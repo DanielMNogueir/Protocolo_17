@@ -18,22 +18,7 @@ var tree_positions := [
 
 
 func _ready() -> void:
-	_create_collision_rect(Rect2(-32, -32, WORLD_SIZE.x + 64, 32))
-	_create_collision_rect(Rect2(-32, WORLD_SIZE.y, WORLD_SIZE.x + 64, 32))
-	_create_collision_rect(Rect2(-32, 0, 32, WORLD_SIZE.y))
-	_create_collision_rect(Rect2(WORLD_SIZE.x, 0, 32, WORLD_SIZE.y))
-
-	# Canal: a ponte central permanece livre para passagem.
-	_create_collision_rect(Rect2(0, 720, 710, 180))
-	_create_collision_rect(Rect2(890, 720, 710, 180))
-
-	# Predio da estacao e paineis solares.
-	_create_collision_rect(Rect2(1175, 125, 305, 270))
-	_create_collision_rect(Rect2(85, 260, 250, 85))
-
-	for tree_position in tree_positions:
-		_create_collision_rect(Rect2(tree_position - Vector2(18, 10), Vector2(36, 28)))
-
+	# Collisions are managed by the ColisoesCenario node.
 	queue_redraw()
 
 

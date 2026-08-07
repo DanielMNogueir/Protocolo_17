@@ -4,6 +4,8 @@
 [ext_resource type="Script" uid="uid://cgl4lp57wof48" path="res://scripts/mission_controller.gd" id="1_sugp2"]
 [ext_resource type="Script" uid="uid://dnwlvcr1kx314" path="res://scripts/player.gd" id="2_player"]
 [ext_resource type="Texture2D" uid="uid://05t6bysn1evk" path="res://assets/cenario_distrito_das_aguas.png" id="4_jyhfs"]
+[ext_resource type="Script" uid="uid://dexg34maywq3f" path="res://scripts/cenario_colisoes.gd" id="5_tbgi4"]
+[ext_resource type="Script" path="res://scripts/mission_complete.gd" id="6_complete"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape_player"]
 radius = 15.0
@@ -101,3 +103,10 @@ z_index = -9
 scale = Vector2(0.95694, 0.95643)
 texture = ExtResource("4_jyhfs")
 centered = false
+
+[node name="ColisoesCenario" type="Node2D" parent="." unique_id=501318408]
+script = ExtResource("5_tbgi4")
+
+[node name="MissionComplete" type="CanvasLayer" parent="."]
+layer = 100
+script = ExtResource("6_complete")

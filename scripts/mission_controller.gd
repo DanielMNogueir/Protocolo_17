@@ -1,5 +1,7 @@
 extends Node2D
 
+signal mission_completed(stats: Dictionary)
+
 ## Camada jog??vel da miss??o "Opera????o Filtro".
 ## Mant??m o cen??rio original intacto e adiciona pickup, tiro, alvos e objetivo.
 
@@ -18,11 +20,12 @@ var weapon_collected := false
 var repaired_filters := 0
 var defeated_drones := 0
 var weapon_position := Vector2(520, 500)
+var mission_finished := false
 
 var filters := [
-	{"position": Vector2(1160, 455), "repaired": false},
-	{"position": Vector2(1270, 455), "repaired": false},
-	{"position": Vector2(1380, 455), "repaired": false},
+	{"name": "OFICINA SOLAR", "position": Vector2(500, 380), "repaired": false},
+	{"name": "ESTAÇÃO DE ÁGUA", "position": Vector2(1100, 450), "repaired": false},
+	{"name": "CANAL CENTRAL", "position": Vector2(800, 720), "repaired": false},
 ]
 
 var drones := [
@@ -40,7 +43,33 @@ func _ready() -> void:
 	queue_redraw()
 
 
+func reset_mission() -> void:
+	elapsed = 0.0
+	shoot_cooldown = 0.0
+	weapon_collected = false
+	repaired_filters = 0
+	defeated_drones = 0
+	mission_finished = false
+	projectiles.clear()
+
+	for filter_index in range(filters.size()):
+		filters[filter_index]["repaired"] = false
+
+	for drone_index in range(drones.size()):
+		drones[drone_index]["position"] = drones[drone_index]["anchor"]
+		drones[drone_index]["health"] = 2
+		drones[drone_index]["active"] = true
+
+	var player = get_node_or_null("Lia")
+	if player:
+		player.call("reset_for_new_mission", Vector2(800, 500))
+	_update_hud(player)
+	queue_redraw()
+
+
 func _process(delta: float) -> void:
+	if mission_finished:
+		return
 	elapsed += delta
 	shoot_cooldown = maxf(0.0, shoot_cooldown - delta)
 	var player = get_node_or_null("Lia")
@@ -52,8 +81,25 @@ func _process(delta: float) -> void:
 	_handle_repair(player)
 	_handle_shoot(player)
 	_update_projectiles(delta)
+	_check_mission_completion()
 	_update_hud(player)
 	queue_redraw()
+
+
+func _check_mission_completion() -> void:
+	if mission_finished:
+		return
+	if repaired_filters < filters.size() or defeated_drones < drones.size():
+		return
+
+	mission_finished = true
+	projectiles.clear()
+	mission_completed.emit({
+		"filters": repaired_filters,
+		"total_filters": filters.size(),
+		"drones": defeated_drones,
+		"total_drones": drones.size(),
+	})
 
 
 func _create_input_actions() -> void:
@@ -101,11 +147,24 @@ func _handle_shoot(player) -> void:
 	if direction == Vector2.ZERO:
 		direction = Vector2.RIGHT
 	projectiles.append({
-		"position": player.global_position + direction * 30.0,
+		"position": _get_weapon_muzzle_position(player.global_position, str(direction_name)),
 		"direction": direction,
 		"life": 1.25,
 	})
 	shoot_cooldown = 0.22
+
+
+func _get_weapon_muzzle_position(player_position: Vector2, direction_name: String) -> Vector2:
+	match direction_name:
+		"left":
+			return player_position + Vector2(-38, -42)
+		"right":
+			return player_position + Vector2(38, -42)
+		"up":
+			return player_position + Vector2(0, -68)
+		"down":
+			return player_position + Vector2(0, -18)
+	return player_position + Vector2(38, -42)
 
 
 func _update_projectiles(delta: float) -> void:
@@ -165,15 +224,26 @@ func _update_hud(player) -> void:
 	var objective = get_node_or_null("Interface/ObjectivePanel/Objective")
 	var controls = get_node_or_null("Interface/Controls")
 	if title:
-		title.text = "PROTOCOLO 17  |  OPERACAO FILTRO"
+		title.text = "PROTOCOLO 17  |  OPERAÇÃO FILTRO"
 	if subtitle:
 		var weapon_text := "ARMA DE PULSO EQUIPADA" if weapon_collected else "ENCONTRE A ARMA DE PULSO"
-		subtitle.text = "DISTRITO DAS AGUAS  -  " + weapon_text
+		subtitle.text = "DISTRITO DAS ÁGUAS  -  " + weapon_text
 	if objective:
-		var state_text := "FILTROS ESTABILIZADOS!" if repaired_filters == filters.size() else "REPARAR OS FILTROS"
-		objective.text = "OBJETIVO\n" + state_text + "\n" + str(repaired_filters) + "/" + str(filters.size()) + " CONCLUIDOS\nDRONES: " + str(defeated_drones)
+		var state_text := "REPARAR OS FILTROS"
+		if repaired_filters == filters.size() and defeated_drones < drones.size():
+			state_text = "ELIMINAR OS DRONES"
+		elif defeated_drones == drones.size() and repaired_filters < filters.size():
+			state_text = "CONCLUIR OS REPAROS"
+		elif mission_finished:
+			state_text = "DISTRITO ESTABILIZADO"
+		var remaining_drones := drones.size() - defeated_drones
+		objective.text = (
+			"OBJETIVO\n" + state_text
+			+ "\nFILTROS: " + str(repaired_filters) + "/" + str(filters.size())
+			+ "\nDRONES RESTANTES: " + str(remaining_drones)
+		)
 	if controls:
-		controls.text = "WASD/SETAS mover   E reparar   ESPACO atirar"
+		controls.text = "WASD/SETAS mover   E reparar   ESPAÇO atirar"
 
 
 func _draw() -> void:
@@ -204,6 +274,16 @@ func _draw() -> void:
 		draw_line(filter_position + Vector2(-8, 0), filter_position + Vector2(8, 0), Color.WHITE, 2.0)
 		if not repaired:
 			draw_line(filter_position + Vector2(0, -34), filter_position + Vector2(0, -25), filter_color, 3.0)
+		var repair_label := "OK - " + str(filter_data["name"]) if repaired else str(filter_data["name"])
+		draw_string(
+			ThemeDB.fallback_font,
+			filter_position + Vector2(-72, -43),
+			repair_label,
+			HORIZONTAL_ALIGNMENT_CENTER,
+			144.0,
+			14,
+			filter_color
+		)
 
 	# Drones de teste.
 	var drone_cell := Vector2(DRONE_SHEET.get_width() / 4.0, DRONE_SHEET.get_height() / 4.0)

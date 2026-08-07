@@ -11,13 +11,14 @@ config_version=5
 [application]
 
 config/name="Protocolo 17 Primeiro Cenario Godot"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/main_menu.tscn"
 config/features=PackedStringArray("4.7")
 
 [autoload]
 
 MCPGameInspector="*res://addons/godot_mcp/services/game_inspector.gd"
 MCPGameInput="*res://addons/godot_mcp/services/game_input.gd"
+GameState="*res://scripts/game_state.gd"
 
 [display]
 
