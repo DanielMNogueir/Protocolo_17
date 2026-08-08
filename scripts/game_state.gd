@@ -5,16 +5,32 @@ extends Node
 
 const SAVE_PATH := "user://protocolo17_save.json"
 const SETTINGS_PATH := "user://protocolo17_settings.cfg"
+const GAME_FONT_PATH := "res://assets/fonts/Kanit-Regular.ttf"
 
 var save_data: Dictionary = {}
 var master_volume: float = 0.8
 var fullscreen: bool = false
+var game_font: Font
 
 
 func _ready() -> void:
+	_setup_game_font()
 	_load_save()
 	_load_settings()
 	apply_settings()
+
+
+func _setup_game_font() -> void:
+	var font_data: FontFile = load(GAME_FONT_PATH) as FontFile
+	if font_data == null:
+		push_error("Não foi possível carregar a fonte do jogo: %s" % GAME_FONT_PATH)
+		return
+	var font_variation := FontVariation.new()
+	font_variation.base_font = font_data
+	font_variation.variation_opentype = {}
+	game_font = font_variation
+	ThemeDB.fallback_font = game_font
+	ThemeDB.fallback_font_size = 16
 
 
 func start_new_game() -> void:

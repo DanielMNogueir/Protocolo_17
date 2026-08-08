@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://dnwlvcr1kx314" path="res://scripts/player.gd" id="2_player"]
 [ext_resource type="Texture2D" uid="uid://05t6bysn1evk" path="res://assets/cenario_distrito_das_aguas.png" id="4_jyhfs"]
 [ext_resource type="Script" uid="uid://dexg34maywq3f" path="res://scripts/cenario_colisoes.gd" id="5_tbgi4"]
-[ext_resource type="Script" path="res://scripts/mission_complete.gd" id="6_complete"]
+[ext_resource type="Script" uid="uid://ch0aoqxql2stb" path="res://scripts/mission_complete.gd" id="6_complete"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape_player"]
 radius = 15.0
@@ -23,7 +23,7 @@ position = Vector2(800, 500)
 script = ExtResource("2_player")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="Lia" unique_id=2085949317]
-position = Vector2(0, -40)
+position = Vector2(0, -8.999996)
 scale = Vector2(0.72, 0.72)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Lia" unique_id=1594647264]
@@ -31,10 +31,11 @@ position = Vector2(0, -8)
 shape = SubResource("CapsuleShape_player")
 
 [node name="Camera2D" type="Camera2D" parent="Lia" unique_id=13474769]
-limit_left = 0
-limit_top = 0
-limit_right = 1600
-limit_bottom = 900
+position = Vector2(-3.0964966, -13.621613)
+limit_left = 165
+limit_top = 94
+limit_right = 1765
+limit_bottom = 994
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
@@ -107,6 +108,6 @@ centered = false
 [node name="ColisoesCenario" type="Node2D" parent="." unique_id=501318408]
 script = ExtResource("5_tbgi4")
 
-[node name="MissionComplete" type="CanvasLayer" parent="."]
+[node name="MissionComplete" type="CanvasLayer" parent="." unique_id=1319081241]
 layer = 100
 script = ExtResource("6_complete")
