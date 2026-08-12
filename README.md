@@ -9,9 +9,9 @@ Protótipo jogável da primeira missão de Lia no Distrito das Águas, em Aurora
 - opção **Continuar** habilitada quando existe um save;
 - prólogo narrativo em cinco registros sobre o colapso de Aurora;
 - configurações persistentes de volume geral e tela cheia;
-- Lia com movimento, colisão, câmera e sprites em quatro direções;
+- Lia com aceleração, desaceleração, animações de caminhada e comportamento ocioso em quatro direções;
 - arma de pulso coletável e disparos direcionais;
-- três drones inimigos e três pontos de reparo;
+- três drones inimigos e três pontos de reparo com animação e progresso contínuo;
 - HUD com filtros reparados e drones restantes;
 - missão concluída somente quando os três filtros forem reparados **e** os três drones forem eliminados;
 - tela final com resultados, repetição da missão e retorno ao menu.
@@ -25,7 +25,7 @@ Protótipo jogável da primeira missão de Lia no Distrito das Águas, em Aurora
 ## Controles da missão
 
 - `WASD` ou setas: movimentar Lia.
-- `E`: reparar um ponto próximo.
+- Segure `E` por 3 segundos: reparar um ponto próximo (soltar cancela o reparo).
 - `Espaço`: atirar depois de coletar a arma.
 - `F8`: encerrar o teste no editor.
 
