@@ -1,67 +1,39 @@
-# Protocolo 17
+# Protocolo 17 — Aurora
 
-Protótipo jogável da primeira missão de Lia no Distrito das Águas, em Aurora.
+Versão alpha do projeto Godot, enviada a partir da pasta `Protocolo_17 - GPT 6` em 20/09/2026.
 
-## O que já está funcionando
+Esta branch contém essa versão do jogo. As versões existentes em `main`, `daniel-dev` e `gabriel-dev` permanecem independentes.
 
-- menu principal com **Jogar**, **Configurações** e **Sair**;
-- criação de novo jogo e save local em `user://`;
-- opção **Continuar** habilitada quando existe um save;
-- prólogo narrativo em cinco registros sobre o colapso de Aurora;
-- configurações persistentes de volume geral e tela cheia;
-- Lia com movimento, colisão, câmera e sprites em quatro direções;
-- arma de pulso coletável e disparos direcionais;
-- três drones inimigos e três pontos de reparo;
-- HUD com filtros reparados e drones restantes;
-- missão concluída somente quando os três filtros forem reparados **e** os três drones forem eliminados;
-- tela final com resultados, repetição da missão e retorno ao menu.
+## Abrir o jogo
 
-## Como executar
-
-1. Abra o projeto pelo arquivo `project.godot`.
+1. Importe `project.godot` no Godot 4.7 (o projeto registra uso do 4.7.1).
 2. Aguarde a importação dos recursos.
-3. Pressione **F5** para iniciar pelo menu principal.
+3. Pressione F5 para executar a cena principal.
 
-## Controles da missão
+## Controles
 
-- `WASD` ou setas: movimentar Lia.
-- `E`: reparar um ponto próximo.
-- `Espaço`: atirar depois de coletar a arma.
-- `F8`: encerrar o teste no editor.
+- WASD ou setas: mover.
+- Mouse: mirar; botão esquerdo: disparar.
+- Espaço: disparar mantendo a direção da mira.
+- Shift: esquiva.
+- E: manter pressionado para restaurar um terminal liberado.
+- M: mapa; Esc: pausa.
+- F10: áudio; F11: tela cheia.
 
-## Fluxo atual
+## Conteúdo
 
-```text
-Menu principal
-  -> Jogar
-     -> Novo jogo
-        -> Prólogo de Aurora
-           -> Missão 01: Operação Filtro
-              -> Missão concluída
-```
+Missão Operação Filtro, com quatro setores, combate contra drones e chefe, melhorias, checkpoints e encerramento. A pasta `assets/` inclui os recursos atuais de Lia e da arma, além da arte de abertura. `tests/` contém testes do projeto e `captures/` contém registros visuais, que podem refletir revisões anteriores.
 
-## Arquivos principais
+Os checkpoints preservam a etapa e as melhorias, reiniciando o encontro da etapa ao continuar. Saves e configurações pessoais ficam em `user://`.
 
-```text
-scenes/
-  main_menu.tscn
-  prologue.tscn
-  main.tscn
-scripts/
-  game_state.gd
-  main_menu.gd
-  prologue.gd
-  mission_controller.gd
-  mission_complete.gd
-  player.gd
-  cenario_colisoes.gd
-assets/
-  cenario_distrito_das_aguas.png
-  lia_movimento.png
-  lia_acoes.png
-  lia_acoes_armada_v2.png
-  armas_protocolo17.png
-  drones_inimigos.png
-```
+## Organização
 
-O save e as configurações ficam no diretório de dados do usuário da Godot e não precisam ser enviados ao GitHub.
+- `scenes/`: cena principal.
+- `scripts/`: simulação, mundo, apresentação, personagem, arma e áudio.
+- `assets/`: imagens, sprites e dados de frames.
+- `tests/`: testes existentes.
+- `tools/`: ferramentas de importação e captura.
+- `captures/`: imagens de referência.
+- `export_presets.cfg`: configuração de exportação Windows.
+
+Caches do Godot, logs, builds e backups locais foram excluídos do envio. As mecânicas e os arquivos-fonte do jogo foram copiados sem implementação de mudanças nesta publicação. Os testes não foram executados como parte do upload.

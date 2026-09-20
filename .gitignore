@@ -1,4 +1,12 @@
 .godot/
+build/
 *.tmp
-*.translation
+.runtime/
+*.log
 
+# Copias locais de seguranca
+backups/
+# Arquivos locais do sistema e credenciais de exportacao
+.DS_Store
+Thumbs.db
+export_credentials.cfg
