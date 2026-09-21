@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lia — 24 direções</title>
+<style>
+body{margin:0;background:#091922;color:#e9ece0;font:16px system-ui}main{max-width:1440px;margin:auto;padding:22px}h1{font-size:23px;margin:0 0 6px}p{color:#a6bebf;margin:0 0 16px}nav{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}button,select{font:inherit;background:#183743;color:#e9ece0;border:1px solid #44636b;border-radius:6px;padding:8px 14px;cursor:pointer}button.active{background:#3d716d}img{display:block;width:100%;image-rendering:pixelated;border-radius:8px}small{display:block;margin-top:14px;color:#94aca9}
+</style>
+<main>
+<h1>Lia · 24 direções, a cada 15°</h1>
+<p>Capturas do próprio renderizador do jogo. Corpo, braços e arma permanecem no mesmo sprite.</p>
+<nav><button id="walk" class="active">Caminhada</button><button id="idle">Repouso</button><button id="fire">Disparo</button><button id="pause">Pausar</button><select id="speed" aria-label="Velocidade"><option value="1">Velocidade do jogo</option><option value="0.5">Metade da velocidade</option><option value="0.25">Um quarto da velocidade</option></select></nav>
+<img id="frame" src="lia_24_step_0.png" alt="Lia nas 24 orientações, de zero a 345 graus">
+<small>0° aponta para a direita; 90° para baixo; 180° para a esquerda; 270° para cima. A mira real permanece contínua.</small>
+</main>
+<script>
+const image=document.querySelector('#frame'), speed=document.querySelector('#speed');
+const paths=Array.from({length:8},(_,i)=>`lia_24_step_${i}.png`);
+[...paths,'lia_24_idle.png','lia_24_blink.png','lia_24_fire.png'].forEach(path=>{const i=new Image();i.src=path});
+let mode='walk',paused=false,time=0,last=performance.now();
+for(const id of ['walk','idle','fire']) document.getElementById(id).onclick=()=>{mode=id;time=0;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.id===id))};
+document.querySelector('#pause').onclick=e=>{paused=!paused;e.target.textContent=paused?'Continuar':'Pausar'};
+function tick(now){if(!paused)time+=Math.min((now-last)/1000,.1)*Number(speed.value);last=now;const path=mode==='walk'?paths[Math.floor(time*18)%8]:mode==='fire'?'lia_24_fire.png':time%4>=3.84?'lia_24_blink.png':'lia_24_idle.png';if(image.getAttribute('src')!==path)image.src=path;requestAnimationFrame(tick)}requestAnimationFrame(tick);
+</script>
+</html>
