@@ -7,6 +7,7 @@ const RATE := 22050
 const MUSIC_DB := -13.0
 const EFFECT_DB := -9.0
 const MAX_VOICES := 10
+const EnemyAudio := preload("res://scripts/enemy_audio.gd")
 
 var _music: Array[AudioStreamPlayer] = []
 var _voices: Array[AudioStreamPlayer] = []
@@ -36,6 +37,10 @@ func warm_up() -> void:
 			_tracks[mood] = _compose(mood)
 	for id in ["shoot", "hurt", "dash", "enemy_dead", "repair", "boss", "complete", "ui"]:
 		_effects[id] = _make_effect(id)
+	for kind in EnemyAudio.KINDS:
+		for event in EnemyAudio.EVENTS:
+			var id: String = "unit_" + kind + "_" + event
+			_effects[id] = EnemyAudio.make_effect(id)
 	_notes.clear()
 	_warmed = true
 
@@ -112,6 +117,8 @@ func play_sfx(id: String) -> void:
 	voice.stop()
 	voice.stream = _effects[id]
 	voice.volume_db = EFFECT_DB - (4.0 if id == "shoot" else 0.0)
+	if id.begins_with("unit_"):
+		voice.volume_db -= 9.0 if id.ends_with("hit") else 5.0
 	voice.play()
 
 
@@ -224,6 +231,8 @@ func _percussion(kind: String, seconds: float) -> PackedFloat32Array:
 
 
 func _make_effect(id: String) -> AudioStreamWAV:
+	if id.begins_with("unit_"):
+		return EnemyAudio.make_effect(id)
 	var duration := 0.18
 	match id:
 		"shoot": duration = 0.09

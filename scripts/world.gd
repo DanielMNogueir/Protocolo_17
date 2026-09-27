@@ -3,6 +3,8 @@ extends RefCounted
 ## Original district geometry, collision and procedural pixel scenery.
 ## All public coordinates are world coordinates; stage is zero based.
 
+const StationArt = preload("res://scripts/station_art.gd")
+
 const SIZE := Vector2(2560, 1800)
 const REGIONS: Array[Rect2] = [
 	Rect2(100, 1020, 1010, 660), Rect2(100, 100, 1010, 740),
@@ -152,6 +154,7 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 	for i in range(REGIONS.size()):
 		if _visible(REGIONS[i],view):
 			_draw_region(canvas,REGIONS[i],i,view,restored)
+			StationArt.draw_shoreline(canvas,REGIONS[i],i,view,restored)
 	for bridge in BRIDGES:
 		if _visible(bridge,view): _draw_bridge(canvas,bridge,false)
 	if _visible(PIER,view): _draw_bridge(canvas,PIER,true)
@@ -159,9 +162,9 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 	for i in range(BASINS.size()):
 		if _visible(BASINS[i],view): _draw_basin(canvas,BASINS[i],i,restored,time)
 	for i in range(BUILDINGS.size()):
-		if _visible(BUILDINGS[i],view): _draw_building(canvas,BUILDINGS[i],i,restored)
+		if _visible(BUILDINGS[i],view): _draw_building_art(canvas,BUILDINGS[i],i)
 	for prop in props():
-		if _visible(prop["rect"],view): _draw_prop(canvas,prop,restored,time)
+		if _visible(prop["rect"],view): _draw_prop_art(canvas,prop,restored,time)
 	for i in range(GOALS.size()):
 		if view.grow(90).has_point(GOALS[i]): _draw_goal_pad(canvas,GOALS[i],i,i<restored,time)
 	for i in range(GATES.size()):
@@ -170,8 +173,8 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 
 static func _draw_water(canvas: Node2D, view: Rect2, restored: int, time: float) -> void:
 	var clean := restored>=3
-	_pixel(canvas,Rect2(0,0,1280,SIZE.y),Color("201e30") if not clean else Color("0c2a34"))
-	_pixel(canvas,Rect2(1280,0,1280,SIZE.y),Color("0b2934"))
+	_pixel(canvas,Rect2(0,0,1280,SIZE.y),Color("153844") if not clean else Color("123b43"))
+	_pixel(canvas,Rect2(1280,0,1280,SIZE.y),Color("123a43"))
 	var extent := view.intersection(Rect2(Vector2.ZERO,SIZE))
 	for y in range(int(extent.position.y/56)*56,int(extent.end.y)+56,56):
 		for x in range(int(extent.position.x/80)*80,int(extent.end.x)+80,80):
@@ -179,46 +182,57 @@ static func _draw_water(canvas: Node2D, view: Rect2, restored: int, time: float)
 			var seed := _hash(x/80,y/56)
 			var purple := x<1280 and not clean
 			var drift := int(sin(time*0.6+seed)*6)
-			var tint := Color("543348") if purple else Color("1b4852")
+			var tint := Color("675064") if purple else Color("397886")
 			var p := Vector2(x+12+seed%29+drift,y+9+seed%26)
 			# Disconnected reflections describe flow without exposing the sampling grid.
 			_pixel(canvas,Rect2(p,Vector2(17+seed%28,2)),tint)
 			_pixel(canvas,Rect2(p+Vector2(-7,4),Vector2(14+seed%12,2)),tint.darkened(0.2))
 			if seed%3==0:
-				_pixel(canvas,Rect2(p+Vector2(9,-4),Vector2(7,1)),Color("84536b") if purple else Color("397680"))
+				_pixel(canvas,Rect2(p+Vector2(9,-4),Vector2(7,1)),Color("9a7787") if purple else Color("67a9a7"))
 			if seed%7==0:
-				_pixel(canvas,Rect2(p+Vector2(-9,14),Vector2(25,3)),Color("382b3e") if purple else Color("103941"))
-				_pixel(canvas,Rect2(p+Vector2(-2,17),Vector2(34,3)),Color("382b3e") if purple else Color("103941"))
+				_pixel(canvas,Rect2(p+Vector2(-9,14),Vector2(25,3)),Color("244751") if purple else Color("1e5058"))
+				_pixel(canvas,Rect2(p+Vector2(-2,17),Vector2(34,3)),Color("244751") if purple else Color("1e5058"))
+			if seed%5==0:
+				_pixel(canvas,Rect2(p+Vector2(-4,-8),Vector2(21,1)),Color("80b4ab",0.28))
+			for ripple in range(5):
+				var grain := _hash(int(x/80)+ripple*17,int(y/56)+ripple*23)
+				var drift2 := int(sin(time*0.45+grain*0.17)*4.0)
+				var glint := Vector2(x+7+grain%61+drift2,y+4+int(grain/13)%47)
+				var width := 7+grain%23
+				_pixel(canvas,Rect2(glint,Vector2(width,1)),Color("8dc7bc",0.20 if purple else 0.31))
+				if grain%3==0:
+					_pixel(canvas,Rect2(glint+Vector2(-4,3),Vector2(maxi(5,width-9),1)),Color("4e8990",0.33))
+				if grain%11==0:
+					_pixel(canvas,Rect2(glint+Vector2(3,-3),Vector2(5,1)),Color("dae2c9",0.28))
+			if purple and seed%9==0:
+				_pixel(canvas,Rect2(p+Vector2(5,10),Vector2(6,1)),Color("ae7199",0.35))
 
 static func _draw_region(canvas: Node2D, rect: Rect2, index: int, view: Rect2, restored: int) -> void:
 	_pixel(canvas,Rect2(rect.position+Vector2(13,19),rect.size),Color("071923"))
 	_pixel(canvas,rect.grow(9),Color("0a2029"))
-	_pixel(canvas,rect,Color("142e35"))
+	StationArt.draw_floor(canvas,rect,index)
 	var area := rect.intersection(view)
-	for y in range(int((area.position.y-rect.position.y)/40)*40+int(rect.position.y),int(area.end.y),40):
-		for x in range(int((area.position.x-rect.position.x)/40)*40+int(rect.position.x),int(area.end.x),40):
-			var seed := _hash(x/40,y/40)
-			var tile := Rect2(x+1,y+1,minf(38,rect.end.x-x-1),minf(38,rect.end.y-y-1))
-			var color := Color("213c43") if index!=1 else Color("263e3e")
-			_pixel(canvas,tile,color.lightened(float(seed%6)*0.004))
-			if seed%3!=0:
-				_pixel(canvas,Rect2(x+3,y+2,tile.size.x-4,1),Color("355056"))
-			if seed%5==0:
-				var crack := Color("152d36")
-				_pixel(canvas,Rect2(x+7,y+14,12,2),crack)
-				_pixel(canvas,Rect2(x+17,y+16,2,6),crack)
-				_pixel(canvas,Rect2(x+18,y+21,8,2),crack)
-				_pixel(canvas,Rect2(x+24,y+22,2,9),crack)
-				_pixel(canvas,Rect2(x+20,y+24,3,1),Color("425c59"))
-			if seed%11==0:
-				_draw_stain(canvas,Vector2(x+10,y+20),seed,index==1)
-			elif seed%9==0:
-				_pixel(canvas,Rect2(x+10,y+12,17,2),Color("2c474c"))
-				_pixel(canvas,Rect2(x+7,y+15,23,4),Color("1b353d"))
-				_pixel(canvas,Rect2(x+16,y+19,14,3),Color("1b353d"))
-			if seed%17==0:
-				for n in range(4):
-					_pixel(canvas,Rect2(x+5+(n*11)%27,y+8+(n*7)%25,2,1),Color("546561"))
+	var row := 0
+	var tile_y := int(rect.position.y)
+	while tile_y < int(rect.end.y):
+		var height: int = mini([48,58,44,62][row%4],int(rect.end.y)-tile_y)
+		if tile_y+height >= int(area.position.y) and tile_y <= int(area.end.y):
+			var x := int(rect.position.x)
+			while x < int(rect.end.x):
+				var seed := _hash(int(x/13)+row*7,int(tile_y/11)+index*19)
+				var width: int = mini((24+row%3*8) if x == int(rect.position.x) and row%2 == 1 else [56,72,92,64][seed%4],int(rect.end.x)-x)
+				var tile := Rect2(x,tile_y,width,height)
+				if tile.intersects(view):
+					StationArt.draw_floor_tile(canvas,tile,seed,index)
+				x += width
+		tile_y += height
+		row += 1
+	# Extra translucent damp marks vary per sector without interrupting routes.
+	for n in range(9):
+		var stain := rect.position+Vector2(72+posmod(n*137+index*83,int(rect.size.x)-144),84+posmod(n*89+index*59,int(rect.size.y)-168))
+		if view.has_point(stain):
+			_pixel(canvas,Rect2(stain,Vector2(35+n%3*8,4)),Color("40676a",0.10))
+			_pixel(canvas,Rect2(stain+Vector2(-4,4),Vector2(27+n%4*6,3)),Color("4a7476",0.07))
 	# Low concrete coping; visual gaps coincide with every bridge mouth.
 	for x in range(int(rect.position.x),int(rect.end.x),32):
 		for y in [rect.position.y,rect.end.y-8]:
@@ -322,17 +336,28 @@ static func _draw_utilities(canvas: Node2D, view: Rect2, restored: int, time: fl
 static func _draw_basin(canvas: Node2D, rect: Rect2, index: int, restored: int, time: float) -> void:
 	_pixel(canvas,Rect2(rect.position+Vector2(6,8),rect.size),Color("2b393a"))
 	_pixel(canvas,rect,Color("152e39"))
-	var water := Color("63394e") if index==0 and restored<1 else Color("245b62")
+	var water := Color("36525a") if index==0 and restored<1 else Color("23616a")
 	_pixel(canvas,rect.grow(-8),water)
 	for y in range(int(rect.position.y)+20,int(rect.end.y)-12,22):
 		var offset := int(time*6+y)%24
 		for x in range(int(rect.position.x)+14,int(rect.end.x)-30,47):
 			_pixel(canvas,Rect2(x+offset,y,19,2),water.lightened(0.18))
-	canvas.draw_rect(rect,Color("a3a58f"),false,7)
+	canvas.draw_rect(rect,Color("a89c7e"),false,7)
 	for x in range(int(rect.position.x)+12,int(rect.end.x),32):
 		_pixel(canvas,Rect2(x,rect.position.y-3,4,6),Color("d7c392"))
 		_pixel(canvas,Rect2(x,rect.end.y-4,4,6),Color("67786f"))
 	_pixel(canvas,Rect2(rect.position+Vector2(17,14),Vector2(6,6)),Color("94c8b1"))
+	if index == 0:
+		StationArt.draw_structure(canvas,0,rect.grow(-2))
+	else:
+		for n in range(4):
+			var foot := rect.position+Vector2(40+n*(rect.size.x-80)/3.0,42+(n%2)*36)
+			StationArt.draw_plant(canvas,3 if n%2==0 else 2,foot,34)
+	for side in 2:
+		var x := rect.position.x+22 if side == 0 else rect.end.x-20
+		StationArt.draw_plant(canvas,4 if side == 0 else 0,Vector2(x,rect.end.y+7),43)
+		StationArt.draw_plant(canvas,1 if side == 0 else 9,Vector2(x,rect.position.y+58),36)
+	StationArt.draw_plant(canvas,6,rect.position+Vector2(rect.size.x*0.52,rect.size.y+6),31)
 
 static func _draw_building(canvas: Node2D, rect: Rect2, index: int, restored: int) -> void:
 	_pixel(canvas,Rect2(rect.position+Vector2(12,14),rect.size),Color("2a3b3b"))
@@ -429,21 +454,53 @@ static func _draw_prop(canvas: Node2D, prop: Dictionary, restored: int, time: fl
 				canvas.draw_line(p-Vector2(0,7),p-Vector2(0,7)+v,Color("76b4ad"),4)
 			_pixel(canvas,Rect2(r.position.x+10,r.end.y-12,r.size.x-20,4),Color("263d48"))
 
+static func _draw_building_art(canvas: Node2D, rect: Rect2, index: int) -> void:
+	_draw_shadow(canvas,rect)
+	_pixel(canvas,rect,Color("515953"))
+	canvas.draw_texture_rect(StationArt.FLOOR,rect.grow(-6),false,Color("99998b"))
+	_pixel(canvas,Rect2(rect.position+Vector2(8,8),Vector2(rect.size.x-16,4)),Color("aca78d"))
+	_pixel(canvas,Rect2(rect.position+Vector2(8,rect.size.y-14),Vector2(rect.size.x-16,5)),Color("4f6059"))
+	if index == 0:
+		StationArt.draw_structure(canvas,3,Rect2(rect.position+Vector2(15,12),Vector2(225,rect.size.y-25)))
+		StationArt.draw_structure(canvas,2,Rect2(rect.position+Vector2(246,85),Vector2(92,112)))
+	elif index == 1:
+		for column in 2:
+			StationArt.draw_structure(canvas,1,Rect2(rect.position+Vector2(42+column*174,8),Vector2(150,rect.size.y-20)))
+	else:
+		StationArt.draw_structure(canvas,5,Rect2(rect.position+Vector2(10,7),Vector2(137,rect.size.y-18)))
+		StationArt.draw_structure(canvas,4,Rect2(rect.position+Vector2(146,7),Vector2(126,rect.size.y-18)))
+	StationArt.draw_plant(canvas,4,rect.position+Vector2(19,rect.size.y+7),35)
+	StationArt.draw_plant(canvas,5,rect.position+Vector2(rect.size.x-20,rect.size.y+9),34)
+
+static func _draw_prop_art(canvas: Node2D, prop: Dictionary, restored: int, time: float) -> void:
+	var r: Rect2 = prop["rect"]
+	var kind: String = prop["kind"]
+	if kind == "fern":
+		var seed := _hash(int(r.position.x),int(r.position.y))
+		var plant_kind: int = [5,6,5,4,9][seed%5]
+		if restored == 0 and r.position.x < 1100 and seed%19 == 0:
+			plant_kind = 11
+		StationArt.draw_plant(canvas,plant_kind,prop["pos"]+Vector2(0,6),25+seed%10)
+		return
+	if kind == "tank" or kind == "pump" or kind == "cabinet" or kind == "battery":
+		_pixel(canvas,Rect2(r.position+Vector2(4,5),r.size),Color("273b3d",0.35))
+		var art_id := 1 if kind == "tank" else (2 if kind == "pump" else (5 if kind == "cabinet" else 4))
+		var inset := 5.0 if kind == "tank" else 0.0
+		StationArt.draw_structure(canvas,art_id,Rect2(r.position+Vector2(inset,0),r.size-Vector2(inset*2,0)))
+		return
+	_draw_prop(canvas,prop,restored,time)
+
 static func _draw_goal_pad(canvas: Node2D, p: Vector2, index: int, active: bool, time: float) -> void:
-	var r := Rect2(p-Vector2(62,51),Vector2(124,104))
-	_pixel(canvas,Rect2(r.position+Vector2(5,7),r.size),Color("324542"))
-	_pixel(canvas,r,Color("314751"))
-	_pixel(canvas,r.grow(-5),Color("677972"))
-	_pixel(canvas,r.grow(-10),Color("3b555d"))
-	for corner in [r.position+Vector2(3,3),Vector2(r.end.x-8,r.position.y+3),r.end-Vector2(8,8),Vector2(r.position.x+3,r.end.y-8)]:
-		_pixel(canvas,Rect2(corner,Vector2(5,5)),Color("c4b087"))
-	var light := Color("80dfb6") if active else Color("78b6bb")
-	canvas.draw_arc(p,30,0,TAU,24,Color("223d48"),7)
-	canvas.draw_arc(p,29,0,TAU,24,light.darkened(0.25),2)
-	for i in range(4):
-		var point := p+Vector2.from_angle(i*PI*0.5)*41
-		_pixel(canvas,Rect2(point-Vector2(4,3),Vector2(8,6)),light if active or int(time*2)%2==0 else light.darkened(0.4))
-	canvas.draw_string(ThemeDB.fallback_font,p+Vector2(-4,6),str(index+1),HORIZONTAL_ALIGNMENT_LEFT,-1,16,Color("d0d6bb"))
+	var r := Rect2(p-Vector2(50,34),Vector2(100,70))
+	_pixel(canvas,Rect2(r.position+Vector2(5,8),r.size),Color(0.02,0.07,0.08,0.36))
+	_pixel(canvas,r,Color("5a615a"))
+	_pixel(canvas,r.grow(-4),Color("a09379"))
+	_pixel(canvas,r.grow(-9),Color("5b6660"))
+	for corner in [r.position+Vector2(4,4),Vector2(r.end.x-9,r.position.y+4),r.end-Vector2(9,9),Vector2(r.position.x+4,r.end.y-9)]:
+		_pixel(canvas,Rect2(corner,Vector2(5,5)),Color("cbbb92"))
+	var light := Color("78dbc4") if active else Color("b76c93")
+	canvas.draw_arc(p+Vector2(0,10),24,0,TAU,24,Color("1f4247"),5)
+	canvas.draw_arc(p+Vector2(0,10),23,0,TAU,24,Color(light,0.45+0.12*sin(time*2+index)),2)
 
 static func _draw_gate(canvas: Node2D, rect: Rect2, opened: bool, time: float) -> void:
 	var horizontal := rect.size.x>rect.size.y

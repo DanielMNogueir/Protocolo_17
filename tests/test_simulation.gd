@@ -57,8 +57,8 @@ func _test_shots_and_walls() -> void:
 	check(sim.hp == sim.max_hp, "Player projectiles do not damage their own shooter")
 
 	sim.start()
-	sim.pos = Vector2(475, 1270)
-	target = _stationary_target(sim, Vector2(595, 1270))
+	sim.pos = Vector2(533, 1215)
+	target = _stationary_target(sim, Vector2(533, 1328))
 	health = int(target["hp"])
 	check(W.walkable(sim.pos, S.PLAYER_RADIUS, 0) and W.walkable(target["pos"], 17.0, 0), "Wall regression fixture places both actors on legal ground")
 	sim.pulse_speed = 12000.0

@@ -1,9 +1,11 @@
 extends Node2D
 ## Original alpha shell: presentation, input, camera, interface and checkpoint I/O.
 const World = preload("res://scripts/world.gd")
+const StationArt = preload("res://scripts/station_art.gd")
 const Simulation = preload("res://scripts/simulation.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
+const EnemyPresentation = preload("res://scripts/enemy_presentation.gd")
 const Sound = preload("res://scripts/audio.gd")
 const SAVE_PATH := "user://aurora_checkpoint.json"
 const INK := Color("091922")
@@ -26,6 +28,7 @@ const FIELD_MESSAGES := [
 ]
 var sim: P17Simulation = Simulation.new()
 var lia_animation := LiaAnimation.new()
+var enemy_presentation := EnemyPresentation.new()
 var sound: Node
 var mode := "title"
 var previous_mode := "play"
@@ -57,6 +60,7 @@ var _shade: GradientTexture2D
 var _glow: GradientTexture2D
 
 func _ready() -> void:
+	Actors.ENEMIES.prepare()
 	_font = ThemeDB.fallback_font
 	_prepare_lighting()
 	sound = Sound.new()
@@ -89,8 +93,16 @@ func _process(delta: float) -> void:
 		if _key(KEY_SPACE):
 			world_mouse = sim.pos + sim.aim * 100
 		var old_state: String = sim.state
-		sim.tick(dt, motion, world_mouse, Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or _key(KEY_SPACE), dash_requested, _key(KEY_E))
+		if enemy_presentation.units.is_empty() and not sim.enemies.is_empty():
+			enemy_presentation.advance(.000001, sim.enemies, sim.stage, sim.elapsed)
+		sim.tick(dt, motion, world_mouse, Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or _key(KEY_SPACE), dash_requested, _key(KEY_E), lia_animation.elapsed, lia_animation.moving)
 		lia_animation.advance(dt, sim.velocity, sim.dash_time > 0)
+		enemy_presentation.advance(dt, sim.enemies, sim.stage, sim.elapsed)
+		var heard := {}
+		for cue in enemy_presentation.cues:
+			if Vector2(cue.pos).distance_to(sim.pos) < 650.0 and not heard.has(cue.id):
+				sound.play_sfx(cue.id)
+				heard[cue.id] = true
 		dash_requested = false
 		_consume_events()
 		if old_state != sim.state:
@@ -172,6 +184,7 @@ func _action(id: String) -> void:
 		"continue":
 			var data := _read_checkpoint()
 			if not data.is_empty() and sim.load_data(data):
+				enemy_presentation.reset()
 				mode = "play"
 				camera_pos = sim.pos
 				_clamp_camera()
@@ -204,6 +217,7 @@ func _action(id: String) -> void:
 			mode = "play"
 		"retry":
 			sim.retry()
+			enemy_presentation.reset()
 			mode = "play"
 			camera_pos = sim.pos
 			_clamp_camera()
@@ -243,6 +257,7 @@ func _start_new_run() -> void:
 	sim = Simulation.new()
 	sim.start()
 	lia_animation.reset()
+	enemy_presentation.reset()
 	mode = "play"
 	camera_pos = sim.pos
 	_clamp_camera()
@@ -273,7 +288,8 @@ func _state_changed() -> void:
 
 func _consume_events() -> void:
 	for event in sim.events:
-		sound.play_sfx(event)
+		if event != "enemy_dead":
+			sound.play_sfx(event)
 		if event == "hurt":
 			shake = 4
 			screen_flash = 0.22
@@ -455,19 +471,23 @@ func _draw_game() -> void:
 		if enemy.hp > 0:
 			entities.append({"y": enemy.pos.y, "enemy": enemy})
 	entities.append({"y": sim.pos.y, "player": true})
+	for wreck in enemy_presentation.wrecks:
+		entities.append({"y": wreck.pos.y, "wreck": wreck})
 	entities.sort_custom(func(a, b): return a.y < b.y)
 	for entity in entities:
 		if entity.has("player"):
 			var lia_action := "repair" if sim.repair > 0 else ("fire" if sim.state == "combat" and sim._fire_cd > 0 else "idle")
 			var shot_age := sim.fire_interval - sim._fire_cd if sim._fire_cd > 0 else -1.0
 			Actors.draw_lia(self, sim.pos, sim.aim, lia_animation.elapsed, lia_animation.moving, sim.invuln > 0 and int(clock * 16) % 2 == 0, sim.dash_time > 0, lia_action, shot_age)
+		elif entity.has("wreck"):
+			Actors.ENEMIES.draw_destroyed(self, entity.wreck)
 		else:
 			var enemy: Dictionary = entity.enemy
 			if enemy.get("warning", 0.0) > 0:
 				var direction: Vector2 = enemy.get("aim", Vector2.DOWN)
 				draw_line(enemy.pos, enemy.pos + direction * (155 if enemy.kind != "boss" else 220), Color(GOLD, 0.35), 2)
 				draw_arc(enemy.pos, float(enemy.get("radius", 14)) + 8, 0, TAU, 20, GOLD, 1)
-			Actors.draw_drone(self, enemy, clock)
+			Actors.draw_drone(self, enemy_presentation.view_for(enemy), sim.elapsed)
 	for bolt in sim.bullets:
 		if not bolt.hostile:
 			Actors.WEAPON.draw_pulse(self, bolt, clock)
@@ -518,22 +538,13 @@ func _draw_terminals() -> void:
 		var active := i < sim.restored
 		var available := i == sim.stage and sim.state == "activation"
 		var color: Color = CYAN if active or available else MAGENTA
-		draw_rect(Rect2(p + Vector2(-26, 15), Vector2(56, 13)), Color(0, 0, 0, 0.27))
-		draw_rect(Rect2(p + Vector2(-25, -13), Vector2(50, 34)), Color("132c37"))
-		draw_rect(Rect2(p + Vector2(-22, -27), Vector2(44, 32)), Color("4e6a70"))
-		draw_rect(Rect2(p + Vector2(-19, -25), Vector2(38, 26)), Color("243f4a"))
-		draw_rect(Rect2(p + Vector2(-14, -21), Vector2(28, 16)), Color("061c25"))
-		for j in 5:
-			draw_rect(Rect2(p + Vector2(-10 + j * 5, -16), Vector2(3, 3 + sin(clock * 3 + j) * 3)), color)
-		draw_rect(Rect2(p + Vector2(-19, 6), Vector2(38, 3)), Color("b78f60"))
-		for j in [-1, 1]:
-			draw_rect(Rect2(p + Vector2(j * 21 - 2, 6), Vector2(4, 13)), Color("829088"))
+		StationArt.draw_totem(self,p,i,active,clock)
 		if available:
-			draw_arc(p, 43 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
+			draw_arc(p+Vector2(0,10), 43 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
 		if i == sim.stage:
-			_text_center("%02d" % (i + 1), p + Vector2(0, -43), 12, color)
+			_text_center("%02d" % (i + 1), p + Vector2(0, -101), 12, color)
 		if i == sim.stage and sim.pos.distance_to(p) < 80 and sim.state == "activation":
-			draw_arc(p, 38, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
+			draw_arc(p+Vector2(0,10), 38, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
 
 func _draw_hud() -> void:
 	var size := _size()

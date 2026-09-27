@@ -1,8 +1,9 @@
 class_name P17Simulation
 extends RefCounted
-## Independent, deterministic game rules. Rendering, input and disk I/O live outside.
+## Deterministic game rules. The authored emitter defines the shot origin.
 
 const W = preload("res://scripts/world.gd")
+const LIA_POSE = preload("res://scripts/lia_directional.gd")
 const PLAYER_RADIUS: float = 14.0
 const REPAIR_SECONDS: float = 1.8
 const MAX_STEP: float = 1.0 / 90.0
@@ -73,7 +74,7 @@ func start(stage_index: int = 0) -> void:
 	_begin_encounter(true)
 
 
-func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pressed: bool, interacting: bool) -> void:
+func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pressed: bool, interacting: bool, pose_time: float = 0.0, pose_moving: bool = false) -> void:
 	events.clear()
 	if dt <= 0.0 or not is_finite(dt):
 		return
@@ -97,12 +98,12 @@ func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pr
 		var step: float = minf(remaining, MAX_STEP)
 		remaining -= step
 		elapsed += step
-		_step(step, input_move, shooting, interacting)
+		_step(step, input_move, target, shooting, interacting, pose_time, pose_moving)
 		if state != "combat" and state != "activation":
 			break
 
 
-func _step(dt: float, movement: Vector2, shooting: bool, interacting: bool) -> void:
+func _step(dt: float, movement: Vector2, target: Vector2, shooting: bool, interacting: bool, pose_time: float, pose_moving: bool) -> void:
 	dash_cd = maxf(0.0, dash_cd - dt)
 	_fire_cd = maxf(0.0, _fire_cd - dt)
 	var was_dashing: bool = dash_time > 0.0
@@ -116,7 +117,13 @@ func _step(dt: float, movement: Vector2, shooting: bool, interacting: bool) -> v
 		velocity = movement * move_speed
 	if shooting and state == "combat" and _fire_cd <= 0.0:
 		_fire_cd = fire_interval
-		_spawn_bullet(pos, aim, pulse_speed, false, pulse_damage, 1.7, 3.0)
+		var muzzle: Vector2 = pos + LIA_POSE.pose(aim, pose_time, pose_moving).muzzle
+		var obstruction: float = _wall_fraction(pos, muzzle, 3.0)
+		if obstruction == INF:
+			var direction: Vector2 = (target - muzzle).normalized() if target.is_finite() and target.distance_squared_to(muzzle) > 1.0 else aim
+			_spawn_bullet(muzzle, direction, pulse_speed, false, pulse_damage, 1.7, 3.0)
+		else:
+			_emit_particles(pos.lerp(muzzle, obstruction), Color("70f1dd"), 4, 65.0)
 		shots += 1
 		events.append("shoot")
 	if state == "combat":
@@ -272,7 +279,7 @@ func _enemy_attack(enemy: Dictionary) -> void:
 
 
 func _spawn_bullet(origin: Vector2, direction: Vector2, speed: float, hostile: bool, damage: int, life: float, radius: float) -> void:
-	bullets.append({"pos": origin, "vel": direction.normalized() * speed, "hostile": hostile,
+	bullets.append({"pos": origin, "source": origin, "vel": direction.normalized() * speed, "hostile": hostile,
 		"damage": damage, "life": life, "radius": radius})
 
 

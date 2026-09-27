@@ -22,10 +22,16 @@ static func draw_pulse(canvas: Node2D, bullet: Dictionary, time: float) -> void:
 	var pos: Vector2 = bullet.pos
 	var vel: Vector2 = bullet.vel
 	var angle := vel.angle()
-	# The leading core ends at the actual collision position, never at an offset muzzle.
+	var forward := vel.normalized()
+	var source: Vector2 = bullet.get("source", pos - forward * 24.0)
+	var travelled: float = maxf(0.0, (pos - source).dot(forward))
+	# A new pulse grows from its source instead of drawing its tail through Lia's body.
+	var length := minf(18.0, travelled)
 	var flicker := 1.0 if int(time * 24) % 2 == 0 else .88
-	_quad(canvas, _pulse, Rect2(0, 0, 18, 8), Rect2(-18, -4, 18, 8), pos, angle, Color(1, 1, 1, flicker))
-	canvas.draw_line(pos - vel.normalized() * 24, pos - vel.normalized() * 14, Color(CYAN, .25), 1)
+	if length > 0.0:
+		_quad(canvas, _pulse, Rect2(18.0 - length, 0, length, 8), Rect2(-length, -4, length, 8), pos, angle, Color(1, 1, 1, flicker))
+	if travelled > 14.0:
+		canvas.draw_line(pos - forward * minf(24.0, travelled), pos - forward * 14.0, Color(CYAN, .25), 1)
 
 static func _prepare_textures() -> void:
 	if _pulse != null:
