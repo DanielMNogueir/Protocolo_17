@@ -1,0 +1,26 @@
+{
+  "tool": "image_gen (integrated)",
+  "date": "2026-09-27",
+  "sources": {
+    "scout": {
+      "generated_file": "C:\\Users\\Daniel\\.codex\\generated_images\\01a088e1-b608-7183-b9be-db5ffbd06606\\exec-73bd1181-3a37-4eeb-92da-ff1b76b34bc1.png",
+      "workspace_file": "assets\\enemies\\scout.png",
+      "sha256": "b9f46fc22749d62512e3486e6dfabab28a858c428a283a9de25a95c02db0e2b1"
+    },
+    "sentry": {
+      "generated_file": "C:\\Users\\Daniel\\.codex\\generated_images\\01a088e1-b608-7183-b9be-db5ffbd06606\\exec-ed14809a-6c2f-466b-8a92-baa230996db8.png",
+      "workspace_file": "assets\\enemies\\sentry.png",
+      "sha256": "454a13becf14f71d0a16643798deed14a2c9f6cf1a539f861a9dbe07f8206b45"
+    },
+    "rammer": {
+      "generated_file": "C:\\Users\\Daniel\\.codex\\generated_images\\01a088e1-b608-7183-b9be-db5ffbd06606\\exec-a620d00b-5058-4578-9e8c-fccfb70b033b.png",
+      "workspace_file": "assets\\enemies\\rammer.png",
+      "sha256": "c60dddc576160516f40df54bf3831f5a4d47913ea7ff431b52437348e46a6141"
+    },
+    "boss": {
+      "generated_file": "C:\\Users\\Daniel\\.codex\\generated_images\\01a088e1-b608-7183-b9be-db5ffbd06606\\exec-0286a945-74ec-4c02-9052-71e4f3c9bed8.png",
+      "workspace_file": "assets\\enemies\\boss.png",
+      "sha256": "58863f1bdecb6a03ee3de5540258d414e8a4b795e71de34235bc86431d919ad5"
+    }
+  }
+}

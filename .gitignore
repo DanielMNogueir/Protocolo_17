@@ -1,4 +1,15 @@
 .godot/
+build/
 *.tmp
-*.translation
+.runtime/
+*.log
+backups/
+.DS_Store
+Thumbs.db
+desktop.ini
 
+# Keep only the current visual review in version control.
+captures/*
+!captures/lia_24_*.png
+!captures/lia_24_*.png.import
+!captures/lia_24_preview.html

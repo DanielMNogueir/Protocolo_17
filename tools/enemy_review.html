@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Protocolo 17 • Inimigos</title>
+<style>body{margin:0;background:#091920;color:#e8ece0;font:16px system-ui}main{max-width:1000px;margin:24px auto;padding:0 20px}h1{font-size:24px;color:#7be4ce}p{color:#a3babe}button,select{background:#19363e;border:1px solid #456269;border-radius:6px;color:#e8ece0;padding:10px 14px;cursor:pointer}button:hover{border-color:#7be4ce}.controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}input{flex:1;min-width:160px}img{display:block;max-width:100%;height:auto;border:1px solid #304951;image-rendering:pixelated}#sounds{display:flex;gap:10px;flex-wrap:wrap}small{color:#a3babe}</style>
+<main><h1>Protocolo 17 • Unidades corrompidas</h1><p>Animações capturadas no Godot. Use a barra para examinar cada direção e os estados de combate.</p>
+<div class="controls"><button id="pause">Pausar</button><input id="frame" type="range" min="0" max="31" value="4" aria-label="Quadro da animação"><span id="angle">45°</span></div>
+<img id="preview" src="frame_04.png" alt="Quatro inimigos nos estados movimento, preparação, ataque, dano e destruição">
+<h2>Sons de cada unidade</h2><div class="controls"><label for="event">Ação</label><select id="event"><option value="wake">Detecção</option><option value="windup">Preparação</option><option value="fire">Ataque</option><option value="hit">Impacto</option><option value="death">Destruição</option></select></div><div id="sounds"></div>
+<p><small>As ampliações da prancha ajudam a revisar detalhes. A imagem abaixo mostra a escala real na partida.</small></p><img src="game.png" alt="Inimigos e Lia na Central de Distribuição">
+</main><script>
+let current=4,playing=true;const slider=document.querySelector('#frame'),preview=document.querySelector('#preview'),pause=document.querySelector('#pause');
+const frames=Array.from({length:32},(_,i)=>{const image=new Image();image.src=`frame_${String(i).padStart(2,'0')}.png`;return image});
+function show(i){current=i;slider.value=i;preview.src=frames[i].src;document.querySelector('#angle').textContent=`${Math.floor(i/4)*45}°`}
+pause.onclick=()=>{playing=!playing;pause.textContent=playing?'Pausar':'Reproduzir'};slider.oninput=()=>{playing=false;pause.textContent='Reproduzir';show(+slider.value)};
+setInterval(()=>{if(playing)show((current+1)%32)},125);
+let sound;for(const [kind,label]of [['scout','Explorador'],['sentry','Sentinela'],['rammer','Investida'],['boss','Contenção']]){const b=document.createElement('button');b.textContent=`▶ ${label}`;b.onclick=()=>{if(sound)sound.pause();sound=new Audio(`unit_${kind}_${document.querySelector('#event').value}.wav`);sound.volume=.65;sound.play()};document.querySelector('#sounds').append(b)}
+</script></html>
