@@ -7,6 +7,8 @@ const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const EnemyPresentation = preload("res://scripts/enemy_presentation.gd")
 const Sound = preload("res://scripts/audio.gd")
+const ENERGY_STATION_SCENE = preload("res://scenes/structures/energy_station.tscn")
+const WaterSurface = preload("res://scripts/water_surface.gd")
 const SAVE_PATH := "user://aurora_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -58,9 +60,22 @@ var settings_return := "title"
 var _font: Font
 var _shade: GradientTexture2D
 var _glow: GradientTexture2D
+var energy_station: Node2D
+var water_surface: P17WaterSurface
 
 func _ready() -> void:
+	water_surface=WaterSurface.new()
+	water_surface.configure(World.SIZE,World.REGIONS,World.BRIDGES,World.PIER,World.BASINS)
+	water_surface.visible=false
+	add_child(water_surface)
 	Actors.ENEMIES.prepare()
+	energy_station = ENERGY_STATION_SCENE.instantiate()
+	energy_station.position = World.ENERGY_STATION_ORIGIN
+	# The alpha draws the game in one batched CanvasItem. The authored scene
+	# remains active for collision/navigation/state while its script supplies
+	# layered draw calls that can interleave with Lia and enemies.
+	energy_station.visible = false
+	add_child(energy_station)
 	_font = ThemeDB.fallback_font
 	_prepare_lighting()
 	sound = Sound.new()
@@ -76,6 +91,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	clock += dt
+	_update_energy_station(dt)
 	pointer = get_global_mouse_position()
 	briefing_clock += dt
 	dialogue_clock += dt
@@ -110,7 +126,20 @@ func _process(delta: float) -> void:
 		var target: Vector2 = sim.pos + (world_mouse - sim.pos).limit_length(100) * 0.18
 		camera_pos = camera_pos.lerp(target, 1 - exp(-dt * 7))
 		_clamp_camera()
+	if sound and energy_station and sound.has_method("set_structure_hum"):
+		var hum_proximity := clampf(1.0 - sim.pos.distance_to(World.ENERGY_STATION_ORIGIN) / 520.0, 0.0, 1.0)
+		sound.set_structure_hum(mode == "play" and energy_station.is_online(), hum_proximity)
 	queue_redraw()
+
+func _update_energy_station(delta: float) -> void:
+	if energy_station == null:
+		return
+	var should_be_online := sim.restored > 1
+	if should_be_online and energy_station.structure_state == energy_station.StructureState.OFFLINE:
+		energy_station.set_online(true, true)
+	elif not should_be_online and energy_station.structure_state != energy_station.StructureState.OFFLINE:
+		energy_station.set_online(false, false)
+	energy_station.advance_state(delta)
 
 func _size() -> Vector2:
 	return get_viewport_rect().size
@@ -358,6 +387,7 @@ func _load_settings() -> void:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func _draw() -> void:
+	water_surface.visible=not (mode in ["title","briefing"] or (mode=="settings" and settings_return=="title"))
 	buttons.clear()
 	if _font == null:
 		return
@@ -463,8 +493,11 @@ func _draw_briefing() -> void:
 
 func _draw_game() -> void:
 	var jitter := Vector2(sin(clock * 103), cos(clock * 79)) * shake
-	draw_set_transform((_size() * 0.5 - camera_pos + jitter).round())
-	World.draw(self, camera_pos, sim.stage, sim.restored, clock)
+	var world_offset:=(_size()*0.5-camera_pos+jitter).round()
+	water_surface.present(world_offset,clock,sim.restored)
+	draw_set_transform(world_offset)
+	World.draw(self, camera_pos, sim.stage, sim.restored, clock,water_surface)
+	energy_station.draw_foundation(self, clock)
 	_draw_terminals()
 	var entities: Array[Dictionary] = []
 	for enemy in sim.enemies:
@@ -473,9 +506,18 @@ func _draw_game() -> void:
 	entities.append({"y": sim.pos.y, "player": true})
 	for wreck in enemy_presentation.wrecks:
 		entities.append({"y": wreck.pos.y, "wreck": wreck})
+	var world_view := Rect2(camera_pos-Vector2(770,490),Vector2(1540,980))
+	for world_object in World.sortable_objects(world_view):
+		entities.append({"y": world_object.y, "world_object": world_object})
+	for part in energy_station.sortable_parts():
+		entities.append({"y":part.y,"structure":energy_station,"part":part.index})
 	entities.sort_custom(func(a, b): return a.y < b.y)
 	for entity in entities:
-		if entity.has("player"):
+		if entity.has("world_object"):
+			World.draw_sortable(self,entity.world_object,sim.restored,clock,sim.stage)
+		elif entity.has("structure"):
+			entity.structure.draw_part(self,entity.part,clock)
+		elif entity.has("player"):
 			var lia_action := "repair" if sim.repair > 0 else ("fire" if sim.state == "combat" and sim._fire_cd > 0 else "idle")
 			var shot_age := sim.fire_interval - sim._fire_cd if sim._fire_cd > 0 else -1.0
 			Actors.draw_lia(self, sim.pos, sim.aim, lia_animation.elapsed, lia_animation.moving, sim.invuln > 0 and int(clock * 16) % 2 == 0, sim.dash_time > 0, lia_action, shot_age)
@@ -488,6 +530,7 @@ func _draw_game() -> void:
 				draw_line(enemy.pos, enemy.pos + direction * (155 if enemy.kind != "boss" else 220), Color(GOLD, 0.35), 2)
 				draw_arc(enemy.pos, float(enemy.get("radius", 14)) + 8, 0, TAU, 20, GOLD, 1)
 			Actors.draw_drone(self, enemy_presentation.view_for(enemy), sim.elapsed)
+	energy_station.draw_effects(self, clock)
 	for bolt in sim.bullets:
 		if not bolt.hostile:
 			Actors.WEAPON.draw_pulse(self, bolt, clock)
@@ -538,11 +581,17 @@ func _draw_terminals() -> void:
 		var active := i < sim.restored
 		var available := i == sim.stage and sim.state == "activation"
 		var color: Color = CYAN if active or available else MAGENTA
-		StationArt.draw_totem(self,p,i,active,clock)
+		if i == 1:
+			if available:
+				draw_arc(p, 45 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
+			if i == sim.stage and sim.pos.distance_to(p) < 80 and sim.state == "activation":
+				draw_arc(p, 39, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
+			continue
 		if available:
 			draw_arc(p+Vector2(0,10), 43 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
 		if i == sim.stage:
-			_text_center("%02d" % (i + 1), p + Vector2(0, -101), 12, color)
+			var bounds: Rect2 = World.terminal(i).visual_bounds
+			_text_center("%02d" % (i + 1),Vector2(bounds.get_center().x,bounds.position.y-12),12,color)
 		if i == sim.stage and sim.pos.distance_to(p) < 80 and sim.state == "activation":
 			draw_arc(p+Vector2(0,10), 38, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
 
@@ -557,7 +606,7 @@ func _draw_hud() -> void:
 	_text("INTEGRIDADE", Vector2(37, 74), 8, MUTED)
 	_text_right("%d / %d" % [sim.hp, sim.max_hp], Vector2(252, 74), 9, WHITE)
 	_panel(Rect2(size.x - 280, 19, 258, 66))
-	_text("OPERAÇÃO FILTRO", Vector2(size.x - 265, 38), 9, MUTED)
+	_text("SISTEMAS RESTAURADOS: %d / 4" % sim.restored, Vector2(size.x - 265, 38), 9, MUTED)
 	_text(SECTOR_SUBTITLES[sim.stage], Vector2(size.x - 265, 56), 12, WHITE)
 	for i in 4:
 		draw_rect(Rect2(size.x - 265 + i * 59, 69, 52, 3), CYAN if i < sim.restored else (GOLD if i == sim.stage else Color("29424a")))
@@ -581,7 +630,7 @@ func _draw_hud() -> void:
 	draw_rect(Rect2(152, size.y - 40, 111, 4), Color("29424a"))
 	draw_rect(Rect2(152, size.y - 40, 111 * (1 - clampf(sim.dash_cd / sim.dash_recharge, 0, 1)), 4), CYAN)
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84:
-		var message := "SEGURE E  /  RESTAURAR SISTEMA" if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
+		var message := "[E] REPARAR SISTEMA" if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
 		var rect := Rect2(size.x * 0.5 - 190, size.y - 87, 380, 45)
 		_panel(rect)
 		_text_center(message, rect.get_center() + Vector2(0, 1), 10, CYAN if sim.state == "activation" else GOLD)

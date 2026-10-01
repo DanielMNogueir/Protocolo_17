@@ -1,0 +1,150 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/energy_station.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assets/station/structures_atlas.png" id="2_structures"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_control"]
+atlas = ExtResource("2_structures")
+region = Rect2(14, 722, 440, 421)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_control"]
+size = Vector2(188, 49)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_generator"]
+size = Vector2(151, 40)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape_terminal"]
+size = Vector2(24,8)
+
+[sub_resource type="CircleShape2D" id="CircleShape_interaction"]
+radius = 84.0
+
+[sub_resource type="Gradient" id="Gradient_light"]
+offsets = PackedFloat32Array(0, 0.42, 1)
+colors = PackedColorArray(0.45, 1, 0.9, 0.72, 0.24, 0.82, 0.74, 0.25, 0.1, 0.38, 0.36, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_light"]
+gradient = SubResource("Gradient_light")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="LabelSettings" id="LabelSettings_prompt"]
+font_size = 11
+font_color = Color(0.78, 0.96, 0.9, 1)
+outline_size = 3
+outline_color = Color(0.03, 0.09, 0.11, 0.92)
+
+[node name="EnergyStation" type="Node2D"]
+y_sort_enabled = true
+script = ExtResource("1_script")
+structure_id = &"energy_station"
+
+[node name="Foundation" type="Polygon2D" parent="."]
+z_index = -2
+polygon = PackedVector2Array(-195, -35, 160, -35, 170, 8, -184, 12)
+color = Color(0.17, 0.23, 0.22, 0.46)
+
+[node name="VisualMain" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="ControlRoom" type="Sprite2D" parent="VisualMain"]
+position = Vector2(-90,-106.465909)
+texture_filter = 1
+texture = SubResource("AtlasTexture_control")
+scale = Vector2(0.477272727,0.477272727)
+
+[node name="Generator" type="Polygon2D" parent="VisualMain"]
+position = Vector2(82,-71.423469)
+texture_filter = 1
+texture = ExtResource("2_structures")
+scale = Vector2(0.418367347,0.418367347)
+polygon = PackedVector2Array(195.00000, 69.08142,183.86603, 88.36603,34.67761, 174.50000,-142.52886, 174.50000,-184.26795, 150.40192,-195.00000, 131.81347,-195.00000, 68.11474,-94.48145, -105.98849,24.18396, -174.50000,88.58142, -174.50000,151.08399, -138.41412,195.00000, -62.34936)
+uv = PackedVector2Array(1240.00000, 1061.58142,1228.86603, 1080.86603,1079.67761, 1167.00000,902.47114, 1167.00000,860.73205, 1142.90192,850.00000, 1124.31347,850.00000, 1060.61474,950.51855, 886.51151,1069.18396, 818.00000,1133.58142, 818.00000,1196.08399, 854.08588,1240.00000, 930.15064)
+
+[node name="VisualUpper" type="Node2D" parent="."]
+z_index = 1
+
+[node name="OfflineOverlay" type="Polygon2D" parent="VisualUpper"]
+position = Vector2(177,-47)
+polygon = PackedVector2Array(-8, -5, 8, -5, 8, 3, -8, 3)
+color = Color(0.84, 0.33, 0.55, 0.85)
+
+[node name="OnlineOverlay" type="Polygon2D" parent="VisualUpper"]
+visible = false
+position = Vector2(177,-47)
+polygon = PackedVector2Array(-8, -5, 8, -5, 8, 3, -8, 3)
+color = Color(0.36, 0.94, 0.82, 0.9)
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="ControlRoomFootprint" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(-91, -23.5)
+shape = SubResource("RectangleShape_control")
+
+[node name="GeneratorFootprint" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(81.5, -19)
+shape = SubResource("RectangleShape_generator")
+
+[node name="TerminalFootprint" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(177,-30)
+shape = SubResource("RectangleShape_terminal")
+
+[node name="Area2D_Interaction" type="Area2D" parent="."]
+position = Vector2(177, -10)
+collision_layer = 8
+collision_mask = 1
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D_Interaction"]
+shape = SubResource("CircleShape_interaction")
+
+[node name="NavigationObstacle2D" type="NavigationObstacle2D" parent="."]
+vertices = PackedVector2Array(-185, -48, 158, -48, 158, 4, -185, 4)
+avoidance_enabled = true
+radius = 8.0
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+
+[node name="Effects" type="Node2D" parent="."]
+
+[node name="Particles" type="CPUParticles2D" parent="Effects"]
+position = Vector2(122, -151)
+emitting = false
+amount = 8
+lifetime = 1.2
+direction = Vector2(0, -1)
+spread = 18.0
+gravity = Vector2(0, -5)
+initial_velocity_min = 8.0
+initial_velocity_max = 18.0
+scale_amount_min = 0.5
+scale_amount_max = 1.2
+color = Color(0.75, 0.9, 0.84, 0.3)
+
+[node name="Light2D" type="PointLight2D" parent="Effects"]
+position = Vector2(105, -68)
+enabled = false
+texture = SubResource("GradientTexture2D_light")
+energy = 0.45
+texture_scale = 0.9
+color = Color(0.38, 0.96, 0.84, 1)
+
+[node name="AudioStreamPlayer2D" type="AudioStreamPlayer2D" parent="."]
+volume_db = -18.0
+max_distance = 430.0
+
+[node name="InteractionIndicator" type="Label" parent="."]
+visible = false
+offset_left = 69.0
+offset_top = 12.0
+offset_right = 285.0
+offset_bottom = 33.0
+text = "[E] REPARAR SISTEMA"
+label_settings = SubResource("LabelSettings_prompt")
+horizontal_alignment = 1
+

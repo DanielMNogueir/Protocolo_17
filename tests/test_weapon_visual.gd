@@ -122,6 +122,8 @@ func _run() -> void:
   await process_frame
   game.set_process(false)
   game.sound.set_muted(true)
+  for player in game.sound.get_children():
+   if player is AudioStreamPlayer: player.stop()
   game.sim.start()
   game.sim.pos = Vector2(800, 1420)
   game.mode = "play"
@@ -137,7 +139,8 @@ func _run() -> void:
    await RenderingServer.frame_post_draw
    check(before == _snapshot(game.sim), "Real scene drawing preserves all combat and progression state")
   root.get_texture().get_image().save_png("res://captures/lia_24_game.png")
-  game.queue_free()
-  await process_frame
+  game.free()
+  game = null
+  for cleanup in range(5): await process_frame
  print("WEAPON_VISUAL_", "OK" if failures == 0 else "FAILED", ": ", checks, " checks; 24 headings; ", failures, " failures")
  quit(0 if failures == 0 else 1)

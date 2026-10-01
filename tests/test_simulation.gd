@@ -176,7 +176,19 @@ func _nearest_cell(grid: AStarGrid2D, point: Vector2) -> Vector2i:
 
 func _path(sim: P17Simulation, destination: Vector2) -> PackedVector2Array:
 	var grid: AStarGrid2D = _grid(sim.stage)
-	return grid.get_point_path(_nearest_cell(grid, sim.pos), _nearest_cell(grid, destination))
+	var path := grid.get_point_path(_nearest_cell(grid, sim.pos), _nearest_cell(grid, destination))
+	# A replanned path starts at the nearest cell center, often behind the bot.
+	# Returning to it every 12 frames can oscillate forever on entirely free floor.
+	# Skip only that start node, and only after testing the actual body-sized edge.
+	if path.size()>1 and sim.pos.distance_to(path[0])<CELL*0.75:
+		var clear := true
+		var samples := maxi(1,int(ceil(sim.pos.distance_to(path[1])/3.0)))
+		for index in range(samples+1):
+			if not W.walkable(sim.pos.lerp(path[1],float(index)/samples),S.PLAYER_RADIUS+1,sim.stage):
+				clear=false
+				break
+		if clear: path.remove_at(0)
+	return path
 
 
 func _clear_sight(origin: Vector2, destination: Vector2, stage: int) -> bool:
@@ -201,7 +213,12 @@ func _fight(sim: P17Simulation) -> bool:
 			if sim.pos.distance_to(enemy_pos) < distance:
 				target = enemy_pos
 				distance = sim.pos.distance_to(enemy_pos)
-		var need_move: bool = distance > 240.0 or not _clear_sight(sim.pos, target, sim.stage)
+		# A low terminal can clear Lia's center line but obstruct the actual rifle.
+		# The bot must reposition as a player would; collision/damage remain unchanged.
+		var aim: Vector2 = (target-sim.pos).normalized()
+		var muzzle: Vector2 = sim.pos+S.LIA_POSE.pose(aim,0,false).muzzle
+		var can_fire: bool = sim._wall_fraction(sim.pos,muzzle,3)==INF and sim._wall_fraction(muzzle,target,3)==INF
+		var need_move: bool = distance > 240.0 or not _clear_sight(sim.pos, target, sim.stage) or not can_fire
 		if need_move:
 			if frame % 12 == 0 or path.is_empty():
 				path = _path(sim, target)
