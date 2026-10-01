@@ -48,9 +48,11 @@ func _run() -> void:
 				_check(Vector2(bullet.vel).normalized().dot((target - muzzle).normalized()) > 0.9999, "Pulse travels toward the cursor: " + label)
 				_check(Vector2(bullet.pos).distance_to(muzzle + Vector2(bullet.vel) * DT) < 0.01, "Pulse advances from emitter: " + label)
 
-	# The barrel can reach over a wall while Lia's collision body stays outside it.
+	# Use the pump's physical base, not the now-walkable upper sprite rectangle.
 	sim.start()
-	sim.pos = Vector2(586, 1270)
+	var pump: Rect2 = World.props()[2].collision_rect
+	var left_muzzle: Vector2 = LiaPose.pose(Vector2.LEFT,0,false).muzzle
+	sim.pos = Vector2(pump.end.x+15,pump.get_center().y-left_muzzle.y)
 	var enemy: Dictionary = sim.enemies[0]
 	sim.enemies.clear()
 	enemy.pos = Vector2(10000, 10000)
@@ -59,6 +61,7 @@ func _run() -> void:
 	enemy.cooldown = 999.0
 	sim.enemies.append(enemy)
 	_check(World.walkable(sim.pos, Simulation.PLAYER_RADIUS, 0), "Wall fixture keeps Lia on walkable ground")
+	_check(sim._wall_fraction(sim.pos,sim.pos+left_muzzle,3)!=INF,"Wall fixture places the emitter through the physical pump base")
 	sim.tick(DT, Vector2.ZERO, sim.pos + Vector2.LEFT * 200, true, false, false)
 	_check(sim.shots == 1 and sim.bullets.is_empty(), "A barrel beyond a wall cannot fire through it")
 

@@ -46,6 +46,12 @@ O Distrito das Águas usa o conceito aprovado de concreto gasto, água azul-petr
 
 [Arte e proveniência](assets/station/README.md) · [Prompts](assets/station/PROMPTS.md). Para ver capturas dos quatro setores e de um totem restaurado, execute `godot --path . --script tools/review_station.gd`.
 
+## Estruturas modulares
+
+O Pátio de Energia contém a primeira estrutura reutilizável completa em `scenes/structures/energy_station.tscn`. A estação possui colisões separadas para sala técnica e gerador, terminal acessível, obstáculo de navegação, profundidade por Y, estados offline/partida/online, luz, partículas, animação e ruído de operação por proximidade. O objetivo e o contador do HUD usam a progressão existente.
+
+[Arquitetura e guia para novas estruturas](docs/structures.md). Execute `godot --path . --script tools/review_energy_station.gd` para gerar as três capturas de revisão.
+
 ## Validação
 
 Na raiz do projeto, substitua `godot` pelo caminho do executável instalado:
@@ -59,6 +65,7 @@ godot --headless --path . --script tests/test_world.gd
 godot --headless --path . --script tests/test_simulation.gd
 godot --headless --path . --script tests/test_shot_origin.gd
 godot --headless --path . --script tests/test_enemy_presentation.gd
+godot --headless --path . --script tests/test_energy_station.gd
 ```
 
 Resultados da integração direcional: 3752 verificações visuais, 22 do relógio de animação, 97 dos recursos oficiais e 2405 do mundo aprovadas. O teste visual requer renderer gráfico para gerar as capturas e verificar a cena real.
@@ -80,3 +87,25 @@ Na revisão de 27/09, os disparos da Lia partem do cano, com 962 verificações 
 Os atlas prontos são usados diretamente pelo jogo. As ferramentas de extração não precisam ser executadas para jogar.
 
 A manutenção com ferramenta conserva suas quatro poses oficiais anteriores.
+
+## Integração do ambiente — rodada 02
+
+As três pontes e o píer foram reconstruídos com módulos próprios: grade, vigas,
+guarda-corpos, pilares e encaixes. Os recortes das máquinas, totens e props agora
+incluem suas silhuetas completas. Gerador e coletor usam contornos do atlas que
+excluem partes das máquinas vizinhas sem deformar os pixels. A máscara retangular
+do gerador desligado foi removida. Colisão e profundidade continuam pela base.
+
+Consulte [dados, desenho e validação](docs/environment_integration.md).
+Execute `godot --headless --path . --script tests/test_asset_silhouettes.gd` para
+verificar silhuetas, contornos e escala; `godot --path . --script tools/review_environment_integration.gd --audio-driver Dummy`
+para 20 capturas e percursos renderizados da Lia; e
+`godot --path . --script tools/review_asset_silhouettes.gd --audio-driver Dummy`
+para três pranchas de checagem, sem HUD cobrindo as máquinas.
+
+## Água — revisão 03
+
+Canais e reservatórios abertos agora usam água animada com profundidade junto às
+margens, corrente orientada, ondulações discretas, sombra sob pontes e contato com
+vegetação. O shader é leve; os campos do mapa são construídos uma vez. As colisões
+e a progressão permanecem iguais. Consulte [desenho, manutenção e validação](docs/water_visuals.md).

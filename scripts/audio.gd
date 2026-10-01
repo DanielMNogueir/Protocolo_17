@@ -11,6 +11,7 @@ const EnemyAudio := preload("res://scripts/enemy_audio.gd")
 
 var _music: Array[AudioStreamPlayer] = []
 var _voices: Array[AudioStreamPlayer] = []
+var _structure_hum: AudioStreamPlayer
 var _tracks: Dictionary = {}
 var _effects: Dictionary = {}
 var _notes: Dictionary = {}
@@ -60,6 +61,10 @@ func _prepare_players() -> void:
 		player.volume_db = EFFECT_DB
 		add_child(player)
 		_voices.append(player)
+	_structure_hum = AudioStreamPlayer.new()
+	_structure_hum.name = "StructureHum"
+	_structure_hum.volume_db = -36.0
+	add_child(_structure_hum)
 
 
 func set_mood(mood: String) -> void:
@@ -103,6 +108,21 @@ func set_muted(value: bool) -> void:
 	if value:
 		for voice in _voices:
 			voice.stop()
+		if _structure_hum:
+			_structure_hum.stop()
+
+
+func set_structure_hum(active: bool, proximity: float) -> void:
+	_prepare_players()
+	if _muted or not active or proximity <= 0.01:
+		if _structure_hum.playing:
+			_structure_hum.stop()
+		return
+	if _structure_hum.stream == null:
+		_structure_hum.stream = _make_structure_hum()
+	_structure_hum.volume_db = lerpf(-34.0, -20.0, clampf(proximity, 0.0, 1.0))
+	if not _structure_hum.playing:
+		_structure_hum.play()
 
 
 func play_sfx(id: String) -> void:
@@ -279,6 +299,19 @@ func _make_effect(id: String) -> AudioStreamWAV:
 			envelope *= minf(note_phase * 15.0, 1.0) * minf((1.0 - note_phase) * 8.0, 1.0)
 		samples[index] = lerpf(wave, noise, noise_amount) * envelope * 0.68
 	return _wav(samples, false)
+
+
+func _make_structure_hum() -> AudioStreamWAV:
+	var duration := 1.6
+	var samples := PackedFloat32Array()
+	samples.resize(int(duration * RATE))
+	for index in range(samples.size()):
+		var t := float(index) / RATE
+		var low := sin(TAU * 55.0 * t) * 0.25 + sin(TAU * 110.0 * t) * 0.09
+		var motor := sin(TAU * 27.5 * t + sin(TAU * 0.625 * t) * 0.12) * 0.08
+		var pulse := pow(maxf(0.0, sin(TAU * 1.25 * t)), 12.0) * sin(TAU * 330.0 * t) * 0.10
+		samples[index] = (low + motor + pulse) * 0.42
+	return _wav(samples, true)
 
 
 func _mix(target: PackedFloat32Array, source: PackedFloat32Array, offset: int, gain: float) -> void:
