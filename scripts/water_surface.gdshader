@@ -21,8 +21,8 @@ void fragment() {
 	float ripples = texture(surface_noise, ripple_uv).r;
 	float grain = texture(surface_noise, moving / 360.0 + vec2(0.31, 0.67)).r;
 
-	vec3 deep_color = mix(vec3(0.034, 0.115, 0.158), vec3(0.040, 0.145, 0.172), recovery);
-	vec3 shallow_color = mix(vec3(0.105, 0.257, 0.263), vec3(0.137, 0.296, 0.282), recovery);
+	vec3 deep_color = mix(vec3(0.035, 0.145, 0.180), vec3(0.045, 0.190, 0.216), recovery);
+	vec3 shallow_color = mix(vec3(0.110, 0.330, 0.345), vec3(0.140, 0.380, 0.360), recovery);
 	float depth_mix = smoothstep(0.06, 0.85, depth);
 	vec3 water = mix(shallow_color, deep_color, depth_mix);
 	// Broad uneven tonal volumes replace the old rectangular patches.

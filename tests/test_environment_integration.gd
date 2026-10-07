@@ -9,6 +9,7 @@ var checks := 0
 var failures: Array[String] = []
 var walked_edges := 0
 var blocker_checks := 0
+var edge_directions := {Vector2.LEFT: 0, Vector2.RIGHT: 0, Vector2.UP: 0, Vector2.DOWN: 0}
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -31,6 +32,8 @@ func walk_edge(sim: P17Simulation, a: Vector2, b: Vector2) -> void:
 		check(W.walkable(sim.pos,S.PLAYER_RADIUS,3),"Lia stays outside the base along %s → %s" % [a,b])
 	check(sim.pos.distance_to(b)<5,"Lia reaches the end of an accessible object edge %s → %s" % [a,b])
 	walked_edges += 1
+	var direction := (b-a).normalized().round()
+	edge_directions[direction] += 1
 
 func _run() -> void:
 	var sim: P17Simulation = S.new()
@@ -66,7 +69,10 @@ func _run() -> void:
 			var src: Rect2 = record.source
 			var visual: Rect2 = record.visual_bounds
 			check(absf(visual.size.x/src.size.x-visual.size.y/src.size.y)<0.001,"Equipment keeps a uniform art scale")
-	check(walked_edges>100,"Perimeters include front, back and lateral walking")
+	# New wetlands make some old perimeters intentionally inaccessible. Verify
+	# meaningful coverage on every side instead of a fixed total from the dry map.
+	for direction in edge_directions:
+		check(edge_directions[direction]>=10,"Perimeters include at least ten accessible edges in direction %s" % direction)
 	check(blocker_checks>100,"Base approach coverage includes all equipment categories")
 	for bridge in W.BRIDGES:
 		var center := bridge.get_center()

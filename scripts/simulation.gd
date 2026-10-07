@@ -59,7 +59,7 @@ var pulse_speed: float = 640.0
 var dash_recharge: float = 1.2
 var _fire_cd: float = 0.0
 var _dash_direction: Vector2 = Vector2.UP
-var _solid_rects: Array[Rect2] = []
+var _projectile_rects: Array[Rect2] = []
 var _particle_serial: int = 0
 
 
@@ -172,7 +172,7 @@ func _begin_encounter(at_checkpoint: bool) -> void:
 	particles.clear()
 	events.clear()
 	enemies.clear()
-	_solid_rects = W.solids(stage)
+	_projectile_rects = W.projectile_solids(stage)
 	var locations: Array = W.SPAWNS[stage]
 	var kinds: Array = WAVE_KINDS[stage]
 	for index in mini(locations.size(), kinds.size()):
@@ -478,17 +478,10 @@ func _avoid_move(enemy: Dictionary, travel: Vector2, radius: float) -> Vector2:
 
 func _wall_fraction(origin: Vector2, destination: Vector2, radius: float) -> float:
 	var first: float = INF
-	for rect in _solid_rects:
+	for rect in _projectile_rects:
 		first = minf(first, _segment_box(origin, destination, rect.grow(radius)))
-	# Land boundaries are part of collision too, including water between regions.
-	var samples: int = maxi(1, int(ceil(origin.distance_to(destination) / 5.0)))
-	for index in samples + 1:
-		var fraction: float = float(index) / float(samples)
-		if fraction >= first:
-			break
-		if not W.walkable(origin.lerp(destination, fraction), radius, stage):
-			first = fraction
-			break
+	# The published rectangle partition includes world bounds, banks and locked
+	# gates. Movement-only open drains are intentionally absent from this list.
 	return first
 
 

@@ -3,7 +3,10 @@ extends RefCounted
 ## Approved water-treatment-station concept art, placed without changing world geometry.
 
 const WaterSurface = preload("res://scripts/water_surface.gd")
-const FLOOR: Texture2D = preload("res://assets/station/stone_surface.png")
+const FLOOR: Texture2D = preload("res://assets/station/wet_concrete_v2.png")
+const FERNS: Texture2D = preload("res://assets/station/wetland_ferns.png")
+const FERN_CROPS := [Rect2(20,130,590,460),Rect2(640,20,595,570),Rect2(25,755,585,430),Rect2(650,680,590,550)]
+static var _floor_layouts: Dictionary = {}
 const STRUCTURES: Texture2D = preload("res://assets/station/structures_atlas.png")
 const TOTEMS: Texture2D = preload("res://assets/station/totems_atlas.png")
 const VEGETATION: Texture2D = preload("res://assets/station/vegetation_atlas.png")
@@ -38,21 +41,51 @@ const PLANT_CROPS := [
 ]
 
 static func draw_floor(canvas: Node2D, rect: Rect2, sector: int) -> void:
-	var color: Color = [Color("796d5d"),Color("6e7165"),Color("74766b"),Color("6a746d")][sector]
+	var color: Color = [Color("506971"),Color("647777"),Color("4f7276"),Color("526e6b")][sector]
 	canvas.draw_rect(rect,color)
 
 static func draw_floor_tile(canvas: Node2D, tile: Rect2, seed: int, sector: int) -> void:
-	var sample_width := int(tile.size.x * 1.65)
-	var sample_height := int(tile.size.y * 1.65)
-	var source := Rect2(29 + posmod(seed * 61, 1190 - sample_width),
-		23 + posmod(seed * 97, 1200 - sample_height), sample_width, sample_height)
-	var tint: Color = [Color("e8e1d4"),Color("d7ded5"),Color("d9dcd5"),Color("d1ddd7")][sector]
+	var sample_width := int(tile.size.x * 1.85)
+	var sample_height := int(tile.size.y * 1.85)
+	var dimensions := FLOOR.get_size()
+	var source := Rect2(16 + posmod(seed * 61, int(dimensions.x) - sample_width - 32),
+		16 + posmod(seed * 97, int(dimensions.y) - sample_height - 32), sample_width, sample_height)
+	var tint: Color = [Color("c2d8de"),Color("d5dbd1"),Color("b8d8d5"),Color("c2d4c9")][sector]
 	canvas.draw_texture_rect_region(FLOOR,tile,source,tint)
-	canvas.draw_rect(Rect2(tile.position+Vector2(2,1),Vector2(maxf(0,tile.size.x-4),1)),Color("d2c6a9",0.14))
-	canvas.draw_rect(Rect2(tile.position+Vector2(0,tile.size.y-1),Vector2(tile.size.x,1)),Color("393e3a",0.24))
-	canvas.draw_rect(Rect2(tile.position+Vector2(tile.size.x-1,0),Vector2(1,tile.size.y)),Color("3d413d",0.19))
-	if seed%7 == 0:
-		canvas.draw_rect(Rect2(tile.position+Vector2(2,2),Vector2(4,2)),Color("658045",0.60))
+	# A quiet maintenance floor keeps actor silhouettes above its fine aggregate.
+	canvas.draw_rect(tile,Color("78929c",0.17))
+	canvas.draw_rect(Rect2(tile.position+Vector2(2,1),Vector2(maxf(0,tile.size.x-4),1)),Color("aec6bc",0.12))
+	canvas.draw_rect(Rect2(tile.position+Vector2(0,tile.size.y-2),Vector2(tile.size.x,2)),Color("152a2e",0.69))
+	canvas.draw_rect(Rect2(tile.position+Vector2(tile.size.x-2,0),Vector2(2,tile.size.y)),Color("203435",0.68))
+	if seed%3 != 0:
+		var a := tile.position+Vector2(tile.size.x*(0.25+seed%3*0.17),2)
+		var b := a+Vector2(seed%23-11,tile.size.y*0.32)
+		var c := b+Vector2(seed%17-8,tile.size.y*0.22)
+		canvas.draw_polyline(PackedVector2Array([a,b,c]),Color("172d30",0.67),1)
+		canvas.draw_polyline(PackedVector2Array([a+Vector2(1,0),b+Vector2(1,0),c+Vector2(1,0)]),Color("acc0af",0.12),1)
+
+static func floor_tiles(rect: Rect2, sector: int) -> Array[Dictionary]:
+	if _floor_layouts.has(rect): return _floor_layouts[rect]
+	var result: Array[Dictionary] = []
+	var y := int(rect.position.y)
+	var row := 0
+	while y<int(rect.end.y):
+		var height := mini([80,96,88,104][row%4],int(rect.end.y)-y)
+		var x := int(rect.position.x)
+		while x<int(rect.end.x):
+			var seed := posmod(int(x/13)*73+(row*7+sector*19)*157+int(x/13)*(row*7+sector*19)*13,997)
+			var width := mini(48 if x==int(rect.position.x) and row%2==1 else [104,128,144,112][seed%4],int(rect.end.x)-x)
+			result.append({"rect":Rect2(x,y,width,height),"seed":seed})
+			x += width
+		y += height
+		row += 1
+	_floor_layouts[rect] = result
+	return result
+
+static func draw_fern(canvas: Node2D, foot: Vector2, width: float, seed: int) -> void:
+	var source: Rect2 = FERN_CROPS[seed%4]
+	var height := width*source.size.y/source.size.x
+	canvas.draw_texture_rect_region(FERNS,Rect2(foot-Vector2(width*0.5,height),Vector2(width,height)),source,Color("e2edd2"))
 
 static func draw_structure(canvas: Node2D, kind: int, rect: Rect2, tint: Color = Color.WHITE) -> void:
 	var source: Rect2 = STRUCTURE_CROPS[kind]

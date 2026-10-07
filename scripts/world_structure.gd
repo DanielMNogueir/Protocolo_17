@@ -62,6 +62,10 @@ func _set_state(next_state: StructureState) -> void:
 
 
 func _apply_scene_state() -> void:
+	var control_panel := get_node_or_null("VisualMain/Terminal")
+	if control_panel:
+		control_panel.online = structure_state == StructureState.ONLINE
+		control_panel.repair = startup_progress() if structure_state == StructureState.STARTING else 0.0
 	var online_overlay := get_node_or_null("VisualUpper/OnlineOverlay") as CanvasItem
 	if online_overlay:
 		online_overlay.visible = structure_state != StructureState.OFFLINE
@@ -80,4 +84,3 @@ func _apply_scene_state() -> void:
 	var animation_player := get_node_or_null("AnimationPlayer") as AnimationPlayer
 	if animation_player and animation_player.has_animation(state_name()):
 		animation_player.play(state_name())
-
