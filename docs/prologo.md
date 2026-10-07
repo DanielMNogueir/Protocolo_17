@@ -2,7 +2,7 @@
 
 Nova operação começa com uma tela breve sobre Aurora em funcionamento. Em seguida,
 o jogador controla Doutora Beatrix Window no laboratório: diagnóstico, consulta à
-análise ambiental, desativação de um atuador com pulsos, isolamento da rede, fuga
+análise ambiental, desativação de um atuador com E, isolamento da rede, fuga
 com esquiva e preservação de um registro. Depois dessa conquista, os drones atacam
 a cientista; a imagem corta antes do impacto. A perda do sinal humano confirma o
 acontecimento, e o jogo passa ao início normal da campanha de Lia.
@@ -10,20 +10,20 @@ acontecimento, e o jogo passa ao início normal da campanha de Lia.
 A transmissão para Lia aguarda Enter ou o botão de assumir controle, permitindo
 ler a mensagem com calma. P também continua disponível nessa passagem.
 
-A máquina responde em balões associados ao núcleo, sem nome, identificação ou
+A máquina responde na barra de diálogo inferior, sem nome, identificação ou
 referência visível a Protocolo 17. A cientista humana tenta impedir a contenção.
 A verdadeira identidade da máquina e da futura guia digital permanece reservada
 à narrativa posterior; essa versão não acrescenta ainda a guia à campanha.
 
 ## Controles e repetição
 
-- WASD/setas: movimento. Mouse: direção do pulso. Clique/espaço: emitir pulso.
-- Um toque em E: inicia a calibração, consulta, isolamento ou preservação do registro; a ação termina automaticamente enquanto Beatrix permanece perto da estação. Afastar-se cancela a ação. Adaptação provisória para testes pelo AnyDesk, restrita ao prólogo.
+- WASD/setas: movimento.
+- Um toque em E: inicia a calibração, consulta, desativação do atuador, isolamento ou preservação do registro; a ação termina automaticamente enquanto Beatrix permanece perto da estação. Afastar-se cancela a ação. Adaptação provisória para testes pelo AnyDesk, restrita ao prólogo.
 - Shift: esquiva durante a fuga; avisos dos drones antecedem os disparos.
 - Enter: primeiro completa a frase em exibição, depois avança.
-- As falas do laboratório avançam automaticamente após o tempo de leitura. Beatrix pode mover-se e interagir durante as falas de rotina; a descoberta da contenção e o último registro pausam as ações até suas falas terminarem. Enter continua disponível para avançar antes.
-- Enter pressionado: acelera a sequência de falas, sem concluir tarefas jogáveis.
-- Tab ou botão inferior: falas instantâneas; preferência salva nas configurações.
+- Cada fala espera uma nova confirmação; movimento, interação e ameaças ficam suspensos durante a leitura.
+- Enter pressionado: acelera apenas a escrita da fala atual, sem avançar a conversa.
+- Tab ou botão inferior: falas instantâneas, ainda com confirmação manual; preferência salva nas configurações.
 - P ou **Pular introdução**: pula contexto, laboratório e encerramento juntos.
 - Esc: pausa. A pausa oferece Retomar, Configurações, Voltar e Pular introdução.
 - R: retoma a fuga após falhar, com vida restaurada e conexão já isolada.
@@ -36,7 +36,7 @@ Continuar operação carrega o checkpoint existente e não repete a introdução
 
 ## Organização
 
-- `scripts/prologue.gd`: sequência narrativa, texto, tarefas, movimento, pulsos,
+- `scripts/prologue.gd`: sequência narrativa, texto, tarefas, movimento, interação,
   esquiva, ameaças, tentativa de contenção e passagem para Lia.
 - `scripts/laboratory_world.gd`: geometria, colisão, arte, profundidade e animação.
 - `scripts/laboratory_set.gd`: contornos, bases de colisão e bordas frontais medidos
@@ -75,12 +75,14 @@ atrás dos equipamentos. A profundidade segue a borda diagonal da base na posiç
 horizontal da cientista, em vez de ordenar todas as peças por uma altura fixa.
 
 O indicador aponta o instrumento da estação e o local livre para se aproximar.
-O atuador possui uma área de impacto na face do gabinete: seus próprios apoios
-não impedem o tutorial de pulsos. Os drones permanecem nas suas posições livres
+Um anel destaca o ponto de interação, e uma seta perto de Beatrix aponta para
+o objetivo enquanto ele estiver distante; quando o destino estiver fora da área
+de jogo, a seta aparece na borda visível. O atuador agora usa E no ponto livre
+ao lado do gabinete. Os drones permanecem nas suas posições livres
 durante o encerramento, com disparos visuais antes do corte, sem atravessar móveis.
 
-Calibrar, consultar e isolar levam 0,6 segundo; preservar leva 0,9 segundo.
-E continua funcionando com um toque. P pula tudo; Enter e Tab aceleram as falas.
+Calibrar, consultar, desativar o atuador e isolar levam 0,6 segundo; preservar leva 0,9 segundo.
+E continua funcionando com um toque. P pula tudo; Enter acelera a escrita e Tab alterna texto instantâneo.
 A identidade da máquina continua oculta e a campanha de Lia mantém seu checkpoint.
 
 ## Validação
@@ -108,9 +110,9 @@ e a simulação da campanha foram confirmadas novamente no projeto principal.
 
 Revisão de ritmo e cenário: percurso do prólogo (678 verificações), integração de entrada/pular/reprodução (29), renderização (874, incluindo animação individual dos dois shaders) e simulação da campanha (92) passaram. Dez capturas revisadas visualmente incluem uma vista geral do laboratório. Foram verificados percurso com movimento real, toque único em E, avanço automático das falas, movimento durante falas de rotina, colisões, câmera, iluminação de alarme e oclusão.
 
-Revisão do laboratório compacto: percurso com movimento e disparos reais (520 verificações), integração do controlador (29) e renderização (876) passaram. A verificação gráfica inclui sombras fora da base do núcleo e ausência de sombra no corredor livre. Dez capturas da sala em rotina, alarme, fuga e registro estão em `captures/prologo-compacto`. As posições do tutorial, dos drones e da retomada acompanham a nova sala. E com um toque, P para pular e o checkpoint da campanha continuam preservados.
+Revisão do laboratório compacto: percurso com movimento e disparos reais (520 verificações), integração do controlador (29) e renderização (876) passaram na versão anterior, quando o atuador ainda usava pulsos. A verificação gráfica inclui sombras fora da base do núcleo e ausência de sombra no corredor livre. Dez capturas da sala em rotina, alarme, fuga e registro estão em `captures/prologo-compacto`. As posições do tutorial, dos drones e da retomada acompanham a nova sala. E com um toque, P para pular e o checkpoint da campanha continuam preservados.
 
-Revisão do cenário isométrico integrado: percurso com movimento e disparos reais
+Revisão do cenário isométrico integrado: percurso com movimento e disparos reais na versão anterior
 (385 verificações), controlador/pular/reprodução (29), renderização com GPU (893)
 e simulação da campanha (92) passaram. O teste gráfico usa posições acessíveis
 atrás e à frente do núcleo e verifica a oclusão real da cientista, animação de

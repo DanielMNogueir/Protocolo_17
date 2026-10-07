@@ -79,12 +79,11 @@ func _run() -> void:
 	walk(story,Lab.ANALYSIS)
 	interact(story)
 	check(story.step==3,"Environmental report triggers containment")
-	walk(story,Lab.RELAY_APPROACH)
-	for frame in range(180):
-		story.tick(1.0/60,Vector2.ZERO,Lab.RELAY,true,false,false)
-		if story.step!=3: break
-	check(story.relay_hits==2 and story.step==4,"Aimed live projectiles disable the actuator")
-	_dismiss(story)
+	walk(story,Intro.TARGETS[3])
+	for frame in range(60): story.tick(1.0/60,Vector2.ZERO,Lab.RELAY,true,false,false)
+	check(story.step==3 and story.bolts.is_empty(),"Shooting no longer advances the actuator objective")
+	interact(story)
+	check(story.step==4,"One E press disables the actuator after remaining nearby")
 	walk(story,Lab.ISOLATION)
 	interact(story)
 	check(story.step==5,"Isolation opens the escape objective")

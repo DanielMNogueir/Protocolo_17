@@ -21,6 +21,7 @@ func _run() -> void:
 		["02_rotina",1,Intro.Lab.START,Intro.Lab.SIZE/2,[]],
 		["03_resposta",2,Intro.Lab.ANALYSIS,Intro.Lab.SIZE/2,[["beatrix","Circuito estável. Agora, mostre a análise ambiental."]]],
 		["04_ruptura",3,Intro.Lab.RELAY_APPROACH,Intro.Lab.SIZE/2,[["system","Solicitação negada. Iniciando contenção da intervenção humana."]]],
+		["04_atuador",3,Intro.Lab.START,Intro.Lab.SIZE/2,[]],
 		["05_fuga",5,Intro.Lab.ESCAPE,Intro.Lab.SIZE/2,[]],
 		["06_registro",6,Intro.Lab.ARCHIVE,Intro.Lab.SIZE/2,[]],
 	]
@@ -62,7 +63,7 @@ func _run() -> void:
 	game.free()
 	game = null
 	for cleanup in range(5): await process_frame
-	print("PROLOGUE_REVIEW_OK: 10 actual game views")
+	print("PROLOGUE_REVIEW_OK: 11 actual game views")
 	quit(0)
 
 func _capture(label: String) -> void:
