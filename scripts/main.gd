@@ -124,7 +124,7 @@ func _process(delta: float) -> void:
 		var offset := (_size()/2-prologue_camera).round()
 		var cursor := pointer-offset
 		if _key(KEY_SPACE): cursor = prologue.pos+prologue.aim*100
-		prologue.tick(dt,motion,cursor,(Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE),dash_requested,prologue_interact_requested,_key(KEY_ENTER) or _key(KEY_KP_ENTER))
+		prologue.tick(dt,motion,cursor,(Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE),false,prologue_interact_requested,_key(KEY_ENTER) or _key(KEY_KP_ENTER))
 		prologue_interact_requested = false
 		dash_requested = false
 		prologue_camera = Prologue.Lab.camera(prologue_camera.lerp(prologue.pos,1-exp(-dt*6)),_size())
@@ -205,7 +205,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_P: _finish_prologue()
 			KEY_TAB: _action("intro_fast")
 			KEY_ENTER, KEY_KP_ENTER: prologue.advance()
-			KEY_SHIFT: dash_requested = true
 			KEY_E:
 				if prologue.phase == "lab" and (prologue.conversation.is_empty() or not prologue.dialogue_blocks): prologue_interact_requested = true
 			KEY_R:

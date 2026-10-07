@@ -38,14 +38,14 @@ func route(start: Vector2, goal: Vector2) -> Array[Vector2]:
 		current = parents[current]
 	return result
 
-func walk(story: P17Prologue, goal: Vector2) -> void:
+func walk(story: P17Prologue, goal: Vector2, protect: bool = true) -> void:
 	var path := route(story.pos,goal)
 	check(not path.is_empty(),"Reachable tutorial station: "+str(goal))
 	for point in path:
 		for frame in range(250):
 			if story.pos.distance_to(point)<4: break
 			if not story.conversation.is_empty(): _dismiss(story)
-			story.invulnerable = 1 # Only isolate route/progression from combat difficulty.
+			if protect: story.invulnerable = 1 # Only isolate route/progression from combat difficulty.
 			story.tick(1.0/60,(point-story.pos).normalized(),goal,false,false,false)
 			check(Lab.walkable(story.pos),"Real tutorial movement respects the laboratory footprints")
 	check(story.pos.distance_to(goal)<10,"Bot reaches station through movement, without teleporting")
@@ -87,11 +87,12 @@ func _run() -> void:
 	walk(story,Lab.ISOLATION)
 	interact(story)
 	check(story.step==5,"Isolation opens the escape objective")
+	story.invulnerable = 0
 	story.tick(1.0/60,Vector2.RIGHT,story.pos+Vector2.RIGHT,false,true,false)
-	check(story.used_dash and story.dash_time>0,"Escape introduces a working dash")
-	walk(story,Intro.TARGETS[5])
+	check(story.velocity.length()==225 and not story.events.has("dash"),"Shift has no movement effect in the prologue")
+	walk(story,Intro.TARGETS[5],false)
 	_dismiss(story)
-	check(story.step==6,"Escape leads to the emergency archive")
+	check(story.step==6 and story.hp>0,"Walking to the archive survives and advances without Shift")
 	walk(story,Lab.ARCHIVE)
 	interact(story)
 	check(story.record_saved and story.phase=="ending","Successful archive action precedes the scripted death")

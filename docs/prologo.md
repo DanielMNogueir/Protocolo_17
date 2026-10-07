@@ -3,7 +3,7 @@
 Nova operação começa com uma tela breve sobre Aurora em funcionamento. Em seguida,
 o jogador controla Doutora Beatrix Window no laboratório: diagnóstico, consulta à
 análise ambiental, desativação de um atuador com E, isolamento da rede, fuga
-com esquiva e preservação de um registro. Depois dessa conquista, os drones atacam
+sob ataque e preservação de um registro. Depois dessa conquista, os drones atacam
 a cientista; a imagem corta antes do impacto. A perda do sinal humano confirma o
 acontecimento, e o jogo passa ao início normal da campanha de Lia.
 
@@ -19,7 +19,7 @@ A verdadeira identidade da máquina e da futura guia digital permanece reservada
 
 - WASD/setas: movimento.
 - Um toque em E: inicia a calibração, consulta, desativação do atuador, isolamento ou preservação do registro; a ação termina automaticamente enquanto Beatrix permanece perto da estação. Afastar-se cancela a ação. Adaptação provisória para testes pelo AnyDesk, restrita ao prólogo.
-- Shift: esquiva durante a fuga; avisos dos drones antecedem os disparos.
+- A fuga depende de alcançar o arquivo; os avisos vermelhos antecedem os disparos dos drones. Shift não é necessário no prólogo.
 - Enter: primeiro completa a frase em exibição, depois avança.
 - Cada fala espera uma nova confirmação; movimento, interação e ameaças ficam suspensos durante a leitura.
 - Enter pressionado: acelera apenas a escrita da fala atual, sem avançar a conversa.
@@ -37,7 +37,7 @@ Continuar operação carrega o checkpoint existente e não repete a introdução
 ## Organização
 
 - `scripts/prologue.gd`: sequência narrativa, texto, tarefas, movimento, interação,
-  esquiva, ameaças, tentativa de contenção e passagem para Lia.
+  ameaças, tentativa de contenção e passagem para Lia.
 - `scripts/laboratory_world.gd`: geometria, colisão, arte, profundidade e animação.
 - `scripts/laboratory_set.gd`: contornos, bases de colisão e bordas frontais medidos
   na imagem original. Todos passam pela mesma transformação para o mundo.
@@ -81,6 +81,10 @@ de jogo, a seta aparece na borda visível. O atuador agora usa E no ponto livre
 ao lado do gabinete. Os drones permanecem nas suas posições livres
 durante o encerramento, com disparos visuais antes do corte, sem atravessar móveis.
 
+A caminhada de Beatrix alterna as duas poses de passada com uma pose de passagem.
+Os deslocamentos medidos dos quadros mantêm cabeça e tronco alinhados enquanto
+as pernas mudam de posição nas oito direções.
+
 Calibrar, consultar, desativar o atuador e isolar levam 0,6 segundo; preservar leva 0,9 segundo.
 E continua funcionando com um toque. P pula tudo; Enter acelera a escrita e Tab alterna texto instantâneo.
 A identidade da máquina continua oculta e a campanha de Lia mantém seu checkpoint.
@@ -90,6 +94,7 @@ A identidade da máquina continua oculta e a campanha de Lia mantém seu checkpo
 ```text
 godot --headless --path . --script tests/test_prologue.gd
 godot --headless --path . --script tests/test_prologue_shell.gd
+godot --path . --script tests/test_beatrix_walk.gd --audio-driver Dummy
 godot --path . --script tests/test_prologue_rendering.gd --audio-driver Dummy
 godot --path . --script tools/review_prologue.gd --audio-driver Dummy
 ```

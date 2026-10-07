@@ -62,7 +62,6 @@ static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void
 	if (story.conversation.is_empty() or not story.dialogue_blocks) and story.phase == "lab" and story.step<7:
 		var hint: String = story.HINTS[story.step]
 		if story.interaction_active: hint = "AÇÃO EM ANDAMENTO  •  PERMANEÇA PERTO DA ESTAÇÃO"
-		if story.step == 5 and story.used_dash: hint = "ALCANCE O ARQUIVO  •  OS DRONES ANUNCIAM CADA DISPARO"
 		var bottom: float = size.y-43 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-24
 		canvas.draw_rect(Rect2(180,bottom-25,size.x-360,25),Color(INK,0.93))
 		canvas._text_center(hint,Vector2(size.x/2,bottom-8),9,CYAN)
