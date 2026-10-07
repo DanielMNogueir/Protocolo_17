@@ -1,0 +1,28 @@
+extends RefCounted
+const HEIGHT := 233.0
+const FRAMES := [
+	{"region":Rect2(56,63,136,233),"anchor":Vector2(102.401,296)},
+	{"region":Rect2(278,63,136,233),"anchor":Vector2(320.934,296)},
+	{"region":Rect2(497,61,145,233),"anchor":Vector2(557.480,294)},
+	{"region":Rect2(711,61,122,235),"anchor":Vector2(788.183,296)},
+	{"region":Rect2(918,63,135,233),"anchor":Vector2(1006.747,296)},
+	{"region":Rect2(1145,61,131,231),"anchor":Vector2(1199.761,292)},
+	{"region":Rect2(1385,62,131,233),"anchor":Vector2(1443.806,295)},
+	{"region":Rect2(1608,61,129,231),"anchor":Vector2(1682.172,292)},
+	{"region":Rect2(57,296,133,277),"anchor":Vector2(152.568,573)},
+	{"region":Rect2(282,296,136,278),"anchor":Vector2(371.360,574)},
+	{"region":Rect2(495,344,141,235),"anchor":Vector2(560.833,579)},
+	{"region":Rect2(705,296,121,277),"anchor":Vector2(734.809,573)},
+	{"region":Rect2(908,296,139,278),"anchor":Vector2(957.410,574)},
+	{"region":Rect2(1145,345,130,224),"anchor":Vector2(1234.698,569)},
+	{"region":Rect2(1385,343,135,236),"anchor":Vector2(1428.652,579)},
+	{"region":Rect2(1609,343,133,226),"anchor":Vector2(1647.139,569)},
+	{"region":Rect2(61,618,138,225),"anchor":Vector2(154.165,843)},
+	{"region":Rect2(272,616,138,231),"anchor":Vector2(365.063,847)},
+	{"region":Rect2(496,615,139,234),"anchor":Vector2(545.318,849)},
+	{"region":Rect2(710,616,123,228),"anchor":Vector2(739.917,844)},
+	{"region":Rect2(911,616,138,227),"anchor":Vector2(955.599,843)},
+	{"region":Rect2(1141,615,136,226),"anchor":Vector2(1234.409,841)},
+	{"region":Rect2(1382,616,133,233),"anchor":Vector2(1447.912,849)},
+	{"region":Rect2(1603,615,140,226),"anchor":Vector2(1650.605,841)},
+]

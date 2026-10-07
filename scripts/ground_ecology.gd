@@ -60,11 +60,11 @@ static func prepare(regions: Array[Rect2], channels: Array[Rect2], basins: Array
 				var grain := detail.get_noise_2dv(p)*0.5+0.5
 				var joint := joints.get_pixel(x,y).r
 				var score := n*0.48+field.r*0.44+field.g*0.34+joint*(0.10+grain*0.21)
-				var cover := smoothstep(0.56,0.74,score+grain*0.09)
+				var cover := smoothstep(0.63,0.80,score+grain*0.09)
 				var damp := Color("102e36",field.r*(0.13+0.10*n))
 				if cover>0.04:
-					var moss := Color("24422d").lerp(Color("637e27"),clampf(grain*1.7-0.35,0,1))
-					if grain>0.66: moss = moss.lerp(Color("a2ad49"),0.45)
+					var moss := Color("233b30").lerp(Color("4c643b"),clampf(grain*1.7-0.35,0,1))
+					if grain>0.66: moss = moss.lerp(Color("819057"),0.25)
 					moss.a = cover*(0.64+0.30*grain)
 					damp = damp.blend(moss)
 				image.set_pixel(x,y,damp)

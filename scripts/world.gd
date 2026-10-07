@@ -7,6 +7,7 @@ const StationArt = preload("res://scripts/station_art.gd")
 const EnergyStation = preload("res://scripts/energy_station.gd")
 const EnvironmentProps = preload("res://scripts/environment_props.gd")
 const WaterSurface = preload("res://scripts/water_surface.gd")
+const Architecture = preload("res://scripts/district_architecture.gd")
 const BridgeLayout = preload("res://scripts/bridge_layout.gd")
 const Wetlands = preload("res://scripts/wetlands.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
@@ -70,6 +71,8 @@ static func props() -> Array[Dictionary]:
 		["tank",Rect2(1510,1310,80,100)],["cabinet",Rect2(2335,1120,45,70)],
 		["solar",Rect2(2280,1350,115,60)],["open_crate",Rect2(1530,1570,50,44)],
 		["barrel",Rect2(1600,1580,28,34)],["pump",Rect2(1880,1550,65,70)],
+		["service_rack",Rect2(562,1080,56,70)],["service_rack",Rect2(612,365,56,70)],
+		["service_rack",Rect2(1987,270,56,70)],["service_rack",Rect2(1792,1110,56,70)],
 	]
 	for item in items:
 		var rect: Rect2 = item[1]
@@ -129,6 +132,8 @@ static func _build_solids() -> void:
 	for index in range(1,BASINS.size()):
 		_solid_cache.append(BASINS[index])
 	_solid_cache.append_array(Wetlands.channel_solids())
+	prepare_wetlands()
+	for wall in Architecture.walls: _solid_cache.append(wall.collision_rect)
 	_solid_cache.append(clarifier().collision_rect)
 	for building in building_objects():
 		_solid_cache.append(building.collision_rect)
@@ -168,6 +173,8 @@ static func projectile_solids(stage: int) -> Array[Rect2]:
 	# Open drains block ground movement, but do not form invisible shooting walls.
 	var result := solids(stage)
 	for channel_piece in Wetlands.channel_solids(): result.erase(channel_piece)
+	# Low retaining lips stop feet; pulses pass over them just like open drains.
+	for wall in Architecture.walls: result.erase(wall.collision_rect)
 	return result
 
 static func _circle_hits_rect(point: Vector2, radius: float, rect: Rect2) -> bool:
@@ -183,7 +190,7 @@ static func _visible(rect: Rect2, view: Rect2) -> bool:
 static func _hash(x: int, y: int) -> int:
 	return posmod(x*73+y*157+x*y*13,997)
 
-static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int, time: float, water_surface: P17WaterSurface) -> void:
+static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int, time: float, water_surface: P17WaterSurface, district_effects: Node = null) -> void:
 	prepare_wetlands()
 	var viewport_size:=canvas.get_viewport_rect().size
 	var view:=Rect2(camera_pos-viewport_size*0.5,viewport_size).grow(90)
@@ -193,6 +200,7 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 			_draw_region(canvas,REGIONS[i],i,view,restored)
 			StationArt.draw_shoreline(canvas,REGIONS[i],i,view,restored,time)
 	Wetlands.draw_ground(canvas,view,time)
+	Architecture.draw_ground(canvas,view)
 	Wetlands.draw_channels(canvas,view,water_surface,time,restored)
 	for bridge in BRIDGES:
 		if _visible(bridge,view): _draw_bridge(canvas,bridge,false)
@@ -200,6 +208,7 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 	_draw_utilities(canvas,view,restored,time)
 	for i in range(BASINS.size()):
 		if i != 0 and _visible(BASINS[i],view): _draw_basin(canvas,BASINS[i],i,restored,time,water_surface)
+	if district_effects: district_effects.draw_ground(canvas)
 	for prop in props():
 		if not _visible(prop.rect,view): continue
 		if prop.kind == "fern":
@@ -233,6 +242,7 @@ static func terminal(index: int) -> Dictionary:
 static func sortable_objects(view: Rect2) -> Array[Dictionary]:
 	prepare_wetlands()
 	var result: Array[Dictionary] = []
+	result.append_array(Architecture.parts(view))
 	result.append_array(Wetlands.plants(view))
 	for building in building_objects():
 		if _visible(building.visual_bounds,view):
@@ -255,11 +265,18 @@ static func sortable_objects(view: Rect2) -> Array[Dictionary]:
 static func draw_sortable(canvas: Node2D, object: Dictionary, restored: int, time: float, stage: int = 0, available: bool = false, repair: float = 0.0) -> void:
 	match object.type:
 		"wetland_plant": Wetlands.draw_plant(canvas,object,time)
-		"machine": EnvironmentProps.draw(canvas,object.prop,time)
+		"machine": EnvironmentProps.draw(canvas,object.prop,time,_hydraulic_online(object.prop,restored))
 		"terminal": Objectives.draw_body(canvas,GOALS[object.index],object.index,object.index<restored,time,available and object.index==stage,repair if object.index==stage else 0.0)
 		"bridge_part": BridgeLayout.draw_part(canvas,object)
+		"district_wall": Architecture.draw_wall(canvas,object)
 		"gate": _draw_gate(canvas,object.rect,object.index<stage,time)
 		_: _draw_prop_art(canvas,object.prop,restored,time)
+
+static func _hydraulic_online(prop: Dictionary, restored: int) -> bool:
+	var center: Vector2 = prop.visual_bounds.get_center()
+	for sector in range(REGIONS.size()):
+		if REGIONS[sector].has_point(center): return restored>sector
+	return false
 
 static func prepare_wetlands() -> void:
 	if _wetlands_ready: return
@@ -276,6 +293,7 @@ static func prepare_wetlands() -> void:
 	for group in SPAWNS:
 		for spawn in group: reservations.append(Rect2(spawn-Vector2(32,32),Vector2(64,64)))
 	Wetlands.prepare(REGIONS,ROUTES,reservations,BASINS)
+	Architecture.prepare(REGIONS,Wetlands.CHANNELS,BRIDGES,Wetlands.CROSSINGS,PIER,BASINS)
 	_wetlands_ready = true
 
 static func _draw_region(canvas: Node2D, rect: Rect2, index: int, view: Rect2, restored: int) -> void:
@@ -425,7 +443,7 @@ static func _draw_basin(canvas: Node2D, rect: Rect2, index: int, restored: int, 
 	_pixel(canvas,Rect2(rect.position+Vector2(17,14),Vector2(6,6)),Color("94c8b1"))
 	if index==2:
 		WaterSurface.draw_outlet_contact(canvas,Vector2(rect.position.x+10,1430),time,restored>=3)
-		WaterSurface.draw_outlet_contact(canvas,Vector2(rect.end.x-2,1480),time,restored>=4)
+		WaterSurface.draw_outlet_contact(canvas,Vector2(rect.end.x-10,1480),time,restored>=4,Vector2.LEFT)
 	for n in range(4):
 		var foot := rect.position+Vector2(40+n*(rect.size.x-80)/3.0,42+(n%2)*36)
 		WaterSurface.draw_plant_contact(canvas,foot,34,time)
@@ -484,7 +502,7 @@ static func _draw_prop_art(canvas: Node2D, prop: Dictionary, restored: int, time
 		StationArt.draw_plant(canvas,plant_kind,prop["pos"]+Vector2(0,6),25+seed%10)
 		return
 	if EnvironmentProps.supports(kind):
-		EnvironmentProps.draw(canvas,prop,time)
+		EnvironmentProps.draw(canvas,prop,time,_hydraulic_online(prop,restored))
 		return
 	_draw_prop(canvas,prop,restored,time)
 

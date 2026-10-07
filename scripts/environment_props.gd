@@ -2,6 +2,8 @@ class_name P17EnvironmentProps
 extends RefCounted
 ## One placement record supplies art, ground contact, collision and depth.
 const StationArt = preload("res://scripts/station_art.gd")
+const Hydraulics = preload("res://scripts/hydraulic_effects.gd")
+const District = preload("res://scripts/district_assets.gd")
 const ATLAS: Texture2D = preload("res://assets/environment/props/industrial_props_atlas.png")
 const CROPS: Array[Rect2] = [
 	Rect2(62,74,373,379), Rect2(516,110,361,342),
@@ -12,6 +14,7 @@ const CROPS: Array[Rect2] = [
 # Footprints are measured fractions of the visible source, not its full box.
 # Explicit category profiles keep upper equipment and transparent corners free.
 const PROFILES := {
+	"service_rack": {"district":true,"width":60.0,"contact":Rect2(0.07,0.85,0.86,0.13)},
 	"crate": {"art":0,"width":52.0,"contact":Rect2(0.12,0.70,0.76,0.25)},
 	"open_crate": {"art":1,"width":54.0,"contact":Rect2(0.10,0.64,0.80,0.31)},
 	"stacked_crates": {"art":2,"width":66.0,"contact":Rect2(0.09,0.72,0.82,0.23)},
@@ -34,7 +37,7 @@ static func supports(kind: String) -> bool:
 
 static func create(kind: String, foot: Vector2, width: float = 0.0) -> Dictionary:
 	var profile: Dictionary = PROFILES[kind]
-	var source: Rect2 = CROPS[profile.art] if profile.has("art") else StationArt.STRUCTURE_CROPS[profile.station]
+	var source: Rect2 = District.CABINET if profile.has("district") else (CROPS[profile.art] if profile.has("art") else StationArt.STRUCTURE_CROPS[profile.station])
 	var actual_width: float = profile.width if width <= 0.0 else width
 	var size := Vector2(actual_width, actual_width * source.size.y / source.size.x)
 	var visual := Rect2(foot - Vector2(size.x * 0.5, size.y), size)
@@ -43,9 +46,10 @@ static func create(kind: String, foot: Vector2, width: float = 0.0) -> Dictionar
 	return {"kind":kind,"pos":collision.get_center(),"rect":collision,
 		"visual_bounds":visual,"source":source,"collision_rect":collision,
 		"depth_anchor":Vector2(foot.x,collision.end.y),"solid":true,
-		"station":profile.get("station",-1),"foot":foot}
+		"station":profile.get("station",-1),"foot":foot,"district":profile.get("district",false)}
 
 static func draw_foundation(canvas: Node2D, prop: Dictionary) -> void:
+	Hydraulics.draw_ground(canvas,prop)
 	var r: Rect2 = prop.collision_rect
 	var p := r.position
 	var e := r.end
@@ -70,10 +74,15 @@ static func draw_foundation(canvas: Node2D, prop: Dictionary) -> void:
 	if prop.kind in ["clarifier","control_room","manifold"]:
 		StationArt.draw_plant(canvas,4,Vector2(p.x+8,e.y+5),19,0.80)
 
-static func draw(canvas: Node2D, prop: Dictionary, time: float) -> void:
-	var texture: Texture2D = ATLAS if prop.station < 0 else StationArt.STRUCTURES
+static func draw(canvas: Node2D, prop: Dictionary, time: float, online: bool = false) -> void:
+	var texture: Texture2D = District.ATLAS if prop.get("district",false) else (ATLAS if prop.station < 0 else StationArt.STRUCTURES)
 	if prop.station>=0: StationArt.draw_structure(canvas,prop.station,prop.visual_bounds)
-	else: canvas.draw_texture_rect_region(texture,prop.visual_bounds,prop.source)
+	else: canvas.draw_texture_rect_region(texture,prop.visual_bounds,prop.source,Color("d3dedb"))
+	Hydraulics.draw_machine(canvas,prop,time,online)
+	if prop.get("district",false):
+		var r: Rect2=prop.visual_bounds
+		var p:=r.position+r.size*Vector2(0.46,0.31)
+		canvas.draw_rect(Rect2(p,Vector2(5,2)),Color("79dac9") if online else Color("dba875"))
 	if prop.kind == "cabinet":
 		var visual: Rect2 = prop.visual_bounds
 		canvas.draw_rect(Rect2(visual.position+visual.size*Vector2(0.66,0.46),Vector2(3,4)),Color("72dac7",0.65+0.2*sin(time*2.4)))

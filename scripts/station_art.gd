@@ -3,7 +3,7 @@ extends RefCounted
 ## Approved water-treatment-station concept art, placed without changing world geometry.
 
 const WaterSurface = preload("res://scripts/water_surface.gd")
-const FLOOR: Texture2D = preload("res://assets/station/wet_concrete_v2.png")
+const FLOOR: Texture2D = preload("res://assets/station/district_concrete_v3.png")
 const FERNS: Texture2D = preload("res://assets/station/wetland_ferns.png")
 const FERN_CROPS := [Rect2(20,130,590,460),Rect2(640,20,595,570),Rect2(25,755,585,430),Rect2(650,680,590,550)]
 static var _floor_layouts: Dictionary = {}
@@ -45,15 +45,12 @@ static func draw_floor(canvas: Node2D, rect: Rect2, sector: int) -> void:
 	canvas.draw_rect(rect,color)
 
 static func draw_floor_tile(canvas: Node2D, tile: Rect2, seed: int, sector: int) -> void:
-	var sample_width := int(tile.size.x * 1.85)
-	var sample_height := int(tile.size.y * 1.85)
-	var dimensions := FLOOR.get_size()
-	var source := Rect2(16 + posmod(seed * 61, int(dimensions.x) - sample_width - 32),
-		16 + posmod(seed * 97, int(dimensions.y) - sample_height - 32), sample_width, sample_height)
+	var origins: Array[Vector2]=[Vector2(100,1020),Vector2(100,100),Vector2(1450,100),Vector2(1450,1020)]
+	var source:=Rect2(tile.position-origins[sector],tile.size)
 	var tint: Color = [Color("c2d8de"),Color("d5dbd1"),Color("b8d8d5"),Color("c2d4c9")][sector]
 	canvas.draw_texture_rect_region(FLOOR,tile,source,tint)
 	# A quiet maintenance floor keeps actor silhouettes above its fine aggregate.
-	canvas.draw_rect(tile,Color("78929c",0.17))
+	canvas.draw_rect(tile,Color("708890",0.08))
 	canvas.draw_rect(Rect2(tile.position+Vector2(2,1),Vector2(maxf(0,tile.size.x-4),1)),Color("aec6bc",0.12))
 	canvas.draw_rect(Rect2(tile.position+Vector2(0,tile.size.y-2),Vector2(tile.size.x,2)),Color("152a2e",0.69))
 	canvas.draw_rect(Rect2(tile.position+Vector2(tile.size.x-2,0),Vector2(2,tile.size.y)),Color("203435",0.68))

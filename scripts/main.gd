@@ -10,6 +10,10 @@ const Sound = preload("res://scripts/audio.gd")
 const ENERGY_STATION_SCENE = preload("res://scenes/structures/energy_station.tscn")
 const WaterSurface = preload("res://scripts/water_surface.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
+const Prologue = preload("res://scripts/prologue.gd")
+const PrologueView = preload("res://scripts/prologue_presentation.gd")
+const LaboratoryEffects = preload("res://scripts/laboratory_effects.gd")
+const DistrictLighting = preload("res://scripts/district_lighting.gd")
 const SAVE_PATH := "user://aurora_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -63,12 +67,26 @@ var _shade: GradientTexture2D
 var _glow: GradientTexture2D
 var energy_station: Node2D
 var water_surface: P17WaterSurface
+var prologue: P17Prologue
+var laboratory_effects: P17LaboratoryEffects
+var district_effects: P17DistrictLighting
+var prologue_camera := Vector2(480,730)
+var prologue_replay := false
+var prologue_interact_requested := false
+var instant_prologue_text := false
+var ui_mouse_held := false
 
 func _ready() -> void:
+	laboratory_effects = LaboratoryEffects.new()
+	laboratory_effects.configure(Prologue.Lab.ROOM,Prologue.Lab.shadow_casters(),Prologue.Lab.CORE)
+	add_child(laboratory_effects)
 	water_surface=WaterSurface.new()
 	water_surface.configure(World.SIZE,World.REGIONS,World.BRIDGES,World.PIER,World.BASINS,World.Wetlands.CHANNELS)
 	water_surface.visible=false
 	add_child(water_surface)
+	district_effects=DistrictLighting.new()
+	district_effects.configure()
+	add_child(district_effects)
 	Actors.ENEMIES.prepare()
 	energy_station = ENERGY_STATION_SCENE.instantiate()
 	energy_station.position = World.ENERGY_STATION_ORIGIN
@@ -94,12 +112,25 @@ func _process(delta: float) -> void:
 	clock += dt
 	_update_energy_station(dt)
 	pointer = get_global_mouse_position()
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): ui_mouse_held = false
 	briefing_clock += dt
 	dialogue_clock += dt
 	toast_time = maxf(0, toast_time - dt)
 	shake = maxf(0, shake - dt * 14)
 	screen_flash = maxf(0, screen_flash - dt * 3)
 	title_fade = maxf(0, title_fade - dt * 0.7)
+	if mode == "prologue":
+		var motion := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT))-float(_key(KEY_A) or _key(KEY_LEFT)),float(_key(KEY_S) or _key(KEY_DOWN))-float(_key(KEY_W) or _key(KEY_UP)))
+		var offset := (_size()/2-prologue_camera).round()
+		var cursor := pointer-offset
+		if _key(KEY_SPACE): cursor = prologue.pos+prologue.aim*100
+		prologue.tick(dt,motion,cursor,(Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE),dash_requested,prologue_interact_requested,_key(KEY_ENTER) or _key(KEY_KP_ENTER))
+		prologue_interact_requested = false
+		dash_requested = false
+		prologue_camera = Prologue.Lab.camera(prologue_camera.lerp(prologue.pos,1-exp(-dt*6)),_size())
+		for cue in prologue.events: sound.play_sfx(cue)
+		sound.set_mood("suspense" if prologue.step>=3 else "calm")
+		if prologue.finished: _finish_prologue()
 	if mode == "play" and dialogue.is_empty():
 		var motion := Vector2(
 			float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
@@ -112,7 +143,7 @@ func _process(delta: float) -> void:
 		var old_state: String = sim.state
 		if enemy_presentation.units.is_empty() and not sim.enemies.is_empty():
 			enemy_presentation.advance(.000001, sim.enemies, sim.stage, sim.elapsed)
-		sim.tick(dt, motion, world_mouse, Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or _key(KEY_SPACE), dash_requested, _key(KEY_E), lia_animation.elapsed, lia_animation.moving)
+		sim.tick(dt, motion, world_mouse, (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE), dash_requested, _key(KEY_E), lia_animation.elapsed, lia_animation.moving)
 		lia_animation.advance(dt, sim.velocity, sim.dash_time > 0)
 		enemy_presentation.advance(dt, sim.enemies, sim.stage, sim.elapsed)
 		var heard := {}
@@ -156,6 +187,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		for button in buttons:
 			if button.rect.has_point(event.position):
+				ui_mouse_held = true
 				_action(button.id)
 				get_viewport().set_input_as_handled()
 				return
@@ -168,15 +200,32 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_F10:
 		_toggle_sound()
 		return
+	if mode == "prologue":
+		match key:
+			KEY_P: _finish_prologue()
+			KEY_TAB: _action("intro_fast")
+			KEY_ENTER, KEY_KP_ENTER: prologue.advance()
+			KEY_SHIFT: dash_requested = true
+			KEY_E:
+				if prologue.phase == "lab" and (prologue.conversation.is_empty() or not prologue.dialogue_blocks): prologue_interact_requested = true
+			KEY_R:
+				if prologue.phase == "retry": _action("intro_retry")
+			KEY_ESCAPE:
+				prologue_interact_requested = false
+				previous_mode = "prologue"
+				mode = "pause"
+		get_viewport().set_input_as_handled()
+		return
 	if key == KEY_ESCAPE:
 		if not dialogue.is_empty() and mode == "play":
 			previous_mode = "play"
 			mode = "pause"
 		elif mode == "map" or mode == "pause":
-			mode = "play"
+			mode = previous_mode if mode == "pause" else "play"
 		elif mode == "settings":
 			mode = settings_return
 		elif mode == "play":
+			previous_mode = "play"
 			mode = "pause"
 		elif mode == "briefing":
 			_start_new_run()
@@ -207,10 +256,17 @@ func _action(id: String) -> void:
 	sound.play_sfx("ui")
 	match id:
 		"new":
-			mode = "briefing"
-			briefing_page = 0
-			briefing_clock = 0
-			sound.set_mood("calm")
+			_start_prologue(false)
+		"intro_replay": _start_prologue(true)
+		"intro_next": prologue.advance()
+		"intro_skip": _finish_prologue()
+		"intro_retry":
+			prologue_interact_requested = false
+			prologue.retry()
+		"intro_fast":
+			instant_prologue_text = not instant_prologue_text
+			if prologue != null: prologue.fast_text = instant_prologue_text
+			_save_settings()
 		"continue":
 			var data := _read_checkpoint()
 			if not data.is_empty() and sim.load_data(data):
@@ -240,11 +296,12 @@ func _action(id: String) -> void:
 		"dialogue":
 			dialogue.clear()
 		"pause":
+			previous_mode = mode
 			mode = "pause"
 		"map":
 			mode = "map"
 		"resume":
-			mode = "play"
+			mode = previous_mode
 		"retry":
 			sim.retry()
 			enemy_presentation.reset()
@@ -255,6 +312,8 @@ func _action(id: String) -> void:
 			_notify("RECONEXÃO CONCLUÍDA  /  ETAPA PRESERVADA", 3)
 		"title":
 			mode = "title"
+			prologue = null
+			previous_mode = "play"
 			dialogue.clear()
 			has_save = not _read_checkpoint().is_empty()
 			sound.set_mood("menu")
@@ -270,7 +329,29 @@ func _action(id: String) -> void:
 				dialogue = FIELD_MESSAGES[clampi(sim.stage - 1, 0, 2)].duplicate()
 				dialogue_clock = 0
 				sound.set_mood("combat")
-				_notify("PASSAGEM LIBERADA  /  " + SECTOR_SUBTITLES[sim.stage], 4)
+			_notify("PASSAGEM LIBERADA  /  " + SECTOR_SUBTITLES[sim.stage], 4)
+
+func _start_prologue(replay: bool) -> void:
+	prologue_interact_requested = false
+	prologue = Prologue.new()
+	prologue.fast_text = instant_prologue_text
+	prologue_replay = replay
+	prologue_camera = Prologue.Lab.camera(prologue.pos,_size())
+	dash_requested = false
+	mode = "prologue"
+	sound.set_mood("calm")
+
+func _finish_prologue() -> void:
+	prologue_interact_requested = false
+	if prologue_replay:
+		mode = "title"
+		has_save = not _read_checkpoint().is_empty()
+		sound.set_mood("menu")
+	else:
+		_start_new_run()
+	prologue = null
+	previous_mode = "play"
+	dash_requested = false
 
 func _advance_briefing() -> void:
 	if briefing_clock < 1.2:
@@ -376,6 +457,7 @@ func _save_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("audio", "muted", muted)
 	config.set_value("display", "fullscreen", fullscreen)
+	config.set_value("narrative", "instant_prologue_text", instant_prologue_text)
 	config.save("user://settings.cfg")
 
 func _load_settings() -> void:
@@ -383,16 +465,23 @@ func _load_settings() -> void:
 	if config.load("user://settings.cfg") == OK:
 		muted = config.get_value("audio", "muted", false)
 		fullscreen = config.get_value("display", "fullscreen", false)
+		instant_prologue_text = config.get_value("narrative", "instant_prologue_text", false)
 		sound.set_muted(muted)
 		if fullscreen:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func _draw() -> void:
-	water_surface.visible=not (mode in ["title","briefing"] or (mode=="settings" and settings_return=="title"))
+	var showing_prologue := prologue!=null and (mode=="prologue" or (mode=="pause" and previous_mode=="prologue") or (mode=="settings" and settings_return=="pause" and previous_mode=="prologue"))
+	laboratory_effects.present(prologue.elapsed if prologue!=null else 0.0,prologue!=null and prologue.step>=3,showing_prologue and prologue.phase in ["lab","ending","retry"])
+	water_surface.visible=not (showing_prologue or mode in ["title","briefing"] or (mode=="settings" and settings_return=="title"))
+	district_effects.present(clock,sim.restored,water_surface.visible)
 	buttons.clear()
 	if _font == null:
 		return
-	if mode in ["title", "briefing"] or (mode == "settings" and settings_return == "title"):
+	if showing_prologue:
+		PrologueView.draw(self,prologue,prologue_camera)
+		if mode!="prologue": buttons.clear()
+	elif mode in ["title", "briefing"] or (mode == "settings" and settings_return == "title"):
 		_draw_opening()
 	else:
 		_draw_game()
@@ -462,6 +551,7 @@ func _draw_title() -> void:
 		_button(Rect2(50, y + 56, 145, 36), "CONFIGURAÇÕES", "settings", false)
 		_button(Rect2(204, y + 56, 146, 36), "SAIR", "exit", false)
 	_text("01 / OPERAÇÃO FILTRO", Vector2(50, size.y - 25), 11, WHITE)
+	_button(Rect2(50,size.y-79,300,29),"REVER PRÓLOGO","intro_replay",false)
 	_text_right("ALPHA 0.1  •  F11 TELA CHEIA", Vector2(size.x - 35, size.y - 25), 10, MUTED)
 	_text_right("DISTRITO DAS ÁGUAS", Vector2(size.x - 38, size.y - 84), 11, WHITE)
 	draw_circle(Vector2(size.x - 175, size.y - 88), 3, CYAN)
@@ -474,7 +564,7 @@ func _draw_briefing() -> void:
 	draw_line(Vector2(60, 82), Vector2(size.x - 60, 82), Color("36524f"))
 	var headlines := ["O futuro tinha um endereço.", "Então, a rede silenciou.", "As ordens foram alteradas."]
 	var descriptions := [
-		"Aurora nasceu de uma promessa: tecnologia e natureza poderiam crescer juntas. O Protocolo 17 cuidava da água, da energia e da vida que ligava a cidade.",
+		"Aurora nasceu de uma promessa: tecnologia e natureza poderiam crescer juntas. Uma rede automatizada cuidava da água, da energia e da vida que ligava a cidade.",
 		"Os canais escureceram. As bombas pararam. Os drones de manutenção passaram a atacar as pessoas que deveriam proteger.",
 		"Lia recebe um último sinal do Distrito das Águas. Quatro sistemas precisam voltar a funcionar antes que a contaminação alcance toda Aurora."
 	]
@@ -484,7 +574,7 @@ func _draw_briefing() -> void:
 	draw_rect(Rect2(60, 302, size.x - 120, 104), Color(INK, 0.94))
 	draw_rect(Rect2(60, 302, 3, 104), CYAN)
 	_radio_portrait(Vector2(81, 321), trans[0] == "LIA")
-	_text("CANAL 17  /  " + trans[0], Vector2(153, 329), 10, CYAN)
+	_text("CANAL LOCAL  /  " + trans[0], Vector2(153, 329), 10, CYAN)
 	var message: String = trans[1]
 	var visible := message.substr(0, mini(message.length(), int(briefing_clock * 60)))
 	_wrapped(visible, Rect2(153, 342, size.x - 240, 60), 14, WHITE, 21)
@@ -497,14 +587,15 @@ func _draw_game() -> void:
 	var world_offset:=(_size()*0.5-camera_pos+jitter).round()
 	water_surface.present(world_offset,clock,sim.restored)
 	draw_set_transform(world_offset)
-	World.draw(self, camera_pos, sim.stage, sim.restored, clock,water_surface)
+	district_effects.present(clock,sim.restored)
+	World.draw(self, camera_pos, sim.stage, sim.restored, clock,water_surface,district_effects)
 	energy_station.draw_foundation(self, clock)
 	_draw_terminals()
 	var entities: Array[Dictionary] = []
 	for enemy in sim.enemies:
 		if enemy.hp > 0:
-			entities.append({"y": enemy.pos.y, "enemy": enemy})
-	entities.append({"y": sim.pos.y, "player": true})
+			entities.append({"y": enemy.pos.y+(29 if enemy.kind=="boss" else 14), "enemy": enemy})
+	entities.append({"y": sim.pos.y+14, "player": true})
 	for wreck in enemy_presentation.wrecks:
 		entities.append({"y": wreck.pos.y, "wreck": wreck})
 	var world_view := Rect2(camera_pos-Vector2(770,490),Vector2(1540,980))
@@ -741,7 +832,10 @@ func _draw_pause() -> void:
 	_button(Rect2(x, 253, 290, 42), "RETOMAR OPERAÇÃO", "resume", true)
 	_button(Rect2(x, 306, 290, 36), "CONFIGURAÇÕES", "settings", false)
 	_button(Rect2(x, 354, 290, 36), "VOLTAR AO INÍCIO", "title", false)
-	_text_center("O checkpoint guarda o início da etapa atual.", Vector2(_size().x * 0.5, 431), 11, MUTED)
+	if previous_mode == "prologue":
+		_button(Rect2(x,402,290,30),"PULAR INTRODUÇÃO","intro_skip",false)
+	else:
+		_text_center("O checkpoint guarda o início da etapa atual.", Vector2(_size().x * 0.5, 431), 11, MUTED)
 
 func _draw_settings() -> void:
 	_overlay("CONFIGURAÇÕES", "Ajuste seu equipamento de campo.")

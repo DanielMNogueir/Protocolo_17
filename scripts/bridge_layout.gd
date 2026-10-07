@@ -1,5 +1,6 @@
 class_name P17BridgeLayout
 extends RefCounted
+const Assets = preload("res://scripts/district_assets.gd")
 ## New orthogonal bridge, built from actual geometry; no old atlas resampling.
 ## Ground modules and raised modules share a footprint for collision and Y sorting.
 const EDGE := 34.0
@@ -24,15 +25,7 @@ static func draw_deck(canvas: Node2D, rect: Rect2) -> void:
 
 static func _draw_grating(canvas: Node2D, d: Rect2, vertical: bool) -> void:
 	canvas.draw_rect(Rect2(d.position+Vector2(5,7),d.size),Color("071b23",0.50))
-	canvas.draw_rect(d,DARK)
-	canvas.draw_rect(d.grow(-2),Color("273f48"))
-	# Square openings and tiny bevels remain the same pixel size in both directions.
-	for y in range(int(d.position.y)+3,int(d.end.y)-3,5):
-		for x in range(int(d.position.x)+3,int(d.end.x)-3,5):
-			canvas.draw_rect(Rect2(x,y,3,3),Color("0c252f"))
-			canvas.draw_rect(Rect2(x,y,3,1),Color("526971"))
-			if posmod(x/5+y/5,13)==0:
-				canvas.draw_rect(Rect2(x+3,y+2,1,2),Color("80634b"))
+	Assets.grate(canvas,d)
 	var length := d.size.y if vertical else d.size.x
 	for offset in range(0,int(length),48):
 		var p := d.position+(Vector2(0,offset) if vertical else Vector2(offset,0))

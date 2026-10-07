@@ -2,6 +2,7 @@ class_name P17ObjectiveVisual
 extends RefCounted
 ## Physical mission equipment, shared placement and readable service states.
 const Art = preload("res://scripts/station_art.gd")
+const Hydraulics = preload("res://scripts/hydraulic_effects.gd")
 const TITLES := ["CAPTAÇÃO", "ENERGIA", "FILTRAGEM", "DISTRIBUIÇÃO"]
 const SYSTEMS := ["BOMBA DE ADMISSÃO", "CONTROLE DA REDE", "NÚCLEO DOS FILTROS", "CENTRAL DE VAZÃO"]
 const INK := Color("102630")
@@ -76,7 +77,7 @@ static func draw_body(canvas: Node2D, goal: Vector2, index: int, online: bool, t
 		var height := rect.size.x*source.size.y/source.size.x
 		var destination := Rect2(data.foot-Vector2(rect.size.x/2,height),Vector2(rect.size.x,height))
 		canvas.draw_texture_rect_region(Art.TOTEMS,destination,source)
-		if online: _draw_operation(canvas,rect,index,time)
+		Hydraulics.draw_objective(canvas,destination,source,index,time,online)
 	var lamp_position: Vector2 = [Vector2(0.87,0.42),Vector2(0.90,0.22),Vector2(0.93,0.67),Vector2(0.49,0.77)][index]
 	var lamp_center := rect.position+rect.size*lamp_position
 	var beacon := Rect2(lamp_center-Vector2(2,6),Vector2(4,12))
@@ -114,19 +115,6 @@ static func _draw_energy_panel(canvas: Node2D, r: Rect2, color: Color, online: b
 		canvas.draw_rect(Rect2(p,Vector2(2,2)),COPPER)
 	if online:
 		canvas.draw_rect(Rect2(r.position+Vector2(10+int(time*10)%22,29),Vector2(3,1)),CYAN)
-
-static func _draw_operation(canvas: Node2D, r: Rect2, index: int, time: float) -> void:
-	if index == 0 or index == 3:
-		var center := r.position+r.size*Vector2(0.53 if index==0 else 0.51,0.38 if index==0 else 0.58)
-		var radius := r.size.x*0.085
-		for blade in range(3):
-			var direction: Vector2 = Vector2.from_angle(time*1.25+blade*TAU/3)
-			canvas.draw_line(center+direction*2,center+direction*radius,Color("91e9d1",0.70),2)
-	else:
-		for column in range(3):
-			var p := r.position+r.size*Vector2(0.23+column*0.25,0.39)
-			p.y += fposmod(time*9+column*11,r.size.y*0.29)
-			canvas.draw_rect(Rect2(p,Vector2(2,3)),Color("c4f1df",0.72))
 
 static func draw_sign(canvas: Node2D, goal: Vector2, index: int, online: bool, available: bool, repair: float, time: float) -> void:
 	var data := placement(goal,index)
