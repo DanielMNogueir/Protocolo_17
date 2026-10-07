@@ -109,3 +109,14 @@ Canais e reservatórios abertos agora usam água animada com profundidade junto 
 margens, corrente orientada, ondulações discretas, sombra sob pontes e contato com
 vegetação. O shader é leve; os campos do mapa são construídos uma vez. As colisões
 e a progressão permanecem iguais. Consulte [desenho, manutenção e validação](docs/water_visuals.md).
+
+## Remodelamento do Distrito das Águas
+
+Concreto úmido, poças, vegetação agrupada e água dentro das plataformas nos quatro setores. O mapa incorpora 16 trechos de canais/reservatórios, quatro travessias de serviço e tubulações/comportas que conectam a composição às máquinas. Abra este project.godot no Godot e pressione F5.
+
+[Acabamento atual do solo, recursos e comparações](docs/direcao-visual/solo-integrado.md). O [remodelamento dos canais](docs/direcao-visual/remodelamento-mapa.md) e a [primeira implementação](docs/direcao-visual/implementacao.md) registram as etapas anteriores.
+
+
+## Objetivos de missão
+
+Os quatro objetivos possuem equipamentos destacados, identificação por setor, área de manutenção e estados visuais de avaria, disponibilidade, reparo e funcionamento. Consulte [design, comparações e verificações](docs/direcao-visual/objetivos.md). Execute `godot --headless --path . --script tests/test_objectives.gd` para validar acesso e reparos, ou `godot --path . --script tools/review_objectives.gd --audio-driver Dummy` para gerar as 16 capturas.

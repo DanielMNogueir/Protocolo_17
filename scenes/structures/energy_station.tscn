@@ -1,7 +1,8 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/energy_station.gd" id="1_script"]
 [ext_resource type="Texture2D" path="res://assets/station/structures_atlas.png" id="2_structures"]
+[ext_resource type="Script" path="res://scripts/objective_panel.gd" id="3_panel"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_control"]
 atlas = ExtResource("2_structures")
@@ -66,6 +67,10 @@ uv = PackedVector2Array(1240.00000, 1061.58142,1228.86603, 1080.86603,1079.67761
 
 [node name="VisualUpper" type="Node2D" parent="."]
 z_index = 1
+
+[node name="Terminal" type="Node2D" parent="VisualMain"]
+position = Vector2(177,-10)
+script = ExtResource("3_panel")
 
 [node name="OfflineOverlay" type="Polygon2D" parent="VisualUpper"]
 position = Vector2(177,-47)

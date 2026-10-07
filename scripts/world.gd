@@ -8,6 +8,8 @@ const EnergyStation = preload("res://scripts/energy_station.gd")
 const EnvironmentProps = preload("res://scripts/environment_props.gd")
 const WaterSurface = preload("res://scripts/water_surface.gd")
 const BridgeLayout = preload("res://scripts/bridge_layout.gd")
+const Wetlands = preload("res://scripts/wetlands.gd")
+const Objectives = preload("res://scripts/objective_visual.gd")
 const SIZE := Vector2(2560, 1800)
 const REGIONS: Array[Rect2] = [
 	Rect2(100, 1020, 1010, 660), Rect2(100, 100, 1010, 740),
@@ -19,10 +21,10 @@ const GOALS: Array[Vector2] = [Vector2(870,1190), EnergyStation.INTERACTION_POIN
 const ENERGY_STATION_ORIGIN: Vector2 = EnergyStation.WORLD_ORIGIN
 const CHECKPOINTS: Array[Vector2] = [START, Vector2(770,760), Vector2(1530,610), Vector2(2040,1100)]
 const SPAWNS := [
-	[Vector2(740,1360),Vector2(955,1260),Vector2(510,1450)],
+	[Vector2(740,1330),Vector2(955,1260),Vector2(510,1480)],
 	[Vector2(560,610),Vector2(920,455),Vector2(740,310),Vector2(410,670)],
 	[Vector2(1620,590),Vector2(1910,460),Vector2(2200,720),Vector2(2310,540),Vector2(2050,540)],
-	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1890,1510),Vector2(2110,1370)],
+	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1900,1540),Vector2(2110,1370)],
 ]
 const BRIDGES: Array[Rect2] = [Rect2(690,840,160,180),Rect2(1110,530,340,160),Rect2(1960,840,160,180)]
 const GATES: Array[Rect2] = [Rect2(682,919,176,22),Rect2(1269,522,22,176),Rect2(1952,919,176,22)]
@@ -38,6 +40,7 @@ const BUILDINGS: Array[Rect2] = [Rect2(230,220,350,230),Rect2(1550,180,430,220),
 static var _solid_cache: Array[Rect2] = []
 static var _props_cache: Array[Dictionary] = []
 static var _building_cache: Array[Dictionary] = []
+static var _wetlands_ready := false
 
 static func _land_at(point: Vector2) -> bool:
 	for region in REGIONS:
@@ -88,8 +91,10 @@ static func props() -> Array[Dictionary]:
 			var y := region.position.y + 20 if i%2==0 else region.end.y-31
 			if (region_index <= 1 and x>665 and x<870) or (region_index>=2 and x>1935 and x<2140):
 				continue
+			if Wetlands.water_contains(Vector2(x,y)): continue
 			_props_cache.append({"kind":"fern","pos":Vector2(x,y),"rect":Rect2(x-15,y-16,30,24),"solid":false})
 	for point in [Vector2(570,1500),Vector2(610,1120),Vector2(200,690),Vector2(1015,650),Vector2(1860,440),Vector2(2360,650),Vector2(1980,1530),Vector2(2200,1580)]:
+		if Wetlands.water_contains(point): continue
 		_props_cache.append({"kind":"fern","pos":point,"rect":Rect2(point-Vector2(15,16),Vector2(30,24)),"solid":false})
 	return _props_cache
 
@@ -123,6 +128,7 @@ static func _build_solids() -> void:
 			_solid_cache.append(Rect2(row_start,ys[yi],SIZE.x-row_start,ys[yi+1]-ys[yi]))
 	for index in range(1,BASINS.size()):
 		_solid_cache.append(BASINS[index])
+	_solid_cache.append_array(Wetlands.channel_solids())
 	_solid_cache.append(clarifier().collision_rect)
 	for building in building_objects():
 		_solid_cache.append(building.collision_rect)
@@ -158,6 +164,12 @@ static func walkable(point: Vector2, radius: float, stage: int) -> bool:
 		if stage<=i and _circle_hits_rect(point,radius,GATES[i]): return false
 	return true
 
+static func projectile_solids(stage: int) -> Array[Rect2]:
+	# Open drains block ground movement, but do not form invisible shooting walls.
+	var result := solids(stage)
+	for channel_piece in Wetlands.channel_solids(): result.erase(channel_piece)
+	return result
+
 static func _circle_hits_rect(point: Vector2, radius: float, rect: Rect2) -> bool:
 	var near := point.clamp(rect.position,rect.end)
 	return rect.has_point(point) or point.distance_squared_to(near)<radius*radius
@@ -172,6 +184,7 @@ static func _hash(x: int, y: int) -> int:
 	return posmod(x*73+y*157+x*y*13,997)
 
 static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int, time: float, water_surface: P17WaterSurface) -> void:
+	prepare_wetlands()
 	var viewport_size:=canvas.get_viewport_rect().size
 	var view:=Rect2(camera_pos-viewport_size*0.5,viewport_size).grow(90)
 	WaterSurface.draw_structure_contacts(canvas,view,BRIDGES,PIER,time)
@@ -179,6 +192,8 @@ static func draw(canvas: Node2D, camera_pos: Vector2, stage: int, restored: int,
 		if _visible(REGIONS[i],view):
 			_draw_region(canvas,REGIONS[i],i,view,restored)
 			StationArt.draw_shoreline(canvas,REGIONS[i],i,view,restored,time)
+	Wetlands.draw_ground(canvas,view,time)
+	Wetlands.draw_channels(canvas,view,water_surface,time,restored)
 	for bridge in BRIDGES:
 		if _visible(bridge,view): _draw_bridge(canvas,bridge,false)
 	if _visible(PIER,view): _draw_bridge(canvas,PIER,true)
@@ -213,16 +228,12 @@ static func clarifier() -> Dictionary:
 	return EnvironmentProps.create("clarifier",Vector2(BASINS[0].get_center().x,BASINS[0].end.y-3),256.0)
 
 static func terminal(index: int) -> Dictionary:
-	# The original objective coordinate stays free, just in front of the pedestal.
-	var height: float = [72.0,88.0,94.0,80.0][index]
-	var source: Rect2 = StationArt.TOTEM_CROPS[index]
-	var size := Vector2(height*source.size.x/source.size.y,height)
-	var visual := Rect2(GOALS[index]-Vector2(70+size.x*0.5,height+23),size)
-	var contact := Rect2(visual.position+size*Vector2(0.15,0.75),size*Vector2(0.70,0.20))
-	return {"visual_bounds":visual,"collision_rect":contact,"depth_anchor":Vector2(GOALS[index].x-70,contact.end.y)}
+	return Objectives.placement(GOALS[index],index)
 
 static func sortable_objects(view: Rect2) -> Array[Dictionary]:
+	prepare_wetlands()
 	var result: Array[Dictionary] = []
+	result.append_array(Wetlands.plants(view))
 	for building in building_objects():
 		if _visible(building.visual_bounds,view):
 			result.append({"type":"machine","prop":building,"y":building.depth_anchor.y})
@@ -241,34 +252,39 @@ static func sortable_objects(view: Rect2) -> Array[Dictionary]:
 		if _visible(GATES[index],view): result.append({"type":"gate","index":index,"rect":GATES[index],"y":GATES[index].end.y})
 	return result
 
-static func draw_sortable(canvas: Node2D, object: Dictionary, restored: int, time: float, stage: int = 0) -> void:
+static func draw_sortable(canvas: Node2D, object: Dictionary, restored: int, time: float, stage: int = 0, available: bool = false, repair: float = 0.0) -> void:
 	match object.type:
+		"wetland_plant": Wetlands.draw_plant(canvas,object,time)
 		"machine": EnvironmentProps.draw(canvas,object.prop,time)
-		"terminal": StationArt.draw_totem(canvas,GOALS[object.index],object.index,object.index<restored,time)
+		"terminal": Objectives.draw_body(canvas,GOALS[object.index],object.index,object.index<restored,time,available and object.index==stage,repair if object.index==stage else 0.0)
 		"bridge_part": BridgeLayout.draw_part(canvas,object)
 		"gate": _draw_gate(canvas,object.rect,object.index<stage,time)
 		_: _draw_prop_art(canvas,object.prop,restored,time)
+
+static func prepare_wetlands() -> void:
+	if _wetlands_ready: return
+	var reservations: Array[Rect2] = []
+	for prop in props():
+		if prop.solid: reservations.append(prop.rect)
+	for building in building_objects(): reservations.append(building.collision_rect)
+	reservations.append(clarifier().collision_rect)
+	reservations.append_array(EnergyStation.COLLISION_RECTS)
+	reservations.append_array(BASINS)
+	for crossing in Wetlands.CROSSINGS: reservations.append(crossing.grow(24))
+	for goal in GOALS: reservations.append(Rect2(goal-Vector2(44,44),Vector2(88,88)))
+	for index in [0,2,3]: reservations.append(terminal(index).collision_rect.grow(12))
+	for group in SPAWNS:
+		for spawn in group: reservations.append(Rect2(spawn-Vector2(32,32),Vector2(64,64)))
+	Wetlands.prepare(REGIONS,ROUTES,reservations,BASINS)
+	_wetlands_ready = true
 
 static func _draw_region(canvas: Node2D, rect: Rect2, index: int, view: Rect2, restored: int) -> void:
 	_pixel(canvas,Rect2(rect.position+Vector2(13,19),rect.size),Color("071923"))
 	_pixel(canvas,rect.grow(9),Color("0a2029"))
 	StationArt.draw_floor(canvas,rect,index)
-	var area := rect.intersection(view)
-	var row := 0
-	var tile_y := int(rect.position.y)
-	while tile_y < int(rect.end.y):
-		var height: int = mini([48,58,44,62][row%4],int(rect.end.y)-tile_y)
-		if tile_y+height >= int(area.position.y) and tile_y <= int(area.end.y):
-			var x := int(rect.position.x)
-			while x < int(rect.end.x):
-				var seed := _hash(int(x/13)+row*7,int(tile_y/11)+index*19)
-				var width: int = mini((24+row%3*8) if x == int(rect.position.x) and row%2 == 1 else [56,72,92,64][seed%4],int(rect.end.x)-x)
-				var tile := Rect2(x,tile_y,width,height)
-				if tile.intersects(view):
-					StationArt.draw_floor_tile(canvas,tile,seed,index)
-				x += width
-		tile_y += height
-		row += 1
+	for tile in StationArt.floor_tiles(rect,index):
+		if tile.rect.intersects(view):
+			StationArt.draw_floor_tile(canvas,tile.rect,tile.seed,index)
 	# Extra translucent damp marks vary per sector without interrupting routes.
 	for n in range(9):
 		var stain := rect.position+Vector2(72+posmod(n*137+index*83,int(rect.size.x)-144),84+posmod(n*89+index*59,int(rect.size.y)-168))
@@ -409,6 +425,7 @@ static func _draw_basin(canvas: Node2D, rect: Rect2, index: int, restored: int, 
 	_pixel(canvas,Rect2(rect.position+Vector2(17,14),Vector2(6,6)),Color("94c8b1"))
 	if index==2:
 		WaterSurface.draw_outlet_contact(canvas,Vector2(rect.position.x+10,1430),time,restored>=3)
+		WaterSurface.draw_outlet_contact(canvas,Vector2(rect.end.x-2,1480),time,restored>=4)
 	for n in range(4):
 		var foot := rect.position+Vector2(40+n*(rect.size.x-80)/3.0,42+(n%2)*36)
 		WaterSurface.draw_plant_contact(canvas,foot,34,time)
@@ -472,17 +489,7 @@ static func _draw_prop_art(canvas: Node2D, prop: Dictionary, restored: int, time
 	_draw_prop(canvas,prop,restored,time)
 
 static func _draw_goal_pad(canvas: Node2D, p: Vector2, index: int, active: bool, time: float) -> void:
-	var r: Rect2 = terminal(index).collision_rect
-	# Low service pedestal supports feet instead of presenting the art in a frame.
-	canvas.draw_colored_polygon(PackedVector2Array([
-		r.position+Vector2(-3,2),Vector2(r.end.x+2,r.position.y+2),r.end+Vector2(4,4),Vector2(r.position.x-1,r.end.y+4)
-	]),Color("556157"))
-	canvas.draw_line(Vector2(r.position.x+2,r.end.y+4),r.end+Vector2(2,4),Color("a59b7a"),2)
-	for x in [r.position.x+2,r.end.x-3]: canvas.draw_rect(Rect2(x,r.end.y,2,2),Color("d1b878"))
-	var light := Color("78dbc4") if active else Color("b76c93")
-	var connection := PackedVector2Array([p+Vector2(-70,-24),p+Vector2(-70,-8),p+Vector2(0,-8)])
-	canvas.draw_polyline(connection,Color("293e43"),5)
-	canvas.draw_polyline(connection,Color(light,0.48),1)
+	Objectives.draw_foundation(canvas,p,index,active,time)
 
 static func _draw_gate(canvas: Node2D, rect: Rect2, opened: bool, time: float) -> void:
 	var crosses_vertical_bridge := rect.size.x>rect.size.y

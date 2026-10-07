@@ -11,12 +11,13 @@ const WORLD_ORIGIN := Vector2(835.0, 420.0)
 const INTERACTION_POINT := Vector2(1012.0, 410.0)
 const SORT_Y := 420.0
 const Art = preload("res://scripts/station_art.gd")
+const Objectives = preload("res://scripts/objective_visual.gd")
 const CONTROL_CROP: Rect2 = Art.STRUCTURE_CROPS[3]
 const GENERATOR_CROP: Rect2 = Art.STRUCTURE_CROPS[5]
 const MOSS_CROP := Rect2(35, 514, 279, 258)
 const CONTROL_VISUAL := Rect2(640,414-210.0*421.0/440.0,210,210.0*421.0/440.0)
 const GENERATOR_VISUAL := Rect2(835,422-164.0*351.0/392.0,164,164.0*351.0/392.0)
-const TERMINAL_VISUAL := Rect2(998,360,28,35)
+const TERMINAL_VISUAL := Rect2(990,316,44,82)
 const COLLISION_RECTS: Array[Rect2] = [
 	Rect2(650, 372, 188, 49),
 	Rect2(841, 381, 151, 40),
@@ -48,6 +49,7 @@ func draw_foundation(canvas: Node2D, time: float) -> void:
 	if structure_state != StructureState.OFFLINE:
 		var pulse_x := 819.0 + fposmod(time * 42.0, 174.0)
 		canvas.draw_rect(Rect2(pulse_x, 409, 9, 3), Color("67e2ce", 0.78))
+	Objectives.draw_foundation(canvas,INTERACTION_POINT,1,is_online(),time)
 
 
 func sortable_parts() -> Array[Dictionary]:
@@ -69,7 +71,7 @@ func draw_part(canvas: Node2D, part: int, time: float) -> void:
 	elif part == 1:
 		Art.draw_structure(canvas,5,generator_dest,tint)
 	else:
-		_draw_terminal(canvas,time,shake_offset)
+		Objectives.draw_body(canvas,INTERACTION_POINT,1,is_online(),time)
 
 
 func draw_effects(canvas: Node2D, time: float) -> void:
@@ -95,19 +97,3 @@ func _draw_fan(canvas: Node2D, center: Vector2, time: float) -> void:
 		var direction := Vector2.from_angle(angle + blade * PI * 0.5)
 		canvas.draw_line(center + direction * 2.0, center + direction * 8.0, Color("65b7ad") if active_speed > 0.0 else Color("61797a"), 3.0)
 	canvas.draw_circle(center, 2.0, Color("d3bd83"))
-
-
-func _draw_terminal(canvas: Node2D, time: float, offset: Vector2) -> void:
-	var panel := Rect2(TERMINAL_VISUAL.position+offset,TERMINAL_VISUAL.size)
-	canvas.draw_rect(Rect2(panel.position + Vector2(3, 4), panel.size), Color(0.03, 0.07, 0.08, 0.40))
-	canvas.draw_rect(panel, Color("283b40"))
-	canvas.draw_rect(panel.grow(-3), Color("8b846d"))
-	var screen_color := Color("d46d8f")
-	if structure_state == StructureState.STARTING:
-		screen_color = Color("e7bb72").lerp(Color("70e2ca"), startup_progress())
-	elif structure_state == StructureState.ONLINE:
-		screen_color = Color("70e2ca")
-	var blink := 0.68 + 0.25 * sin(time * (6.0 if structure_state == StructureState.ONLINE else 2.0))
-	canvas.draw_rect(Rect2(panel.position + Vector2(6, 7), Vector2(16, 8)), Color(screen_color, blink))
-	for row in 3:
-		canvas.draw_rect(Rect2(panel.position + Vector2(6, 20 + row * 4), Vector2(16, 2)), Color("435659"))

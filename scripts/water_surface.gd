@@ -12,8 +12,9 @@ var setup_usec := 0
 var pool_viewport: SubViewport
 var pool_material: ShaderMaterial
 var pool_regions: Array[Rect2]=[]
+var service_channel_offset := 0
 
-func configure(size: Vector2, banks: Array[Rect2], bridges: Array[Rect2], pier: Rect2, pools: Array[Rect2]=[]) -> void:
+func configure(size: Vector2, banks: Array[Rect2], bridges: Array[Rect2], pier: Rect2, pools: Array[Rect2]=[], service_channels: Array[Rect2]=[]) -> void:
 	var start := Time.get_ticks_usec()
 	world_size=size
 	show_behind_parent=true
@@ -52,19 +53,49 @@ func configure(size: Vector2, banks: Array[Rect2], bridges: Array[Rect2], pier: 
 	water_material.set_shader_parameter("surface_noise",texture)
 	water_material.set_shader_parameter("world_size",world_size)
 	material=water_material
-	if not pools.is_empty(): _prepare_pools(pools)
+	if not pools.is_empty(): _prepare_pools(pools,service_channels)
 	setup_usec=Time.get_ticks_usec()-start
 	queue_redraw()
 
-func _prepare_pools(pools: Array[Rect2]) -> void:
+func _prepare_pools(pools: Array[Rect2], service_channels: Array[Rect2]) -> void:
 	# One tiny shared render texture lets the existing immediate-mode renderer
 	# place animated water between the basin floor and its rim/plants.
 	var atlas_size:=Vector2i(288,384)
-	var y:=0.0
+	var region_sizes: Array[Vector2] = []
 	for index in range(1,pools.size()):
 		var inner:=pools[index].grow(-8)
-		pool_regions.append(Rect2(Vector2(0,y),inner.size))
-		y+=inner.size.y+16
+		region_sizes.append(inner.size)
+	service_channel_offset = region_sizes.size()
+	for channel in service_channels:
+		var inner := channel.grow(-3)
+		region_sizes.append(inner.size)
+	if service_channels.is_empty():
+		var y := 0.0
+		for size in region_sizes:
+			pool_regions.append(Rect2(Vector2(0,y),size))
+			y += size.y+16
+	else:
+		# Shelf packing shares the new lakes with the existing reservoirs without
+		# paying for a several-thousand-pixel vertical strip of empty render space.
+		atlas_size.x = 1024
+		var order: Array[int] = []
+		for index in range(region_sizes.size()):
+			order.append(index)
+			atlas_size.x = maxi(atlas_size.x,int(ceil(region_sizes[index].x/4.0))*4+16)
+		order.sort_custom(func(a: int, b: int) -> bool: return region_sizes[a].y>region_sizes[b].y)
+		pool_regions.resize(region_sizes.size())
+		var cursor := Vector2.ZERO
+		var row_height := 0.0
+		for index in order:
+			var size := region_sizes[index]
+			var slot := Vector2(ceil(size.x/4.0)*4+16,ceil(size.y/4.0)*4+16)
+			if cursor.x+slot.x>atlas_size.x:
+				cursor = Vector2(0,cursor.y+row_height)
+				row_height = 0.0
+			pool_regions[index] = Rect2(cursor,size)
+			cursor.x += slot.x
+			row_height = maxf(row_height,slot.y)
+		atlas_size.y = int(cursor.y+row_height)
 	var image:=Image.create(atlas_size.x/FIELD_STEP,atlas_size.y/FIELD_STEP,false,Image.FORMAT_RGB8)
 	for py in range(image.get_height()):
 		for px in range(image.get_width()):
@@ -94,6 +125,9 @@ func _prepare_pools(pools: Array[Rect2]) -> void:
 
 func draw_pool(canvas: Node2D, inner: Rect2, index: int) -> void:
 	canvas.draw_texture_rect_region(pool_viewport.get_texture(),inner,pool_regions[index-1])
+
+func draw_service_channel(canvas: Node2D, inner: Rect2, index: int) -> void:
+	canvas.draw_texture_rect_region(pool_viewport.get_texture(),inner,pool_regions[service_channel_offset+index])
 
 func present(offset: Vector2, time: float, restored: int) -> void:
 	position=offset

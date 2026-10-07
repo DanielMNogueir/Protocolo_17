@@ -9,6 +9,7 @@ const EnemyPresentation = preload("res://scripts/enemy_presentation.gd")
 const Sound = preload("res://scripts/audio.gd")
 const ENERGY_STATION_SCENE = preload("res://scenes/structures/energy_station.tscn")
 const WaterSurface = preload("res://scripts/water_surface.gd")
+const Objectives = preload("res://scripts/objective_visual.gd")
 const SAVE_PATH := "user://aurora_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -65,7 +66,7 @@ var water_surface: P17WaterSurface
 
 func _ready() -> void:
 	water_surface=WaterSurface.new()
-	water_surface.configure(World.SIZE,World.REGIONS,World.BRIDGES,World.PIER,World.BASINS)
+	water_surface.configure(World.SIZE,World.REGIONS,World.BRIDGES,World.PIER,World.BASINS,World.Wetlands.CHANNELS)
 	water_surface.visible=false
 	add_child(water_surface)
 	Actors.ENEMIES.prepare()
@@ -514,9 +515,12 @@ func _draw_game() -> void:
 	entities.sort_custom(func(a, b): return a.y < b.y)
 	for entity in entities:
 		if entity.has("world_object"):
-			World.draw_sortable(self,entity.world_object,sim.restored,clock,sim.stage)
+			World.draw_sortable(self,entity.world_object,sim.restored,clock,sim.stage,sim.state=="activation",sim.repair)
 		elif entity.has("structure"):
-			entity.structure.draw_part(self,entity.part,clock)
+			if entity.part == 2:
+				Objectives.draw_body(self,World.GOALS[1],1,sim.restored>1,clock,sim.stage==1 and sim.state=="activation",sim.repair if sim.stage==1 else 0.0)
+			else:
+				entity.structure.draw_part(self,entity.part,clock)
 		elif entity.has("player"):
 			var lia_action := "repair" if sim.repair > 0 else ("fire" if sim.state == "combat" and sim._fire_cd > 0 else "idle")
 			var shot_age := sim.fire_interval - sim._fire_cd if sim._fire_cd > 0 else -1.0
@@ -531,6 +535,8 @@ func _draw_game() -> void:
 				draw_arc(enemy.pos, float(enemy.get("radius", 14)) + 8, 0, TAU, 20, GOLD, 1)
 			Actors.draw_drone(self, enemy_presentation.view_for(enemy), sim.elapsed)
 	energy_station.draw_effects(self, clock)
+	for index in range(4):
+		Objectives.draw_sign(self,World.GOALS[index],index,index<sim.restored,index==sim.stage and sim.state=="activation",sim.repair if index==sim.stage else 0.0,clock)
 	for bolt in sim.bullets:
 		if not bolt.hostile:
 			Actors.WEAPON.draw_pulse(self, bolt, clock)
@@ -577,23 +583,7 @@ func _draw_route() -> void:
 
 func _draw_terminals() -> void:
 	for i in 4:
-		var p: Vector2 = World.GOALS[i]
-		var active := i < sim.restored
-		var available := i == sim.stage and sim.state == "activation"
-		var color: Color = CYAN if active or available else MAGENTA
-		if i == 1:
-			if available:
-				draw_arc(p, 45 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
-			if i == sim.stage and sim.pos.distance_to(p) < 80 and sim.state == "activation":
-				draw_arc(p, 39, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
-			continue
-		if available:
-			draw_arc(p+Vector2(0,10), 43 + sin(clock * 3) * 2, 0, TAU, 28, Color(CYAN, 0.45), 1)
-		if i == sim.stage:
-			var bounds: Rect2 = World.terminal(i).visual_bounds
-			_text_center("%02d" % (i + 1),Vector2(bounds.get_center().x,bounds.position.y-12),12,color)
-		if i == sim.stage and sim.pos.distance_to(p) < 80 and sim.state == "activation":
-			draw_arc(p+Vector2(0,10), 38, -PI / 2, -PI / 2 + TAU * maxf(sim.repair, 0.01), 32, CYAN, 3)
+		Objectives.draw_service_marker(self,World.GOALS[i],i,i<sim.restored,i==sim.stage and sim.state=="activation",sim.repair if i==sim.stage else 0.0,clock)
 
 func _draw_hud() -> void:
 	var size := _size()
@@ -618,6 +608,8 @@ func _draw_hud() -> void:
 	var objective := "%02d DRONES  /  NEUTRALIZE AS AMEAÇAS" % alive
 	if sim.state == "activation":
 		objective = "ÁREA SEGURA  /  RESTAURE O SISTEMA"
+	elif sim.restored>sim.stage:
+		objective = "SISTEMA RESTAURADO  /  REDE EM OPERAÇÃO"
 	_text_center(objective, Vector2(size.x * 0.5, 73), 10, CYAN if sim.state == "activation" else GOLD)
 	_draw_minimap(Rect2(size.x - 182, size.y - 147, 160, 110))
 	_text_right("M  MAPA DO DISTRITO", Vector2(size.x - 22, size.y - 23), 9, MUTED)
@@ -630,7 +622,8 @@ func _draw_hud() -> void:
 	draw_rect(Rect2(152, size.y - 40, 111, 4), Color("29424a"))
 	draw_rect(Rect2(152, size.y - 40, 111 * (1 - clampf(sim.dash_cd / sim.dash_recharge, 0, 1)), 4), CYAN)
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84:
-		var message := "[E] REPARAR SISTEMA" if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
+		var message: String = "[E] REPARAR " + Objectives.SYSTEMS[sim.stage] if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
+		if sim.restored>sim.stage: message = "SISTEMA RESTAURADO  /  " + Objectives.TITLES[sim.stage]
 		var rect := Rect2(size.x * 0.5 - 190, size.y - 87, 380, 45)
 		_panel(rect)
 		_text_center(message, rect.get_center() + Vector2(0, 1), 10, CYAN if sim.state == "activation" else GOLD)
@@ -669,6 +662,10 @@ func _draw_minimap(rect: Rect2) -> void:
 		draw_rect(Rect2(origin + region.position * scale_value, region.size * scale_value), Color("31544d") if i <= sim.stage else Color("182e38"))
 		var p: Vector2 = origin + World.GOALS[i] * scale_value
 		draw_rect(Rect2(p - Vector2(2, 2), Vector2(4, 4)), CYAN if i < sim.restored else GOLD)
+	for channel in World.Wetlands.CHANNELS:
+		draw_rect(Rect2(origin+channel.position*scale_value,channel.size*scale_value),Color("103f4c"))
+	for crossing in World.Wetlands.CROSSINGS:
+		draw_rect(Rect2(origin+crossing.position*scale_value,crossing.size*scale_value),Color("709183"))
 	for i in 3:
 		var gate: Rect2 = World.GATES[i]
 		var p: Vector2 = origin + gate.get_center() * scale_value
@@ -705,6 +702,10 @@ func _draw_map() -> void:
 		_text(label, r.position + Vector2(13, 51), 11, WHITE)
 		_text("RESTAURADO" if i < sim.restored else ("SINAL ATIVO" if i == sim.stage else "SEM ACESSO"), r.position + Vector2(13, 68), 8, CYAN if i <= sim.stage else MUTED)
 		draw_circle(origin + World.GOALS[i] * ratio, 4, GOLD)
+	for channel in World.Wetlands.CHANNELS:
+		draw_rect(Rect2(origin+channel.position*ratio,channel.size*ratio),Color("103f4c"))
+	for crossing in World.Wetlands.CROSSINGS:
+		draw_rect(Rect2(origin+crossing.position*ratio,crossing.size*ratio),Color("709183"))
 	var route: Array = World.ROUTES[sim.stage]
 	for i in range(route.size() - 1):
 		draw_dashed_line(origin + route[i] * ratio, origin + route[i + 1] * ratio, Color(CYAN, 0.6), 1, 5)

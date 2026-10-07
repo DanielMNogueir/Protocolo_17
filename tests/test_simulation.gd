@@ -120,8 +120,9 @@ func _test_damage_and_warnings() -> void:
 func _test_dash_boundary() -> void:
 	var sim: P17Simulation = S.new()
 	sim.start()
-	sim.pos = Vector2(125, 1450)
-	_stationary_target(sim, Vector2(900, 1450))
+	sim.pos = Vector2(125, 1490)
+	check(W.walkable(sim.pos, S.PLAYER_RADIUS, sim.stage), "Boundary dash fixture starts on safe ground beside the outer canal")
+	_stationary_target(sim, Vector2(900, 1490))
 	sim.invuln = 0.0
 	_hostile_at_player(sim)
 	sim.tick(DT, Vector2.LEFT, sim.pos + Vector2.LEFT * 100.0, false, true, false)
