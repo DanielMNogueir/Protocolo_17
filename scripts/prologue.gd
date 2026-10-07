@@ -33,7 +33,6 @@ var used_dash := false
 var relay_hits := 0
 var fire_cooldown := 0.0
 var cut_age := 0.0
-var hold_age := 0.0
 var threat_age := 0.0
 var bolts: Array[Dictionary] = []
 var events: Array[String] = []
@@ -71,7 +70,7 @@ func _reset_text() -> void:
 	text_age = 0
 	revealed = false
 
-func _say(lines: Array, blocking: bool = false) -> void:
+func _say(lines: Array, blocking: bool = true) -> void:
 	conversation = lines.duplicate(true)
 	dialogue_blocks = blocking
 	_reset_text()
@@ -83,19 +82,11 @@ func tick(dt: float, motion: Vector2, cursor: Vector2, fire: bool, dash: bool, i
 	elapsed += dt
 	text_age += dt
 	if phase == "context" or not conversation.is_empty():
-		if accelerate:
-			hold_age += dt
-			if hold_age>=0.35:
-				revealed = true
-				advance()
-				hold_age = 0.12
-		else: hold_age = 0
-		if phase == "lab" and not accelerate and text_complete() and text_age>=text().length()/TEXT_SPEED+1.3:
-			advance()
-		if phase == "context" or (not conversation.is_empty() and dialogue_blocks):
-			velocity = Vector2.ZERO
-			return
-	if conversation.is_empty(): hold_age = 0
+		# Acceleration reveals this line only. A fresh press/click advances it.
+		if accelerate: text_age += dt*5.0
+		# Freeze objectives and threats so waiting never replaces an unread line.
+		velocity = Vector2.ZERO
+		return
 	if phase == "ending":
 		cut_age += dt
 		if cut_age>=5.2: phase = "handoff"; cut_age = 0

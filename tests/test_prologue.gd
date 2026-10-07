@@ -132,16 +132,40 @@ func _run() -> void:
 	check(not tapping.interaction_active and tapping.repair==0,"Retry clears the pending interaction")
 	var accelerating := Intro.new()
 	for frame in range(160): accelerating.tick(0.05,Vector2.ZERO,Vector2.ZERO,false,false,false,true)
-	check(accelerating.phase=="lab" and accelerating.conversation.is_empty() and accelerating.step==0,"Holding Enter accelerates speech without bypassing playable objectives")
+	check(accelerating.phase=="context" and accelerating.text_complete(),"Holding Enter reveals the current line without changing page or phase")
+	accelerating.advance()
+	var first_line: String = accelerating.text()
+	for frame in range(160): accelerating.tick(0.05,Vector2.RIGHT,accelerating.pos,false,false,true,true)
+	check(accelerating.phase=="lab" and accelerating.text()==first_line and accelerating.text_complete(),"Holding Enter never consumes the next line, even after it is complete")
+	accelerating.advance()
+	check(accelerating.conversation.is_empty() and accelerating.step==0,"Only explicit advance dismisses the revealed greeting")
 	var flowing := Intro.new()
 	flowing.phase = "lab"
 	flowing.pos = Lab.START
 	flowing._say([["beatrix","Vou conferir o circuito."]])
 	var origin := flowing.pos
 	flowing.tick(0.05,Vector2.RIGHT,flowing.pos+Vector2.RIGHT,false,false,false)
-	check(flowing.pos.x>origin.x,"Routine dialogue allows movement")
+	check(flowing.pos==origin,"Routine dialogue waits for the reader before resuming the tutorial")
 	for frame in range(70): flowing.tick(0.05,Vector2.ZERO,flowing.pos,false,false,false)
-	check(flowing.conversation.is_empty(),"Dialogue advances automatically after time to read")
+	check(not flowing.conversation.is_empty() and flowing.text_complete(),"A completed line remains visible regardless of elapsed time")
+	flowing.fast_text = true
+	for frame in range(600): flowing.tick(0.05,Vector2.RIGHT,flowing.pos,true,true,true)
+	check(flowing.conversation.size()==1 and flowing.pos==origin and flowing.step==0,"Instant text, movement and actions cannot replace an unread line")
+	flowing._say([["beatrix","Primeira fala."],["system","Segunda fala."]])
+	flowing.advance()
+	check(flowing.conversation.size()==1 and flowing.text()=="Segunda fala.","One advance consumes exactly one complete line")
+	for frame in range(600): flowing.tick(0.05,Vector2.ZERO,flowing.pos,false,false,false,true)
+	check(flowing.text()=="Segunda fala.","The following line also waits while Enter is held")
+	flowing.advance()
+	check(flowing.conversation.is_empty(),"A fresh advance finishes the final line")
+	flowing.step = 7
+	flowing._say([["system","Registro final."]])
+	for frame in range(160): flowing.tick(0.05,Vector2.ZERO,flowing.pos,false,false,false)
+	check(flowing.phase=="lab" and not flowing.conversation.is_empty(),"Ending cannot start before the player dismisses the final speech")
+	flowing.advance()
+	check(flowing.phase=="ending","Explicit advance starts the ending after its last speech")
+	flowing.phase = "lab"
+	flowing.step = 0
 	flowing._say([["system","Iniciando contenção."]],true)
 	origin = flowing.pos
 	flowing.tick(0.05,Vector2.RIGHT,flowing.pos,false,false,true)
