@@ -74,6 +74,45 @@ uma sequência de seis segundos; `P17_WATER_OUTPUT` escolhe a pasta de saída.
 ## Limites
 
 É uma animação visual; não há simulação hidrodinâmica. Reflexos são abstratos,
-coerentes com pixel art, e não espelham os sprites. O clarificador circular conserva
-a água incorporada em sua ilustração original; animar essa área exigiria separar sua
-arte em camadas. Canais e os dois reservatórios abertos já recebem a superfície nova.
+coerentes com pixel art, e não espelham os sprites. Canais e os dois reservatórios
+abertos recebem a superfície animada. O clarificador conserva a ilustração original
+como base; a revisão de equipamentos acrescenta animação sobre a água visível.
+
+## Água nos equipamentos — revisão 05
+
+`hydraulic_effects.gd` acrescenta efeitos registrados nas coordenadas dos atlas
+originais. A mesma transformação que posiciona a máquina posiciona sua água.
+
+- Clarificador: queda contínua, filetes descendentes, espuma, gotas de impacto e
+  ondulações interrompidas na parte livre da superfície circular.
+- Bombas e tanques: gotas nos bocais abertos, pequenas marcas úmidas e anéis no
+  contato. Após reparar o setor, a pressão transforma as gotas em um filete.
+- Visores dos tanques e filtros: bolhas ascendentes; tubos expostos dos purificadores
+  recebem pequenos reflexos em circulação.
+- Objetivos restaurados de captação e distribuição: animação sobre as quedas de
+  água já presentes na arte. Os três visores do objetivo de filtragem também se movem.
+- Reservatório de distribuição: jatos com filetes, espuma e respingos. Ambos os
+  bocais apontam para dentro do reservatório, inclusive o da borda direita.
+
+Os efeitos usam o mesmo relógio visual da água dos canais. Os bocais e
+visores são desenhados junto à respectiva máquina na ordenação de profundidade,
+para respeitar a passagem de Lia e dos inimigos. Marcas no piso são desenhadas antes
+dos personagens. As quatro fases possuem equipamentos animados, com pressão
+controlada pela quantidade real de sistemas restaurados.
+
+Não há novos obstáculos, mudanças de rotas ou emissão de partículas acumuladas.
+São pequenas primitivas de desenho em quantidade fixa, apenas para os equipamentos
+selecionados pelo enquadramento existente. As quedas usam polígonos estreitos para
+manter os filetes visíveis com o alinhamento de pixels do renderer Compatibility.
+
+Verificação e capturas:
+
+```text
+godot --path . --script tests/test_hydraulics.gd --audio-driver Dummy
+godot --path . --script tools/review_hydraulics.gd --audio-driver Dummy
+```
+
+O teste gráfico verifica movimento nas quedas e bocais, alinhamento durante movimento
+de câmera, oclusão por elementos da frente, aumento de vazão após reparo e cobertura
+dos quatro setores. A revisão salva oito vistas do jogo e 24 quadros do clarificador
+em `captures/agua-viva`. `P17_HYDRAULIC_OUTPUT` permite escolher outra pasta.

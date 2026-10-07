@@ -1,5 +1,6 @@
 class_name P17Wetlands
 extends RefCounted
+const DistrictAssets = preload("res://scripts/district_assets.gd")
 ## Authored wetland composition. Deep service channels and bridges share data
 ## between rendering and collision; shallow puddles and vegetation are cosmetic.
 const Art = preload("res://scripts/station_art.gd")
@@ -93,7 +94,7 @@ static func prepare(regions: Array[Rect2], routes: Array, reservations: Array[Re
 		var center: Vector2 = bed[0]
 		var radii: Vector2 = bed[1]
 		var sector: int = bed[2]
-		for i in range(14):
+		for i in range(8):
 			var seed := _seed(bed_index,i)
 			var angle := float(seed%360)*PI/180.0
 			var spread := sqrt(float(posmod(seed*19,100))/100.0)
@@ -123,7 +124,7 @@ static func prepare(regions: Array[Rect2], routes: Array, reservations: Array[Re
 				var seed := _seed(index*19+side,n+71)
 				var fraction := (n+0.5)/maxi(1,int(length/52))
 				var center := Vector2(channel.position.x+length*fraction,channel.position.y-8 if side==0 else channel.end.y+21) if side<2 else Vector2(channel.position.x-17 if side==2 else channel.end.x+17,channel.position.y+length*fraction)
-				for sprig in range(2):
+				for sprig in range(1):
 					var foot := (center+Vector2(seed%19-9,posmod(seed*13+sprig*17,19)-9)).round()
 					var width := 30.0+posmod(seed+sprig*11,26)
 					if not regions[SECTORS[index]].grow(-10).has_point(foot): continue
@@ -172,7 +173,7 @@ static func prepare(regions: Array[Rect2], routes: Array, reservations: Array[Re
 	Ground.prepare(regions,CHANNELS,basins,_plants,_ground,CROSSINGS)
 
 static func _add_plant(foot: Vector2, width: float, kind: int, seed: int, aquatic: bool) -> void:
-	if not aquatic: width += 12.0
+	if not aquatic: width += 6.0
 	var source: Rect2 = Art.PLANT_CROPS[kind] if aquatic else Art.FERN_CROPS[seed%4]
 	var height := width*source.size.y/source.size.x
 	_plants.append({"type":"wetland_plant","foot":foot,"width":width,"kind":kind,
@@ -228,11 +229,7 @@ static func draw_channels(canvas: Node2D, view: Rect2, water: P17WaterSurface, t
 		if not bridge.grow(12).intersects(view): continue
 		canvas.draw_rect(Rect2(bridge.position+Vector2(3,4),bridge.size),Color("102c33",0.5))
 		canvas.draw_rect(bridge,Color("597579"))
-		canvas.draw_rect(bridge.grow(-5),Color("203b44"))
-		for x in range(int(bridge.position.x)+9,int(bridge.end.x)-7,6):
-			canvas.draw_line(Vector2(x,bridge.position.y+7),Vector2(x,bridge.end.y-7),Color("70908d"),2)
-		for y in range(int(bridge.position.y)+10,int(bridge.end.y)-7,9):
-			canvas.draw_line(Vector2(bridge.position.x+7,y),Vector2(bridge.end.x-7,y),Color("435f67"),2)
+		DistrictAssets.grate(canvas,bridge.grow(-5))
 		for x in [bridge.position.x,bridge.end.x-5]:
 			canvas.draw_rect(Rect2(x,bridge.position.y,5,bridge.size.y),Color("9aa99b"))
 			for y in range(int(bridge.position.y)+3,int(bridge.end.y)-3,12):

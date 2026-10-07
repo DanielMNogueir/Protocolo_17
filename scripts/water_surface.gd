@@ -2,6 +2,7 @@ class_name P17WaterSurface
 extends Node2D
 ## One background quad. The small depth/flow/shadow field is built once at startup.
 const WATER_SHADER = preload("res://scripts/water_surface.gdshader")
+const Hydraulics = preload("res://scripts/hydraulic_effects.gd")
 const FIELD_STEP := 4
 const DEPTH_RANGE := 128.0
 var world_size := Vector2.ZERO
@@ -176,13 +177,11 @@ static func draw_structure_contacts(canvas: Node2D, view: Rect2, bridges: Array[
 				var phase:=fposmod(time*0.26+ring*0.5,1.0)
 				_draw_ripple(canvas,p+Vector2(phase*6,phase*2),Vector2(8+phase*13,3+phase*5),Color("a1c6b5",(1-phase)*0.24))
 
-static func draw_outlet_contact(canvas: Node2D, mouth: Vector2, time: float, active: bool) -> void:
+static func draw_outlet_contact(canvas: Node2D, mouth: Vector2, time: float, active: bool, direction: Vector2 = Vector2.RIGHT) -> void:
 	# Collar at the existing distribution feed; ripples stay inside the reservoir.
-	canvas.draw_rect(Rect2(mouth-Vector2(8,4),Vector2(10,8)),Color("344f50"))
-	canvas.draw_rect(Rect2(mouth-Vector2(7,3),Vector2(9,2)),Color("b29970"))
-	canvas.draw_rect(Rect2(mouth-Vector2(2,2),Vector2(3,4)),Color("142d34"))
-	var phase:=fposmod(time*(0.42 if active else 0.17),1.0)
-	var strength:=0.28 if active else 0.12
-	_draw_ripple(canvas,mouth+Vector2(7+phase*8,0),Vector2(6+phase*9,2+phase*4),Color("b6d0bd",strength*(1-phase)))
-	canvas.draw_rect(Rect2(mouth+Vector2(3,-1),Vector2(5,1)),Color("76b6ae",strength))
+	var sign_x := direction.x
+	canvas.draw_rect(Rect2(mouth+Vector2(-8 if sign_x>0 else -2,-4),Vector2(10,8)),Color("344f50"))
+	canvas.draw_rect(Rect2(mouth+Vector2(-7 if sign_x>0 else -2,-3),Vector2(9,2)),Color("b29970"))
+	canvas.draw_rect(Rect2(mouth+Vector2(-2 if sign_x>0 else -1,-2),Vector2(3,4)),Color("142d34"))
+	Hydraulics.draw_discharge(canvas,mouth,direction,time,active)
 

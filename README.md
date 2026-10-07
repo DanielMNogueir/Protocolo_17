@@ -1,5 +1,10 @@
 # Protocolo 17 — Aurora
 
+Nova operação agora inclui o [prólogo jogável com Beatrix](docs/prologo.md).
+Enter completa/avança as falas, Enter pressionado acelera e Tab ativa falas
+instantâneas. **P** ou **Pular introdução** leva diretamente à campanha de Lia.
+**Rever prólogo** reproduz a introdução sem substituir o checkpoint existente.
+
 Alpha em Godot: Lia recupera os sistemas do Distrito das Águas enquanto enfrenta drones e investiga o colapso de Aurora. Esta versão contém quatro setores, combate, esquiva, reparos, melhorias e confronto final.
 
 ## Executar
@@ -120,3 +125,7 @@ Concreto úmido, poças, vegetação agrupada e água dentro das plataformas nos
 ## Objetivos de missão
 
 Os quatro objetivos possuem equipamentos destacados, identificação por setor, área de manutenção e estados visuais de avaria, disponibilidade, reparo e funcionamento. Consulte [design, comparações e verificações](docs/direcao-visual/objetivos.md). Execute `godot --headless --path . --script tests/test_objectives.gd` para validar acesso e reparos, ou `godot --path . --script tools/review_objectives.gd --audio-driver Dummy` para gerar as 16 capturas.
+
+## Água viva nos equipamentos
+
+Quedas, bocais e visores agora possuem água em movimento nas quatro fases: filetes descendentes, gotas, bolhas, espuma e respingos. Reparar o setor aumenta a vazão. A água dos objetivos restaurados de captação e distribuição também se move. Consulte [efeitos e validação](docs/water_visuals.md#água-nos-equipamentos--revisão-05). Execute `godot --path . --script tests/test_hydraulics.gd --audio-driver Dummy` para verificar a animação ou `godot --path . --script tools/review_hydraulics.gd --audio-driver Dummy` para capturar a revisão.
