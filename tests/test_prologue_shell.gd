@@ -49,6 +49,9 @@ func _run() -> void:
 	shell._action("resume")
 	check(shell.mode=="prologue","Resume restores the introduction, not Lia's campaign")
 	shell.prologue.phase = "lab"
+	shell.prologue.step = 5
+	key(shell,KEY_SHIFT)
+	check(not shell.dash_requested,"Shift does not queue a dash during the prologue")
 	shell.prologue.step = 1
 	shell.prologue.pos = shell.Prologue.Lab.CALIBRATION
 	key(shell,KEY_E)

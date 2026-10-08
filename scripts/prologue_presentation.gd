@@ -62,31 +62,31 @@ static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void
 	if (story.conversation.is_empty() or not story.dialogue_blocks) and story.phase == "lab" and story.step<7:
 		var hint: String = story.HINTS[story.step]
 		if story.interaction_active: hint = "AÇÃO EM ANDAMENTO  •  PERMANEÇA PERTO DA ESTAÇÃO"
-		if story.step == 5 and story.used_dash: hint = "ALCANCE O ARQUIVO  •  OS DRONES ANUNCIAM CADA DISPARO"
 		var bottom: float = size.y-43 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-24
 		canvas.draw_rect(Rect2(180,bottom-25,size.x-360,25),Color(INK,0.93))
 		canvas._text_center(hint,Vector2(size.x/2,bottom-8),9,CYAN)
 		if story.repair>0:
 			canvas.draw_rect(Rect2(190,bottom+2,size.x-380,3),Color("263f49"))
 			canvas.draw_rect(Rect2(190,bottom+2,(size.x-380)*story.repair,3),CYAN)
-		if story.step == 3:
-			canvas._text("PULSOS NO ATUADOR: %d / 2" % story.relay_hits,Vector2(24,111),10,CYAN)
 		_draw_navigation(canvas,story,size)
 
 static func _draw_navigation(canvas: Node2D, story: P17Prologue, size: Vector2) -> void:
 	if story.step>=7: return
 	var target: Vector2 = story.TARGETS[story.step]
-	var delta: Vector2 = target-story.pos
-	var screen: Vector2 = target+(size*0.5-canvas.prologue_camera).round()
+	var offset: Vector2 = (size*0.5-canvas.prologue_camera).round()
+	var player: Vector2 = story.pos+offset
+	var screen: Vector2 = target+offset
+	var delta: Vector2 = screen-player
 	var bottom: float = size.y-121 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-48
 	var safe := Rect2(40,159,size.x-80,bottom-159)
-	if Rect2(30,145,size.x-60,bottom-145).has_point(screen): return
-	var p := screen.clamp(safe.position,safe.end)
+	if delta.length()<75 and safe.has_point(screen): return
+	var p: Vector2 = (player+delta.normalized()*52) if safe.has_point(screen) else screen
+	p = p.clamp(safe.position,safe.end)
 	var direction := delta.normalized()
 	var side := direction.orthogonal()
 	canvas.draw_circle(p,17,Color(INK,0.96))
-	canvas.draw_arc(p,17,0,TAU,24,Color("f3cc80"),1)
-	canvas.draw_colored_polygon(PackedVector2Array([p+direction*10,p-direction*6+side*6,p-direction*6-side*6]),Color("f3cc80"))
+	canvas.draw_arc(p,17,0,TAU,24,Color("f3cc80"),2)
+	canvas.draw_colored_polygon(PackedVector2Array([p+direction*11,p-direction*6+side*7,p-direction*6-side*7]),Color("f3cc80"))
 	canvas._text_center("OBJETIVO",p+Vector2(0,31),8,Color("f3cc80"))
 
 static func _draw_dialogue(canvas: Node2D, story: P17Prologue, size: Vector2) -> void:
