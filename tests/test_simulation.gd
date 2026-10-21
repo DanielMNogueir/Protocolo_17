@@ -218,7 +218,7 @@ func _fight(sim: P17Simulation) -> bool:
 		# The bot must reposition as a player would; collision/damage remain unchanged.
 		var aim: Vector2 = (target-sim.pos).normalized()
 		var muzzle: Vector2 = sim.pos+S.LIA_POSE.pose(aim,0,false).muzzle
-		var can_fire: bool = sim._wall_fraction(sim.pos,muzzle,3)==INF and sim._wall_fraction(muzzle,target,3)==INF
+		var can_fire: bool = sim._wall_fraction(sim.pos,muzzle,5)==INF and sim._wall_fraction(muzzle,target,5)==INF
 		var need_move: bool = distance > 240.0 or not _clear_sight(sim.pos, target, sim.stage) or not can_fire
 		if need_move:
 			if frame % 12 == 0 or path.is_empty():
@@ -257,7 +257,9 @@ func _test_saves_and_retry(snapshot: Dictionary) -> void:
 	check(sim.stage == 1 and sim.restored == 1 and sim.chosen == ["reserve_cell"] and sim.hp == 8 and sim.max_hp == 8, "Loaded checkpoint reconstructs completed stage and selected upgrade stats")
 	check(sim.pos == W.CHECKPOINTS[1], "Loading places Lia at the stage's safe checkpoint")
 	var malformed: Array = [
-		{}, {"version": 2, "stage": 1, "chosen": ["reserve_cell"]},
+		{}, {"version": 3, "stage": 1, "chosen": ["reserve_cell"]},
+		{"version": 2, "stage": 1, "chosen": ["reserve_cell"], "difficulty": "impossible"},
+		{"version": 2, "stage": 1, "chosen": ["reserve_cell"], "elapsed": -1},
 		{"version": 1, "stage": 4, "chosen": []}, {"version": 1, "stage": 1.5, "chosen": []},
 		{"version": 1, "stage": -1, "chosen": []}, {"version": 1, "stage": "1", "chosen": ["reserve_cell"]},
 		{"version": 1, "stage": 1, "chosen": ["invented_upgrade"]},
@@ -282,9 +284,9 @@ func _test_saves_and_retry(snapshot: Dictionary) -> void:
 	first["pos"] = Vector2(920, 730)
 	for frame in 300:
 		sim.tick(DT, Vector2.ZERO, Vector2(920, 730), true, false, false)
-		if sim.enemies.size() < 4:
+		if sim.enemies.size() < 5:
 			break
-	check(sim.enemies.size() == 3, "Retry fixture defeats one current-stage defender with normal projectiles")
+	check(sim.enemies.size() == 4, "Retry fixture defeats one current-stage defender with normal projectiles")
 	sim.bullets.clear()
 	for impact in 8:
 		sim.invuln = 0.0 # Isolate lethal collision behavior; grace timing has its own test.
@@ -292,24 +294,48 @@ func _test_saves_and_retry(snapshot: Dictionary) -> void:
 		sim.tick(DT, Vector2.ZERO, sim.pos + Vector2.UP, false, false, false)
 	check(sim.state == "defeat" and sim.hp == 0, "Eight hostile impacts defeat an upgraded eight-integrity player")
 	sim.retry()
-	check(sim.state == "combat" and sim.enemies.size() == 4 and sim.stage == 1, "Retry rebuilds only the complete current encounter")
+	check(sim.state == "combat" and sim.enemies.size() == 5 and sim.stage == 1, "Retry rebuilds only the complete current encounter")
 	check(sim.restored == 1 and sim.chosen == ["reserve_cell"] and sim.hp == 8 and sim.max_hp == 8, "Retry preserves restored systems and chosen maximum-integrity upgrade")
 	check(sim.pos == W.CHECKPOINTS[1] and W.walkable(W.GATES[0].get_center(), 14.0, sim.stage), "Retry uses a safe checkpoint and keeps the previously opened bridge accessible")
+
+
+func _complete_field_task(sim: P17Simulation) -> bool:
+	var previous: int = sim.operation.completed
+	if not _walk_to(sim,sim.operation.target()): return false
+	if sim.operation.wants_treatment(sim.pos):
+		check(not sim.select_treatment(0), "Unsafe distribution is rejected for suspended solids")
+		for frame in 80: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
+		check(sim.select_treatment(1), "Sample-driven filtration choice unlocks filter washing")
+	for frame in 600:
+		var interact: bool = sim.stage != 1 or sim.operation.in_window(sim.difficulty)
+		sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,interact)
+		bot_frames += 1
+		if sim.operation.completed > previous: return sim.state == "combat"
+	return false
 
 
 func _test_campaign() -> void:
 	var sim: P17Simulation = S.new()
 	sim.start()
-	var expected_waves: Array[int] = [3, 4, 5, 5]
+	var expected_waves: Array[int] = [4, 5, 6, 5]
 	for stage in 4:
+		print("CAMPAIGN_STAGE_BEGIN ",stage+1)
 		check(sim.stage == stage and sim.enemies.size() == expected_waves[stage], "Campaign stage %d creates its expected live encounter" % stage)
-		if stage == 3:
-			check(str(sim.enemies[4]["kind"]) == "boss" and int(sim.enemies[4]["hp"]) == 80, "Final encounter contains four defenders plus the full-health boss")
 		var cleared: bool = _fight(sim)
 		check(cleared, "Bot clears stage %d with real normal-damage projectiles" % stage)
 		if not cleared:
 			return
 		check(sim.state == "activation" and sim.restored == stage, "Defeating stage %d alone does not activate its terminal" % stage)
+		for task in 2:
+			print("CAMPAIGN_FIELD_TASK ",stage+1,"/",task+1)
+			check(_complete_field_task(sim), "Bot reaches and operates field task %d/%d without teleporting" % [stage,task])
+			if sim.state != "combat": return
+			check(sim.wave == task+1, "Task starts exactly one reinforcement wave")
+			if stage == 3 and task == 1:
+				check(sim.enemies.any(func(e): return e.kind == "boss" and e.hp == 80), "Guardian arrives after both distribution valves open")
+			if not _fight(sim):
+				check(false,"Bot clears reinforcements")
+				return
 		var reached: bool = _walk_to(sim, W.GOALS[stage])
 		check(reached, "Bot physically reaches terminal %d without teleporting" % stage)
 		if not reached:
@@ -334,6 +360,6 @@ func _test_campaign() -> void:
 			if stage == 0:
 				_test_saves_and_retry(sim.save_data())
 		else:
-			check(sim.state == "victory" and sim.restored == 4 and sim.kills == 17, "All four restorations and 17 real defeats produce victory")
+			check(sim.state == "victory" and sim.restored == 4 and sim.kills == 57, "All four restorations, eight field tasks and 57 real defeats produce victory")
 			check(sim.chosen.size() == 3 and sim.enemies.is_empty() and sim.bullets.is_empty(), "Victory retains three chosen upgrades and clears combat hazards")
 	print("CAMPAIGN: elapsed simulated seconds=", snappedf(sim.elapsed, 0.01), " kills=", sim.kills, " shots=", sim.shots, " chosen=", sim.chosen)

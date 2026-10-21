@@ -74,6 +74,7 @@ func _run() -> void:
 	check(shell.mode=="title" and shell.saved==initial and shell.writes==initial_writes,"Skipping a replay returns to the title without replacing progress")
 	for phase in ["context","lab","retry","ending","handoff"]:
 		shell._action("new")
+		shell._action("difficulty_operation")
 		shell.prologue.phase = phase
 		shell.prologue.hp = 1
 		shell.prologue.pos = shell.Prologue.Lab.ARCHIVE
@@ -84,11 +85,13 @@ func _run() -> void:
 		check(shell.sim.stage==0 and shell.sim.restored==0 and shell.sim.hp==shell.sim.max_hp,"Lia starts fresh after skipping "+phase)
 		check(shell.sim.pos==shell.World.START and shell.sim.bullets.is_empty() and not shell.dash_requested,"No scientist state or queued attack enters the campaign")
 	shell._action("new")
+	shell._action("difficulty_operation")
 	shell.prologue.phase = "lab"
 	key(shell,KEY_ESCAPE)
 	shell._action("intro_skip")
 	check(shell.mode=="play" and shell.prologue==null,"Skip button also works from the pause menu")
 	shell._action("new")
+	shell._action("difficulty_operation")
 	shell.prologue.phase = "handoff"
 	shell.prologue.finished = true
 	shell._process(0.01)

@@ -4,6 +4,12 @@ extends RefCounted
 
 const W = preload("res://scripts/world.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const Operation = preload("res://scripts/sector_operation.gd")
+const DIFFICULTIES := ["story", "operation", "veteran"]
+const DIFFICULTY_NAMES := ["FÁCIL", "MÉDIO", "DIFÍCIL"]
+const INITIAL_EXTRAS := {"story":0, "operation":1, "veteran":2}
+const REINFORCEMENT_BASE := {"story":2, "operation":4, "veteran":6}
+const HOSTILE_SPEED := {"story":1.35, "operation":1.65, "veteran":1.95}
 const PLAYER_RADIUS: float = 14.0
 const REPAIR_SECONDS: float = 1.8
 const MAX_STEP: float = 1.0 / 90.0
@@ -16,12 +22,12 @@ const WAVE_KINDS: Array = [
 const UPGRADES: Array = [
 	[
 		{"id": "focused_pulse", "title": "Pulso focado", "description": "Dispare 25% mais rápido. Recuperação precisa, sem desperdício."},
-		{"id": "reserve_cell", "title": "Célula de reserva", "description": "+2 de integridade máxima. Recompõe também 2 pontos agora."},
+		{"id": "reserve_cell", "title": "Célula de reserva", "description": "+2 de integridade máxima para os próximos setores."},
 		{"id": "light_harness", "title": "Arnês leve", "description": "+25 de velocidade. Reposicione-se entre as rajadas."},
 	],
 	[
 		{"id": "induction_coil", "title": "Bobina de indução", "description": "+1 de dano por pulso. Reaproveite energia dos drones."},
-		{"id": "reclaimed_armor", "title": "Placas recuperadas", "description": "+2 de integridade máxima e 2 pontos de reparo imediato."},
+		{"id": "reclaimed_armor", "title": "Placas recuperadas", "description": "+2 de integridade máxima durante toda a operação."},
 		{"id": "efficient_dash", "title": "Impulso eficiente", "description": "Recarga do impulso reduzida em 0,25 s."},
 	],
 	[
@@ -31,6 +37,15 @@ const UPGRADES: Array = [
 	],
 ]
 
+var difficulty := "operation"
+var operation = Operation.new()
+var wave := 0
+var secondary_cd := 0.0
+var secondary_recharge := 3.8
+var secondary_shots := 0
+var deaths := 0
+var damage_taken := 0
+var _enemy_serial := 0
 var state: String = "combat"
 var stage: int = 0
 var restored: int = 0
@@ -63,23 +78,28 @@ var _projectile_rects: Array[Rect2] = []
 var _particle_serial: int = 0
 
 
-func start(stage_index: int = 0) -> void:
+func start(stage_index: int = 0, level: String = "operation") -> void:
+	difficulty = level if level in DIFFICULTIES else "operation"
 	stage = clampi(stage_index, 0, 3)
 	restored = stage
 	chosen.clear()
 	elapsed = 0.0
 	kills = 0
 	shots = 0
+	secondary_shots = 0
+	deaths = 0
+	damage_taken = 0
 	_reset_stats()
 	_begin_encounter(true)
 
 
-func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pressed: bool, interacting: bool, pose_time: float = 0.0, pose_moving: bool = false) -> void:
+func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pressed: bool, interacting: bool, pose_time: float = 0.0, pose_moving: bool = false, secondary: bool = false) -> void:
 	events.clear()
 	if dt <= 0.0 or not is_finite(dt):
 		return
 	if state != "combat" and state != "activation":
 		return
+	if not interacting: operation.release_interaction()
 	# Limit catch-up after a suspended window; all accepted time uses bounded steps.
 	var remaining: float = minf(dt, 0.1)
 	var input_move: Vector2 = movement.limit_length(1.0)
@@ -87,6 +107,8 @@ func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pr
 		input_move = Vector2.ZERO
 	if target.is_finite() and target.distance_squared_to(pos) > 1.0:
 		aim = (target - pos).normalized()
+	if secondary and state == "combat" and secondary_cd <= 0.0:
+		_secondary_attack(target, pose_time, pose_moving)
 	if dash_pressed and dash_cd <= 0.0:
 		_dash_direction = input_move.normalized() if input_move.length_squared() > 0.01 else aim
 		dash_time = 0.16
@@ -104,6 +126,7 @@ func tick(dt: float, movement: Vector2, target: Vector2, shooting: bool, dash_pr
 
 
 func _step(dt: float, movement: Vector2, target: Vector2, shooting: bool, interacting: bool, pose_time: float, pose_moving: bool) -> void:
+	secondary_cd = maxf(0.0, secondary_cd - dt)
 	dash_cd = maxf(0.0, dash_cd - dt)
 	_fire_cd = maxf(0.0, _fire_cd - dt)
 	var was_dashing: bool = dash_time > 0.0
@@ -138,7 +161,13 @@ func _step(dt: float, movement: Vector2, target: Vector2, shooting: bool, intera
 			bullets.clear()
 			repair = 0.0
 	elif state == "activation":
-		if interacting and pos.distance_to(W.GOALS[stage]) <= 84.0 and dash_time <= 0.0:
+		var cue: String = operation.tick(dt, pos, interacting, true, difficulty)
+		if not cue.is_empty(): events.append(cue)
+		if cue == "operation_done":
+			wave += 1
+			_spawn_reinforcements()
+			return
+		if operation.ready() and interacting and pos.distance_to(W.GOALS[stage]) <= 84.0 and dash_time <= 0.0:
 			repair = minf(1.0, repair + dt / REPAIR_SECONDS)
 			if repair >= 1.0:
 				_activate()
@@ -149,9 +178,9 @@ func _step(dt: float, movement: Vector2, target: Vector2, shooting: bool, intera
 
 
 func _reset_stats() -> void:
-	max_hp = 6
+	max_hp = 9 if difficulty == "story" else (5 if difficulty == "veteran" else 6)
 	move_speed = 205.0
-	fire_interval = 0.20
+	fire_interval = 0.145
 	pulse_damage = 1
 	pulse_speed = 640.0
 	dash_recharge = 1.2
@@ -159,9 +188,13 @@ func _reset_stats() -> void:
 
 func _begin_encounter(at_checkpoint: bool) -> void:
 	state = "combat"
+	wave = 0
+	operation.reset(stage)
+	secondary_cd = 0.0
+	_enemy_serial = 0
 	if at_checkpoint:
 		pos = W.CHECKPOINTS[stage]
-	hp = max_hp if at_checkpoint else hp
+	hp = max_hp
 	velocity = Vector2.ZERO
 	dash_cd = 0.0
 	dash_time = 0.0
@@ -174,8 +207,27 @@ func _begin_encounter(at_checkpoint: bool) -> void:
 	enemies.clear()
 	_projectile_rects = W.projectile_solids(stage)
 	var locations: Array = W.SPAWNS[stage]
-	var kinds: Array = WAVE_KINDS[stage]
-	for index in mini(locations.size(), kinds.size()):
+	var kinds: Array = WAVE_KINDS[stage].duplicate()
+	if stage == 3: kinds.pop_back() # The guardian arrives after both networks open.
+	for index in int(INITIAL_EXTRAS[difficulty]):
+		kinds.append(["scout","rammer","sentry"][(stage+index)%3])
+	_spawn_wave(kinds, locations)
+
+
+func _spawn_reinforcements() -> void:
+	state = "combat"
+	repair = 0.0
+	invuln = maxf(invuln, 1.0)
+	var count: int = int(REINFORCEMENT_BASE[difficulty]) + wave - 1
+	var kinds: Array = []
+	for index in count: kinds.append(["scout", "sentry", "rammer"][(index+stage+wave)%3])
+	if stage == 3 and wave == 2: kinds.append("boss")
+	_spawn_wave(kinds, W.SPAWNS[stage])
+	events.append("reinforcements")
+
+
+func _spawn_wave(kinds: Array, locations: Array) -> void:
+	for index in kinds.size():
 		var kind: String = str(kinds[index])
 		var enemy_hp: int = 5 + stage * 2
 		var radius: float = 17.0
@@ -188,13 +240,33 @@ func _begin_encounter(at_checkpoint: bool) -> void:
 		elif kind == "boss":
 			enemy_hp = 80
 			radius = 44.0
+		var spawn: Vector2 = locations[index % locations.size()]
+		if wave > 0 or index >= locations.size():
+			spawn = _reinforcement_position(locations,radius)
+		_enemy_serial += 1
 		enemies.append({
-			"pos": locations[index], "kind": kind, "hp": enemy_hp, "max_hp": enemy_hp,
+			"pos": spawn, "kind": kind, "hp": enemy_hp, "max_hp": enemy_hp,
 			"radius": radius, "warning": 0.0, "aim": Vector2.DOWN,
-			"cooldown": 0.7 + float(index) * 0.35, "phase": "idle", "age": 0.0,
-			"charge_time": 0.0, "attack": 0, "id": index, "engaged": false,
+			"cooldown": (1.8 if wave > 0 else 0.7) + float(index) * 0.35, "phase": "idle", "age": 0.0,
+			"charge_time": 0.0, "attack": 0, "id": _enemy_serial, "tier": 0, "engaged": false,
 			"hurt": 0.0, "steer": 1.0 if index % 2 == 0 else -1.0,
 		})
+
+
+func _reinforcement_position(locations: Array, radius: float) -> Vector2:
+	var selected: Vector2 = locations[0]
+	var best := -INF
+	for anchor in locations:
+		for offset in [Vector2.ZERO,Vector2(90,0),Vector2(-90,0),Vector2(0,90),Vector2(0,-90),Vector2(90,90),Vector2(-90,-90)]:
+			var candidate: Vector2 = Vector2(anchor)+Vector2(offset)
+			if not W.walkable(candidate,radius,stage): continue
+			var free := true
+			for other in enemies:
+				if candidate.distance_to(other.pos) < radius+float(other.radius)+12: free=false
+			if free and candidate.distance_to(pos)>best:
+				best = candidate.distance_to(pos)
+				selected = candidate
+	return selected
 
 
 func _update_enemies(dt: float) -> void:
@@ -204,6 +276,11 @@ func _update_enemies(dt: float) -> void:
 		var radius: float = float(enemy["radius"])
 		var offset: Vector2 = pos - origin
 		var distance: float = offset.length()
+		if kind == "boss":
+			var tier := 2 if float(enemy.hp)/float(enemy.max_hp) <= 0.33 else (1 if float(enemy.hp)/float(enemy.max_hp) <= 0.66 else 0)
+			if tier > int(enemy.tier):
+				enemy.tier = tier
+				events.append("boss_phase")
 		enemy["age"] = float(enemy["age"]) + dt
 		enemy["hurt"] = maxf(0.0, float(enemy["hurt"]) - dt)
 		if distance > (610.0 if kind == "boss" else 570.0) and not bool(enemy["engaged"]):
@@ -225,7 +302,7 @@ func _update_enemies(dt: float) -> void:
 			enemy["charge_time"] = float(enemy["charge_time"]) - dt
 			if float(enemy["charge_time"]) <= 0.0 or moved.distance_squared_to(origin) < charge.length_squared() * 0.3:
 				enemy["phase"] = "idle"
-				enemy["cooldown"] = 1.2
+				enemy["cooldown"] = 1.2 * _pressure_interval()
 		else:
 			var desired_range: float = 225.0 if kind == "sentry" else (270.0 if kind == "boss" else 165.0)
 			if kind == "rammer":
@@ -241,7 +318,7 @@ func _update_enemies(dt: float) -> void:
 			var reach: float = 285.0 if kind == "rammer" else (535.0 if kind == "boss" else 470.0)
 			if distance < reach and float(enemy["cooldown"]) <= 0.0 and _wall_fraction(origin, pos, 1.0) == INF:
 				enemy["phase"] = "windup"
-				enemy["warning"] = 0.8 if kind == "boss" else (0.75 if kind == "rammer" else 0.65)
+				enemy["warning"] = (0.8 if kind == "boss" else (0.75 if kind == "rammer" else 0.65)) * (1.3 if difficulty == "story" else (0.85 if difficulty == "veteran" else 1.0))
 				enemy["aim"] = offset.normalized() if distance > 0.01 else Vector2.DOWN
 		# Contact uses the final position; obstacle separation still protects Lia.
 		var final_pos: Vector2 = enemy["pos"]
@@ -251,31 +328,66 @@ func _update_enemies(dt: float) -> void:
 				return
 
 
+func _pressure_interval() -> float:
+	return (1.25 if difficulty == "story" else (0.77 if difficulty == "veteran" else 1.0)) * (1.0 - float(stage)*0.045)
+
+
 func _enemy_attack(enemy: Dictionary) -> void:
-	var origin: Vector2 = enemy["pos"]
-	var direction: Vector2 = enemy["aim"]
-	var kind: String = str(enemy["kind"])
-	enemy["phase"] = "idle"
-	enemy["cooldown"] = 1.65 if kind != "boss" else 1.95
+	var origin: Vector2 = enemy.pos
+	var direction: Vector2 = enemy.aim
+	var kind: String = str(enemy.kind)
+	var speed: float = float(HOSTILE_SPEED[difficulty])
+	enemy.phase = "idle"
+	enemy.cooldown = (1.65 if kind != "boss" else 1.95-float(enemy.tier)*0.24) * _pressure_interval()
+	var attack: int = int(enemy.attack)
+	enemy.attack = attack + 1
 	if kind == "rammer":
-		enemy["phase"] = "charge"
-		enemy["charge_time"] = 0.52
+		enemy.phase = "charge"
+		enemy.charge_time = 0.52
+		if stage > 1:
+			for angle in [-0.5,0.5]: _spawn_bullet(origin,direction.rotated(angle),180*speed,true,1,2.8,4.0)
 	elif kind == "boss":
-		var attack: int = int(enemy["attack"])
-		enemy["attack"] = attack + 1
-		if attack % 2 == 0:
-			# The aim line is a safe gap in an otherwise radial, slow volley.
-			for index in 14:
-				var angle: float = TAU * (float(index) + 0.5) / 14.0
-				_spawn_bullet(origin, direction.rotated(angle), 155.0, true, 1, 4.0, 5.0)
+		var tier: int = int(enemy.tier)
+		if attack % 3 == 0:
+			var count := 14 + tier*4
+			for index in count:
+				# Fixed aim leaves a dodgeable gap; no tracking during windup.
+				var angle: float = TAU*(float(index)+0.5)/float(count)
+				_spawn_bullet(origin,direction.rotated(angle),155*speed,true,1,4.0,5.0)
+		elif attack % 3 == 1:
+			for index in range(-2-tier,3+tier):
+				_spawn_bullet(origin,direction.rotated(float(index)*0.18),220*speed,true,1,3.2,5.0)
 		else:
-			for index in 5:
-				_spawn_bullet(origin, direction.rotated(float(index - 2) * 0.17), 220.0, true, 1, 3.2, 5.0)
+			for index in 3+tier:
+				_spawn_bullet(origin,direction, (170+index*38)*speed,true,1,3.5,5.0)
 	elif kind == "sentry":
-		for angle in [-0.11, 0.11]:
-			_spawn_bullet(origin, direction.rotated(float(angle)), 215.0, true, 1, 2.8, 4.0)
+		var count := 3 if difficulty != "story" else 2
+		for index in count:
+			_spawn_bullet(origin,direction.rotated((float(index)-float(count-1)*0.5)*0.19),215*speed,true,1,2.8,4.0)
 	else:
-		_spawn_bullet(origin, direction, 190.0, true, 1, 2.8, 4.0)
+		_spawn_bullet(origin,direction,190*speed,true,1,2.8,4.0)
+		if stage > 0 and attack%2 == 1 and difficulty != "story":
+			_spawn_bullet(origin,direction,250*speed,true,1,2.8,4.0)
+
+
+func _secondary_attack(target: Vector2, pose_time: float, pose_moving: bool) -> void:
+	var muzzle: Vector2 = pos + LIA_POSE.pose(aim, pose_time, pose_moving).muzzle
+	if _wall_fraction(pos,muzzle,3.0) != INF: return
+	var direction := (target-muzzle).normalized() if target.is_finite() and target.distance_squared_to(muzzle)>1 else aim
+	secondary_cd = secondary_recharge
+	_fire_cd = maxf(_fire_cd,fire_interval)
+	secondary_shots += 1
+	for index in 5:
+		_spawn_bullet(muzzle,direction.rotated(float(index-2)*0.12),pulse_speed*0.85,false,pulse_damage+1,1.2,3.0)
+	events.append("secondary")
+	_emit_particles(muzzle,Color("f0c77a"),8,100)
+
+
+func select_treatment(index: int) -> bool:
+	if state != "activation": return false
+	var result: bool = operation.choose_treatment(index,pos)
+	events.append("treatment_ok" if result else "treatment_miss")
+	return result
 
 
 func _spawn_bullet(origin: Vector2, direction: Vector2, speed: float, hostile: bool, damage: int, life: float, radius: float) -> void:
@@ -337,10 +449,12 @@ func _hurt(amount: int) -> void:
 	if invuln > 0.0 or state != "combat":
 		return
 	hp = maxi(0, hp - amount)
+	damage_taken += amount
 	invuln = 0.8
 	events.append("hurt")
 	_emit_particles(pos, Color("ff708d"), 8, 100.0)
 	if hp == 0:
+		deaths += 1
 		state = "defeat"
 		velocity = Vector2.ZERO
 		dash_time = 0.0
@@ -411,13 +525,15 @@ func retry() -> void:
 
 
 func save_data() -> Dictionary:
-	return {"version": 1, "stage": stage, "chosen": chosen.duplicate()}
+	return {"version": 2, "stage": stage, "chosen": chosen.duplicate(), "difficulty": difficulty,
+		"elapsed": elapsed, "kills": kills, "shots": shots, "secondary_shots": secondary_shots,
+		"deaths": deaths, "damage_taken": damage_taken}
 
 
 func load_data(data: Dictionary) -> bool:
 	if not data.has("version") or not data.has("stage") or not data.has("chosen"):
 		return false
-	if not (data["version"] is int or data["version"] is float) or float(data["version"]) != 1.0:
+	if not (data["version"] is int or data["version"] is float) or float(data["version"]) not in [1.0,2.0]:
 		return false
 	if not (data["stage"] is int or data["stage"] is float):
 		return false
@@ -441,8 +557,23 @@ func load_data(data: Dictionary) -> bool:
 		if not found:
 			return false
 		validated.append(str(ids[index]))
+	var level: Variant = data.get("difficulty", "operation")
+	if not level is String or level not in DIFFICULTIES: return false
+	var stats := {}
+	for key in ["elapsed","kills","shots","secondary_shots","deaths","damage_taken"]:
+		var value: Variant = data.get(key,0)
+		if not (value is int or value is float): return false
+		if not is_finite(float(value)) or float(value)<0 or float(value)>100000000: return false
+		if key != "elapsed" and float(value) != floorf(float(value)): return false
+		stats[key] = value
 	# Validation is complete before mutating the running encounter.
-	start(saved_stage)
+	start(saved_stage,level)
+	elapsed = float(stats.elapsed)
+	kills = int(stats.kills)
+	shots = int(stats.shots)
+	secondary_shots = int(stats.secondary_shots)
+	deaths = int(stats.deaths)
+	damage_taken = int(stats.damage_taken)
 	chosen = validated
 	for id in chosen:
 		_apply_upgrade(id, false)
@@ -470,7 +601,7 @@ func _avoid_move(enemy: Dictionary, travel: Vector2, radius: float) -> Vector2:
 	var side: float = float(enemy["steer"])
 	for angle in [0.65, 1.1, 1.57, 2.1]:
 		var step: Vector2 = travel.rotated(float(angle) * side)
-		if W.walkable(origin + step * 5.0, radius, stage):
+		if W.walkable(origin + step, radius, stage) and W.walkable(origin + step * 5.0, radius, stage):
 			return origin + step
 	enemy["steer"] = -side
 	return direct
