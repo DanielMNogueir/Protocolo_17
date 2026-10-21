@@ -26,10 +26,11 @@ static func draw_pulse(canvas: Node2D, bullet: Dictionary, time: float) -> void:
 	var source: Vector2 = bullet.get("source", pos - forward * 24.0)
 	var travelled: float = maxf(0.0, (pos - source).dot(forward))
 	# A new pulse grows from its source instead of drawing its tail through Lia's body.
-	var length := minf(18.0, travelled)
+	var scale_value := 1.0
+	var length := minf(18.0*scale_value, travelled)
 	var flicker := 1.0 if int(time * 24) % 2 == 0 else .88
 	if length > 0.0:
-		_quad(canvas, _pulse, Rect2(18.0 - length, 0, length, 8), Rect2(-length, -4, length, 8), pos, angle, Color(1, 1, 1, flicker))
+		_quad(canvas, _pulse, Rect2(18.0 - length/scale_value, 0, length/scale_value, 8), Rect2(-length, -4*scale_value, length, 8*scale_value), pos, angle, Color(1, 1, 1, flicker))
 	if travelled > 14.0:
 		canvas.draw_line(pos - forward * minf(24.0, travelled), pos - forward * 14.0, Color(CYAN, .25), 1)
 

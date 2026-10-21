@@ -13,3 +13,14 @@ captures/*
 !captures/lia_24_*.png
 !captures/lia_24_*.png.import
 !captures/lia_24_preview.html
+!captures/beta/
+!captures/beta/*.png
+!captures/beta_021/
+!captures/beta_021/*.png
+
+# Generated distribution and local tooling
+outputs/
+node_modules/
+__pycache__/
+captures/beta/*.import
+captures/beta_021/*.import

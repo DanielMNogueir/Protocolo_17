@@ -1,0 +1,209 @@
+[
+  {
+    "chosen": [
+      "focused_pulse",
+      "induction_coil",
+      "clean_frequency"
+    ],
+    "damage_taken": 2,
+    "deaths": 0,
+    "difficulty": "story",
+    "elapsed": 104.099999999999,
+    "hp": 9,
+    "kills": 37,
+    "loadout": [
+      0,
+      0,
+      0
+    ],
+    "secondary_shots": 15,
+    "shots": 443,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "light_harness",
+      "efficient_dash",
+      "water_stride"
+    ],
+    "damage_taken": 6,
+    "deaths": 0,
+    "difficulty": "story",
+    "elapsed": 129.983333333332,
+    "hp": 6,
+    "kills": 37,
+    "loadout": [
+      2,
+      2,
+      2
+    ],
+    "secondary_shots": 22,
+    "shots": 522,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "reserve_cell",
+      "reclaimed_armor",
+      "living_circuit"
+    ],
+    "damage_taken": 6,
+    "deaths": 0,
+    "difficulty": "story",
+    "elapsed": 129.433333333332,
+    "hp": 13,
+    "kills": 37,
+    "loadout": [
+      1,
+      1,
+      1
+    ],
+    "secondary_shots": 21,
+    "shots": 509,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "focused_pulse",
+      "induction_coil",
+      "clean_frequency"
+    ],
+    "damage_taken": 4,
+    "deaths": 0,
+    "difficulty": "operation",
+    "elapsed": 126.399999999998,
+    "hp": 6,
+    "kills": 57,
+    "loadout": [
+      0,
+      0,
+      0
+    ],
+    "secondary_shots": 20,
+    "shots": 633,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "light_harness",
+      "efficient_dash",
+      "water_stride"
+    ],
+    "damage_taken": 13,
+    "deaths": 1,
+    "difficulty": "operation",
+    "elapsed": 207.361111111172,
+    "hp": 6,
+    "kills": 71,
+    "loadout": [
+      2,
+      2,
+      2
+    ],
+    "secondary_shots": 42,
+    "shots": 973,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "reserve_cell",
+      "reclaimed_armor",
+      "living_circuit"
+    ],
+    "damage_taken": 12,
+    "deaths": 0,
+    "difficulty": "operation",
+    "elapsed": 158.016666666688,
+    "hp": 7,
+    "kills": 57,
+    "loadout": [
+      1,
+      1,
+      1
+    ],
+    "secondary_shots": 29,
+    "shots": 699,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "focused_pulse",
+      "induction_coil",
+      "clean_frequency"
+    ],
+    "damage_taken": 7,
+    "deaths": 0,
+    "difficulty": "veteran",
+    "elapsed": 139.466666666673,
+    "hp": 4,
+    "kills": 77,
+    "loadout": [
+      0,
+      0,
+      0
+    ],
+    "secondary_shots": 25,
+    "shots": 769,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "light_harness",
+      "efficient_dash",
+      "water_stride"
+    ],
+    "damage_taken": 57,
+    "deaths": 10,
+    "difficulty": "veteran",
+    "elapsed": 454.749999999919,
+    "hp": 5,
+    "kills": 188,
+    "loadout": [
+      2,
+      2,
+      2
+    ],
+    "secondary_shots": 106,
+    "shots": 2289,
+    "stage": 3,
+    "version": 2,
+    "victory": false
+  },
+  {
+    "chosen": [
+      "reserve_cell",
+      "reclaimed_armor",
+      "living_circuit"
+    ],
+    "damage_taken": 50,
+    "deaths": 3,
+    "difficulty": "veteran",
+    "elapsed": 313.78333333338,
+    "hp": 5,
+    "kills": 127,
+    "loadout": [
+      1,
+      1,
+      1
+    ],
+    "secondary_shots": 66,
+    "shots": 1562,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  }
+]

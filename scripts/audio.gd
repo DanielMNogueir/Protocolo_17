@@ -29,6 +29,17 @@ func _ready() -> void:
 	warm_up()
 
 
+func _exit_tree() -> void:
+	if is_instance_valid(_fade): _fade.kill()
+	for player in get_children():
+		if player is AudioStreamPlayer:
+			player.stop()
+			player.stream = null
+	_tracks.clear()
+	_effects.clear()
+	_notes.clear()
+
+
 func warm_up() -> void:
 	if _warmed:
 		return

@@ -1,19 +1,24 @@
 # Protocolo 17 — Aurora
 
-Nova operação agora inclui o [prólogo jogável com Beatrix](docs/prologo.md).
-Enter completa/avança as falas, Enter pressionado acelera e Tab ativa falas
-instantâneas. **P** ou **Pular introdução** leva diretamente à campanha de Lia.
-**Rever prólogo** reproduz a introdução sem substituir o checkpoint existente.
-
-Alpha em Godot: Lia recupera os sistemas do Distrito das Águas enquanto enfrenta drones e investiga o colapso de Aurora. Esta versão contém quatro setores, combate, esquiva, reparos, melhorias e confronto final.
+Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento.
 
 ## Executar
 
-1. Abra `project.godot` no **Godot 4.7.1**, versão usada na validação.
-2. Aguarde a importação dos recursos.
-3. Pressione **F5** para iniciar.
+1. Abra o `project.godot` da raiz no Godot 4.7.1.
+2. Aguarde a importação dos recursos e pressione F5.
+3. Escolha uma nova operação e o nível de dificuldade. O prólogo existente pode ser pulado.
 
-O projeto usa o renderer Compatibility. Saves e configurações ficam em `user://`; não fazem parte do repositório. Não há dependências externas para jogar.
+O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações da beta ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
+
+## Dificuldades
+
+| Nível | Vida inicial | Inimigos por campanha sem derrotas |
+| --- | ---: | ---: |
+| Fácil | 9 | 37 |
+| Médio | 6 | 57 |
+| Difícil | 5 | 77 |
+
+A dificuldade altera quantidade de inimigos, velocidade dos projéteis, pressão e tolerância da sincronização. O checkpoint preserva o nível escolhido.
 
 ## Controles
 
@@ -22,110 +27,62 @@ O projeto usa o renderer Compatibility. Saves e configurações ficam em `user:/
 | Movimento | WASD ou setas |
 | Mira | Mouse |
 | Disparo | Botão esquerdo ou Espaço |
+| Rajada de cinco pulsos | Q ou botão direito |
 | Esquiva | Shift |
-| Reparar | Segurar E próximo ao sistema |
+| Operar e reparar | E |
+| Escolher tratamento ou melhoria | 1, 2, 3 ou mouse |
 | Mapa | M |
 | Pausa | Esc |
 | Tela cheia | F11 |
 | Alternar áudio | F10 |
 
-## Lia: 24 direções
+Na energia, aperte E quando o indicador estiver na faixa verde. Nas outras tarefas, segure E. Complete duas tarefas e três levas por setor, depois repare o terminal. A derrota reinicia o setor atual, preservando setores anteriores e melhorias; cada novo setor começa com vida cheia.
 
-A personagem armada possui **24 orientações em intervalos de 15°**, com oito quadros de caminhada por direção, repouso, respiração e piscada. Os 240 quadros mantêm corpo, mãos e arma integrados. A mira e os tiros reais continuam livres em 360°.
+## Novidades da beta
 
-![Lia nas 24 orientações](captures/lia_24_idle.png)
+- Quatro setores com oito tarefas: admissão, sincronização elétrica, análise de amostra, filtração e abertura das redes de distribuição.
+- Reforços por dificuldade, rajada secundária com recarga e chefe com três fases.
+- Tiros no tamanho original e projéteis inimigos mais rápidos; sinais de preparação sem linhas de previsão do ataque.
+- Tarefa da bateria visível à frente do gerador, objetivos no mapa e HUD com indicação da leva e tarefa.
+- Correções de toque curto em E, ações acumuladas na pausa/diálogo, leitura do HUD e persistência.
 
-Abra [a prévia animada](captures/lia_24_preview.html) em um navegador após clonar o projeto. Ela reproduz capturas do próprio Godot e permite reduzir a velocidade da caminhada.
+![Tarefa da bateria no Pátio de Energia](captures/beta_021/04_bateria_visivel_960.png)
 
-[Documentação dos sprites](assets/lia_directional/README.md) · [Prompts de geração](assets/lia_directional/PROMPTS.md) · [Fontes e proveniência](assets/lia_directional/SOURCES.json).
+## Validação e pendências
 
-## Inimigos animados
+Foram realizadas 21 campanhas automatizadas com dano normal, com 18 vitórias, além de testes de regras, interface, saves, colisões e mais de 215 mil quadros em baterias de esforço. O controlador não usa invulnerabilidade ou teleporte nessas campanhas.
 
-Explorador, sentinela, unidade de investida e chefe de contenção agora usam arte própria no estilo da Lia: **64 quadros em oito direções**, recuo, preparação luminosa, reação a dano e destruição em fragmentos. Cada tipo possui sons de detecção, preparação, ataque, impacto e destruição — **20 efeitos originais**.
+A combinação exclusivamente de mobilidade no Difícil não concluiu a última bateria; a suíte de resistência não está integralmente aprovada. Também permanecem teste humano de balanceamento e duração, validação em outro computador e acompanhamento de avisos intermitentes na saída de testes gráficos. A meta provisória de dez minutos humanos ainda não foi comprovada.
 
-[Arte, animações, sons e instruções da prévia](assets/enemies/README.md) · [Prompts de geração](assets/enemies/PROMPTS.md).
+[Relatório completo da 0.2.1](docs/BETA_021_DEBUG.md) · [Auditoria da beta](docs/BETA_AUDITORIA.md) · [Roteiro de teste humano](docs/ROTEIRO_PLAYTEST_BETA.md).
 
-## Estação de tratamento
+## Reproduzir os testes
 
-O Distrito das Águas usa o conceito aprovado de concreto gasto, água azul-petróleo, cobre e vegetação de áreas úmidas. Piso, tanques, filtros, bombas, salas técnicas e os quatro totens aparecem no jogo; os totens mudam de estado quando cada sistema é restaurado. Juncos e plantas aquáticas ficam nas margens, deixando as rotas de combate visíveis. A geometria e as colisões originais permanecem.
-
-[Arte e proveniência](assets/station/README.md) · [Prompts](assets/station/PROMPTS.md). Para ver capturas dos quatro setores e de um totem restaurado, execute `godot --path . --script tools/review_station.gd`.
-
-## Estruturas modulares
-
-O Pátio de Energia contém a primeira estrutura reutilizável completa em `scenes/structures/energy_station.tscn`. A estação possui colisões separadas para sala técnica e gerador, terminal acessível, obstáculo de navegação, profundidade por Y, estados offline/partida/online, luz, partículas, animação e ruído de operação por proximidade. O objetivo e o contador do HUD usam a progressão existente.
-
-[Arquitetura e guia para novas estruturas](docs/structures.md). Execute `godot --path . --script tools/review_energy_station.gd` para gerar as três capturas de revisão.
-
-## Validação
-
-Na raiz do projeto, substitua `godot` pelo caminho do executável instalado:
+Substitua `godot` pelo caminho do Godot 4.7.1 instalado:
 
 ```sh
 godot --headless --path . --editor --import --quit
-godot --path . --script tests/test_weapon_visual.gd
-godot --headless --path . --script tests/test_lia_animation.gd
-godot --headless --path . --script tests/test_lia_official.gd
-godot --headless --path . --script tests/test_world.gd
+godot --headless --path . --script tests/test_beta_rules.gd
+godot --headless --path . --script tests/test_beta_input.gd
+godot --headless --path . --script tests/test_beta_storage.gd
 godot --headless --path . --script tests/test_simulation.gd
-godot --headless --path . --script tests/test_shot_origin.gd
-godot --headless --path . --script tests/test_enemy_presentation.gd
-godot --headless --path . --script tests/test_energy_station.gd
+godot --headless --path . --script tests/test_beta_playthrough.gd
+godot --headless --path . --script tests/test_beta_stress.gd
+godot --headless --path . --script tests/test_beta_endurance.gd
+godot --path . --script tools/review_beta.gd --audio-driver Dummy
 ```
 
-Resultados da integração direcional: 3752 verificações visuais, 22 do relógio de animação, 97 dos recursos oficiais e 2405 do mundo aprovadas. O teste visual requer renderer gráfico para gerar as capturas e verificar a cena real.
+O teste de resistência pode retornar falha na combinação de mobilidade no Difícil, conforme o relatório. As verificações visuais e de shaders precisam de renderer gráfico.
 
-Na revisão de 27/09, os disparos da Lia partem do cano, com 962 verificações aprovadas. O cenário inválido do teste de parede foi corrigido: simulação **91/91**, com as quatro etapas concluídas pelo bot. A apresentação dos inimigos passou em 251 verificações adicionais e na renderização da cena real. O áudio gerado foi verificado quanto a diversidade dos efeitos e ausência de clipping.
+## Arte e estrutura
 
-## Organização
+Lia mantém 24 orientações, mira livre e oito quadros de caminhada por direção. Os inimigos usam arte animada e efeitos sonoros próprios. O distrito conserva água animada, vegetação, pontes, máquinas e estruturas modulares.
 
-- `scripts/`: simulação, apresentação, áudio e interface.
-- `scenes/`: cena principal.
-- `assets/lia_directional/`: apresentação armada atual da Lia.
-- `assets/enemies/`: quatro atlas dos inimigos, recortes, prompts e proveniência.
-- `assets/station/`: atlas das estruturas, totens, vegetação e piso da estação.
-- `assets/lia_official/` e `assets/lia_expanded/`: referências e versões anteriores preservadas.
-- `tests/`: verificações do mundo, combate e apresentação.
-- `tools/`: extração dos atlas e capturas de desenvolvimento.
-- `captures/`: revisão visual da versão atual.
+- `scripts/`, `scenes/`: jogo e apresentação.
+- `assets/`: arte, áudio sintetizado em execução, fontes e proveniência.
+- `tests/`, `tools/`: validação e capturas.
+- `docs/`, `captures/beta_021/`: decisões, evidências e revisão visual.
 
-Os atlas prontos são usados diretamente pelo jogo. As ferramentas de extração não precisam ser executadas para jogar.
+[Lia](assets/lia_directional/README.md) · [Inimigos](assets/enemies/README.md) · [Estação](assets/station/README.md) · [Prólogo](docs/prologo.md).
 
-A manutenção com ferramenta conserva suas quatro poses oficiais anteriores.
-
-## Integração do ambiente — rodada 02
-
-As três pontes e o píer foram reconstruídos com módulos próprios: grade, vigas,
-guarda-corpos, pilares e encaixes. Os recortes das máquinas, totens e props agora
-incluem suas silhuetas completas. Gerador e coletor usam contornos do atlas que
-excluem partes das máquinas vizinhas sem deformar os pixels. A máscara retangular
-do gerador desligado foi removida. Colisão e profundidade continuam pela base.
-
-Consulte [dados, desenho e validação](docs/environment_integration.md).
-Execute `godot --headless --path . --script tests/test_asset_silhouettes.gd` para
-verificar silhuetas, contornos e escala; `godot --path . --script tools/review_environment_integration.gd --audio-driver Dummy`
-para 20 capturas e percursos renderizados da Lia; e
-`godot --path . --script tools/review_asset_silhouettes.gd --audio-driver Dummy`
-para três pranchas de checagem, sem HUD cobrindo as máquinas.
-
-## Água — revisão 03
-
-Canais e reservatórios abertos agora usam água animada com profundidade junto às
-margens, corrente orientada, ondulações discretas, sombra sob pontes e contato com
-vegetação. O shader é leve; os campos do mapa são construídos uma vez. As colisões
-e a progressão permanecem iguais. Consulte [desenho, manutenção e validação](docs/water_visuals.md).
-
-## Remodelamento do Distrito das Águas
-
-Concreto úmido, poças, vegetação agrupada e água dentro das plataformas nos quatro setores. O mapa incorpora 16 trechos de canais/reservatórios, quatro travessias de serviço e tubulações/comportas que conectam a composição às máquinas. Abra este project.godot no Godot e pressione F5.
-
-[Acabamento atual do solo, recursos e comparações](docs/direcao-visual/solo-integrado.md). O [remodelamento dos canais](docs/direcao-visual/remodelamento-mapa.md) e a [primeira implementação](docs/direcao-visual/implementacao.md) registram as etapas anteriores.
-
-
-## Objetivos de missão
-
-Os quatro objetivos possuem equipamentos destacados, identificação por setor, área de manutenção e estados visuais de avaria, disponibilidade, reparo e funcionamento. Consulte [design, comparações e verificações](docs/direcao-visual/objetivos.md). Execute `godot --headless --path . --script tests/test_objectives.gd` para validar acesso e reparos, ou `godot --path . --script tools/review_objectives.gd --audio-driver Dummy` para gerar as 16 capturas.
-
-## Água viva nos equipamentos
-
-Quedas, bocais e visores agora possuem água em movimento nas quatro fases: filetes descendentes, gotas, bolhas, espuma e respingos. Reparar o setor aumenta a vazão. A água dos objetivos restaurados de captação e distribuição também se move. Consulte [efeitos e validação](docs/water_visuals.md#água-nos-equipamentos--revisão-05). Execute `godot --path . --script tests/test_hydraulics.gd --audio-driver Dummy` para verificar a animação ou `godot --path . --script tools/review_hydraulics.gd --audio-driver Dummy` para capturar a revisão.
+Arquivos de importação de trabalho, saves, executáveis e pacotes gerados não precisam ser versionados. A exportação Windows está configurada em `export_presets.cfg` e requer os modelos de exportação correspondentes do Godot.

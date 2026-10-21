@@ -51,6 +51,9 @@ func _run() -> void:
 		sim.tick(0.001,Vector2.ZERO,goal+Vector2.UP,false,false,false)
 		check(sim.state=="activation","Empty encounter becomes available through real simulation")
 		check(Objectives.state_name(false,true,0)=="PRONTO PARA REPARO","Available sign describes the real state")
+		# Isolate the terminal after its new field prerequisites; full tasks are
+		# exercised through physical routes in test_simulation/test_beta_playthrough.
+		sim.operation.completed=2
 		for frame in range(60): sim.tick(1.0/120,Vector2.ZERO,goal+Vector2.UP,false,false,true)
 		check(sim.repair>0 and sim.repair<1,"Holding E advances actual repair")
 		check(Objectives.state_name(false,true,sim.repair).begins_with("REPARANDO"),"Label reads actual repair progress")

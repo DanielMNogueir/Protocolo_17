@@ -1,0 +1,59 @@
+[
+  {
+    "chosen": [
+      "reserve_cell",
+      "induction_coil",
+      "living_circuit"
+    ],
+    "damage_taken": 1,
+    "deaths": 0,
+    "difficulty": "story",
+    "elapsed": 102.499999999999,
+    "hp": 13,
+    "kills": 29,
+    "max_hp": 13,
+    "secondary_shots": 14,
+    "shots": 338,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "reserve_cell",
+      "induction_coil",
+      "living_circuit"
+    ],
+    "damage_taken": 2,
+    "deaths": 0,
+    "difficulty": "operation",
+    "elapsed": 113.533333333332,
+    "hp": 10,
+    "kills": 37,
+    "max_hp": 10,
+    "secondary_shots": 20,
+    "shots": 432,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  },
+  {
+    "chosen": [
+      "reserve_cell",
+      "induction_coil",
+      "living_circuit"
+    ],
+    "damage_taken": 3,
+    "deaths": 0,
+    "difficulty": "veteran",
+    "elapsed": 135.233333333337,
+    "hp": 9,
+    "kills": 45,
+    "max_hp": 9,
+    "secondary_shots": 25,
+    "shots": 562,
+    "stage": 3,
+    "version": 2,
+    "victory": true
+  }
+]
