@@ -346,6 +346,9 @@ func _action(id: String) -> void:
 			sound.set_mood("menu")
 		"exit":
 			get_tree().quit()
+		"residues":
+			get_tree().set_meta("p17_residue_handoff", {"difficulty": sim.difficulty, "upgrades": sim.chosen.duplicate()})
+			get_tree().change_scene_to_file("res://scenes/residues.tscn")
 		_:
 			if id.begins_with("difficulty_"):
 				selected_difficulty = id.trim_prefix("difficulty_")
@@ -953,7 +956,7 @@ func _draw_victory() -> void:
 	_text("REGISTRO RECUPERADO  /  ACESSO EXTERNO", rect.position + Vector2(24, 28), 10, GOLD)
 	_wrapped("LIA: Comando… a alteração nas ordens aconteceu antes do colapso. Isso não foi uma falha.", Rect2(rect.position + Vector2(24, 42), Vector2(rect.size.x - 48, 47)), 15, WHITE, 23)
 	_text("ORIGEM DO COMANDO: REDIGIDA  /  DESTINO: OUTRO DISTRITO", rect.position + Vector2(24, 110), 10, MAGENTA)
-	_button(Rect2(size.x * 0.5 - 150, 444, 300, 42), "VOLTAR A AURORA", "title", true)
+	_button(Rect2(size.x * 0.5 - 155, 438, 310, 42), "SEGUIR AO DISTRITO DE RESÍDUOS  →", "residues", true)
 	_text_center("OPERAÇÃO FILTRO  /  ODS 6 — ÁGUA POTÁVEL E SANEAMENTO", Vector2(size.x * 0.5, size.y - 19), 9, MUTED)
 
 func _overlay(title: String, subtitle: String, accent: Color = CYAN) -> void:

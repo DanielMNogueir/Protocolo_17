@@ -1,6 +1,6 @@
 # Protocolo 17 — Aurora
 
-Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento.
+Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. Esta branch também contém a primeira versão jogável do **Distrito de Resíduos**, acessível após concluir Águas.
 
 ## Executar
 
@@ -9,6 +9,14 @@ Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de A
 3. Escolha uma nova operação e o nível de dificuldade. O prólogo existente pode ser pulado.
 
 O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações da beta ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
+
+## Distrito de Resíduos
+
+Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Também é possível abrir `scenes/residues.tscn` diretamente no editor para revisar a fase. O pátio seco contém triagem de metal, plástico, vidro e orgânicos, prensagem, compostagem, bloqueios de sucata, drones e uma coletora pesada. Use **E** para recolher e entregar materiais e para manter operações de reparo; **M** mostra o mapa. A dificuldade e as melhorias de Águas são transferidas durante a execução. Salvar o progresso de Resíduos entre sessões e seguir para Energia ainda não estão implementados.
+
+![Triagem no Distrito de Resíduos](captures/residuos/02-baias.png)
+
+[Mapa, mecânicas e direção visual](docs/direcao-visual/distrito-de-residuos.md) · [Revisão da prensa](captures/residuos/03-prisma.png) · [Revisão da compostagem](captures/residuos/04-iris.png).
 
 ## Dificuldades
 
@@ -63,6 +71,7 @@ Substitua `godot` pelo caminho do Godot 4.7.1 instalado:
 ```sh
 godot --headless --path . --editor --import --quit
 godot --headless --path . --script tests/test_beta_rules.gd
+godot --headless --path . --script tests/test_residues.gd
 godot --headless --path . --script tests/test_beta_input.gd
 godot --headless --path . --script tests/test_beta_storage.gd
 godot --headless --path . --script tests/test_simulation.gd
@@ -70,13 +79,14 @@ godot --headless --path . --script tests/test_beta_playthrough.gd
 godot --headless --path . --script tests/test_beta_stress.gd
 godot --headless --path . --script tests/test_beta_endurance.gd
 godot --path . --script tools/review_beta.gd --audio-driver Dummy
+godot --path . --script tools/review_residues.gd --audio-driver Dummy
 ```
 
 O teste de resistência pode retornar falha na combinação de mobilidade no Difícil, conforme o relatório. As verificações visuais e de shaders precisam de renderer gráfico.
 
 ## Arte e estrutura
 
-Lia mantém 24 orientações, mira livre e oito quadros de caminhada por direção. Os inimigos usam arte animada e efeitos sonoros próprios. O distrito conserva água animada, vegetação, pontes, máquinas e estruturas modulares.
+Lia mantém 24 orientações, mira livre e oito quadros de caminhada por direção. Os inimigos usam arte animada e efeitos sonoros próprios. Águas conserva água animada, vegetação, pontes, máquinas e estruturas modulares; Resíduos usa concreto seco, poeira, esteiras, fardos e máquinas de separação.
 
 - `scripts/`, `scenes/`: jogo e apresentação.
 - `assets/`: arte, áudio sintetizado em execução, fontes e proveniência.
