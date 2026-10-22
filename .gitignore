@@ -17,6 +17,8 @@ captures/*
 !captures/beta/*.png
 !captures/beta_021/
 !captures/beta_021/*.png
+!captures/residuos/
+!captures/residuos/*.png
 
 # Generated distribution and local tooling
 outputs/
@@ -24,3 +26,4 @@ node_modules/
 __pycache__/
 captures/beta/*.import
 captures/beta_021/*.import
+captures/residuos/*.import
