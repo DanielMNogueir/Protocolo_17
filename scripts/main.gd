@@ -196,8 +196,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		for button in buttons:
 			if button.rect.has_point(event.position):
 				ui_mouse_held = true
-				_action(button.id)
 				get_viewport().set_input_as_handled()
+				_action(button.id)
 				return
 	if not event is InputEventKey or not event.pressed or event.echo:
 		return

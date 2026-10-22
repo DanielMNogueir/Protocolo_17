@@ -72,6 +72,7 @@ Substitua `godot` pelo caminho do Godot 4.7.1 instalado:
 godot --headless --path . --editor --import --quit
 godot --headless --path . --script tests/test_beta_rules.gd
 godot --headless --path . --script tests/test_residues.gd
+bash tests/check_residue_transition.sh
 godot --headless --path . --script tests/test_beta_input.gd
 godot --headless --path . --script tests/test_beta_storage.gd
 godot --headless --path . --script tests/test_simulation.gd
