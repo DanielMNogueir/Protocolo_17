@@ -12,11 +12,13 @@ O projeto usa o renderer Compatibility e não exige dependências externas. Save
 
 ## Distrito de Resíduos
 
-Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Também é possível abrir `scenes/residues.tscn` diretamente no editor para revisar a fase. O pátio seco contém triagem de metal, plástico, vidro e orgânicos, prensagem, compostagem, bloqueios de sucata, drones e uma coletora pesada. Use **E** para recolher e entregar materiais e para manter operações de reparo; **M** mostra o mapa. A dificuldade e as melhorias de Águas são transferidas durante a execução. Salvar o progresso de Resíduos entre sessões e seguir para Energia ainda não estão implementados.
+Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Também é possível abrir `scenes/residues.tscn` diretamente no editor para revisar a fase. O bairro industrial possui uma avenida de serviço, ruas de acesso, galpão de triagem com docas abertas, usina de reciclagem e compostagem cercada. Prensas, esteiras, braços, postes, caminhão de coleta e estoques explicam o funcionamento do lugar. Use **E** para recolher e classificar materiais, liberar as esteiras e reabrir a ventilação; **M** mostra o mapa e a rota pelas entradas. Dificuldade e melhorias de Águas são transferidas durante a execução. Salvar Resíduos entre sessões e seguir para Energia ainda não estão implementados.
 
 ![Triagem no Distrito de Resíduos](captures/residuos/02-baias.png)
 
 [Mapa, mecânicas e direção visual](docs/direcao-visual/distrito-de-residuos.md) · [Revisão da prensa](captures/residuos/03-prisma.png) · [Revisão da compostagem](captures/residuos/04-iris.png).
+
+[Visão geral do bairro](captures/residuos/06-bairro-completo.png) · [Vista em 960×540](captures/residuos/08-triagem-960.png) · [Fontes da arte](assets/residues/README.md).
 
 ## Dificuldades
 

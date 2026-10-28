@@ -1,12 +1,12 @@
 extends Node2D
-## Standalone playable district. State resets entirely on defeat; the water-district
-## reward bridge can be connected to these stats when the full campaign is built.
+## Industrial city district. Campaign stats survive a district retry.
 
 const M = preload("res://scripts/residue_map.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
+const Sound = preload("res://scripts/audio.gd")
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
 const PINK := Color("e36b92")
@@ -53,9 +53,20 @@ var fire_interval := 0.15
 var pulse_speed := 650.0
 var pulse_damage := 1
 var dash_recharge := 1.2
+var guidance_path := PackedVector2Array()
+var _guide_timer := 0.0
+var _guide_target := Vector2.INF
+var sound: Node
+var _muted := false
 
 func _ready() -> void:
 	_apply_handoff()
+	sound = Sound.new()
+	add_child(sound)
+	var settings := ConfigFile.new()
+	if settings.load("user://settings.cfg") == OK: _muted = settings.get_value("audio", "muted", false)
+	sound.set_muted(_muted)
+	sound.set_mood("calm")
 	Actors.ENEMIES.prepare()
 	_setup_lighting()
 	var layer := CanvasLayer.new()
@@ -67,6 +78,8 @@ func _ready() -> void:
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_hud)
 	_spawn_enemies()
+	camera = pos.clamp(get_viewport_rect().size * 0.5, M.SIZE - get_viewport_rect().size * 0.5)
+	_light.position = M.SIZE * 0.5 + _offset()
 	_set_toast("LIA: os materiais estão misturados. Vou reabrir a triagem.")
 
 func _apply_handoff() -> void:
@@ -113,6 +126,7 @@ func _physics_process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	clock += dt
 	pointer = get_viewport().get_mouse_position()
+	_update_audio()
 	if Input.is_physical_key_pressed(KEY_R) and state in ["defeat", "victory"]:
 		if state == "victory": get_tree().change_scene_to_file("res://scenes/main.tscn")
 		else: get_tree().reload_current_scene()
@@ -137,6 +151,7 @@ func _physics_process(delta: float) -> void:
 		dash_time = 0.16
 		dash_cd = dash_recharge
 		invuln = 0.16
+		sound.play_sfx("dash")
 	dash_requested = false
 	velocity = velocity.move_toward(movement * (620.0 if dash_time > 0 else move_speed), 1800 * dt)
 	_move_player(velocity * dt)
@@ -150,6 +165,8 @@ func _physics_process(delta: float) -> void:
 	var e_down := _key(KEY_E)
 	_interact(dt, e_down, e_down and not interact_down)
 	interact_down = e_down
+	_guide_timer -= dt
+	_update_guidance()
 	_update_enemies(dt)
 	_update_bullets(dt)
 	_check_toxic()
@@ -159,6 +176,7 @@ func _physics_process(delta: float) -> void:
 	_light.position = M.SIZE * 0.5 + _offset()
 	_light_material.set_shader_parameter("scene_time", clock)
 	_light_material.set_shader_parameter("restored", float(stage))
+	_light_material.set_shader_parameter("ventilation", float(int(cleared[2]) + int(cleared[3])))
 	queue_redraw()
 	_hud.queue_redraw()
 
@@ -166,6 +184,10 @@ func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and state == "play":
+		secondary_requested = true
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			state = "play" if state in ["pause", "map"] else ("pause" if state == "play" else state)
@@ -179,6 +201,26 @@ func _unhandled_input(event: InputEvent) -> void:
 			dash_requested = true
 		elif event.physical_keycode == KEY_Q and state == "play":
 			secondary_requested = true
+		elif event.physical_keycode == KEY_F10:
+			_muted = not _muted
+			sound.set_muted(_muted)
+		elif event.physical_keycode == KEY_F11:
+			var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if fullscreen else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func _update_audio() -> void:
+	var mood := "calm"
+	if state == "victory": mood = "victory"
+	elif state == "play":
+		for enemy in enemies:
+			if enemy.hp > 0 and enemy.zone <= stage and enemy.pos.distance_to(pos) < 340:
+				mood = "boss" if enemy.boss else "combat"
+				if enemy.boss: break
+	sound.set_mood(mood)
+	var proximity := 0.0
+	for i in 3:
+		if terminal_on[i]: proximity = maxf(proximity, 1.0 - pos.distance_to(M.TERMINALS[i]) / 350.0)
+	sound.set_structure_hum(state == "play", proximity)
 
 func _offset() -> Vector2:
 	return (get_viewport_rect().size * 0.5 - camera).round()
@@ -191,6 +233,7 @@ func _move_player(change: Vector2) -> void:
 
 func _fire(target: Vector2, secondary: bool = false) -> void:
 	fire_cd = fire_interval
+	sound.play_sfx("shoot")
 	var start := pos + aim * 27.0
 	bullets.append({"pos": start, "vel": aim * pulse_speed, "hostile": false, "life": 1.25, "damage": pulse_damage})
 	if secondary:
@@ -208,6 +251,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 	var index: int = candidate.index
 	if kind == "item" and pressed and carried < 0:
 		carried = index
+		sound.play_sfx("ui")
 		_set_toast("MATERIAL COLETADO  /  " + M.MATERIALS[index])
 	elif kind == "bin" and pressed and carried >= 0:
 		if bin_lock > 0.0:
@@ -216,6 +260,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 		if carried == index:
 			sorted[index] = true
 			carried = -1
+			sound.play_sfx("repair")
 			_set_toast("CLASSIFICAÇÃO CORRETA  /  " + M.MATERIALS[index])
 		else:
 			carried = -1
@@ -238,10 +283,12 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 	hold_target = ""
 	if kind == "block":
 		cleared[index] = true
+		sound.play_sfx("repair")
 		_set_toast("ROTA DE CARGA LIBERADA")
 	else:
 		terminal_on[index] = true
 		stage += 1
+		sound.play_sfx("complete")
 		if stage == 3:
 			state = "victory"
 		else:
@@ -252,7 +299,7 @@ func _spawn_alarm_drone() -> void:
 	for enemy in enemies:
 		if enemy.get("alarm", false) and enemy.hp > 0: active += 1
 	if active >= 2: return
-	var location := Vector2(695, 475) if active == 0 else Vector2(545, 475)
+	var location := Vector2(453, 455) * M.SCALE if active == 0 else Vector2(337, 470) * M.SCALE
 	enemies.append({"pos": location, "home": location, "hp": 2, "zone": 0,
 		"shot_cd": 0.5, "hit_cd": 0.0, "phase": 0.0, "id": enemies.size(), "boss": false, "alarm": true})
 
@@ -264,7 +311,7 @@ func _interaction_candidate() -> Dictionary:
 				if not sorted[i]: candidates.append({"kind": "item", "index": i, "pos": M.ITEMS[i], "reach": 51.0})
 		else:
 			for i in 4:
-				candidates.append({"kind": "bin", "index": i, "pos": M.BINS[i] + Vector2(0, 60), "reach": 82.0})
+				candidates.append({"kind": "bin", "index": i, "pos": M.BINS[i], "reach": 48.0})
 	if stage == 1:
 		for i in 2:
 			if not cleared[i]: candidates.append({"kind": "block", "index": i, "pos": M.BLOCKS[i], "reach": 86.0})
@@ -308,7 +355,7 @@ func objective_label() -> String:
 func objective_point() -> Vector2:
 	if stage == 3: return M.TERMINALS[2]
 	if stage == 0:
-		if carried >= 0: return M.BINS[carried] + Vector2(0, 60)
+		if carried >= 0: return M.BINS[carried]
 		for i in 4:
 			if not sorted[i]: return M.ITEMS[i]
 	if stage == 1:
@@ -320,6 +367,26 @@ func objective_point() -> Vector2:
 	for enemy in enemies:
 		if enemy.zone == stage and enemy.hp > 0: return enemy.pos
 	return M.TERMINALS[stage]
+
+func _update_guidance() -> void:
+	var target := objective_point()
+	if _guide_timer > 0.0 and target.distance_to(_guide_target) < 25.0: return
+	_guide_target = target
+	_guide_timer = 0.65
+	var reach := 35.0 if stage == 0 and (carried >= 0 or sorted.has(false)) else 65.0
+	guidance_path = M.path_between(pos, target, stage, cleared, reach)
+
+func guidance_point() -> Vector2:
+	var nearest := 0
+	var best := INF
+	for i in guidance_path.size():
+		var distance := pos.distance_squared_to(guidance_path[i])
+		if distance < best:
+			best = distance
+			nearest = i
+	for i in range(nearest, guidance_path.size()):
+		if pos.distance_to(guidance_path[i]) > 75.0: return guidance_path[i]
+	return objective_point()
 
 func _update_enemies(dt: float) -> void:
 	for i in enemies.size():
@@ -338,6 +405,7 @@ func _update_enemies(dt: float) -> void:
 			for spread in spreads:
 				bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * (260.0 if enemy.boss else 235.0), "hostile": true, "life": 2.2})
 			enemy.shot_cd = 1.35 if enemy.boss else 1.55 + (i % 3) * 0.31
+			sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
 		enemies[i] = enemy
 
 func _update_bullets(dt: float) -> void:
@@ -356,6 +424,7 @@ func _update_bullets(dt: float) -> void:
 				if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (32.0 if enemy.boss else 22.0):
 					enemy.hp -= bullet.damage
 					enemy.hit_cd = 0.18
+					if enemy.hp <= 0: sound.play_sfx("enemy_dead")
 					enemies[j] = enemy
 					gone = true
 					break
@@ -372,6 +441,7 @@ func _check_toxic() -> void:
 
 func _damage() -> void:
 	if invuln > 0.0: return
+	sound.play_sfx("hurt")
 	hp -= 1
 	invuln = 0.68
 	if hp <= 0:
@@ -387,8 +457,10 @@ func _draw() -> void:
 	draw_set_transform(offset)
 	M.draw_map(self, clock, stage, sorted, cleared, terminal_on, carried)
 	var depth_entries: Array[Dictionary] = []
-	for machine in M.major_machines():
-		depth_entries.append({"kind": "machine", "depth": machine.depth, "data": machine})
+	for prop in M.props(sorted, cleared, terminal_on, carried):
+		depth_entries.append({"kind": "prop", "depth": prop.depth, "data": prop})
+	for prop in M.occluders():
+		depth_entries.append({"kind": "occluder", "depth": prop.depth, "data": prop})
 	for enemy in enemies:
 		if enemy.hp <= 0 or enemy.zone > stage: continue
 		depth_entries.append({"kind": "enemy", "depth": enemy.pos.y + 18.0, "data": enemy})
@@ -396,17 +468,20 @@ func _draw() -> void:
 	depth_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.depth < b.depth)
 	for entry in depth_entries:
 		match entry.kind:
-			"machine": M.draw_major_machine(self, entry.data)
+			"prop": M.draw_prop(self, entry.data, clock)
+			"occluder": M.draw_occluder(self, entry.data)
 			"enemy": _draw_enemy(entry.data)
 			"lia": _draw_lia()
 	for bullet in bullets:
 		var color := PINK if bullet.hostile else CYAN
 		draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(color, 0.45), 6)
 		draw_circle(bullet.pos, 4 if bullet.hostile else 5, color)
-	for i in 3:
-		if i < stage: continue
-		var marker: Vector2 = M.TERMINALS[i]
-		draw_arc(marker, 59, 0, TAU, 36, Color(CYAN if _terminal_ready(i) else GOLD, 0.45), 2)
+	if state == "play":
+		var next := guidance_point()
+		if next.distance_to(pos) > 95.0:
+			var direction := (next - pos).normalized()
+			var p := pos + direction * 62 + Vector2(0, 18)
+			draw_polyline(PackedVector2Array([p - direction.rotated(-0.65) * 9, p, p - direction.rotated(0.65) * 9]), Color(GOLD, 0.65 + 0.15 * sin(clock * 3)), 2)
 	var candidate := _interaction_candidate()
 	if not candidate.is_empty():
 		var p: Vector2 = candidate.pos
@@ -418,45 +493,18 @@ func _draw_lia() -> void:
 	var action := "repair" if hold_progress > 0 else ("fire" if fire_cd > 0 else "idle")
 	Actors.draw_lia(self, pos, aim, _animation.elapsed, _animation.moving, invuln > 0 and int(clock * 16) % 2 == 0, dash_time > 0, action, 0.05 if fire_cd > 0 else -1.0)
 	if carried >= 0:
-		var c: Color = M.MATERIAL_COLORS[carried]
-		draw_rect(Rect2(pos + Vector2(-9, -49), Vector2(18, 15)), c)
-		draw_rect(Rect2(pos + Vector2(-10, -50), Vector2(20, 17)), Color("142b35"), false, 2)
+		M.draw_sprite(self, carried, pos + Vector2(-14, -25), 24)
 
 func _draw_enemy(enemy: Dictionary) -> void:
-	var p: Vector2 = enemy.pos
-	var hit: bool = enemy.hit_cd > 0.0
+	var view := enemy.duplicate()
+	view["kind"] = "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry")
+	view["max_hp"] = 9 if enemy.boss else (3 if enemy.id % 2 else 2)
+	view["facing"] = (pos - Vector2(enemy.pos)).normalized()
+	view["phase"] = "windup" if enemy.shot_cd < 0.27 else "idle"
+	view["warning"] = 1.0 if enemy.shot_cd < 0.27 else 0.0
+	view["hurt"] = enemy.hit_cd
+	view["moving"] = enemy.pos.distance_to(pos) < 420
+	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
 	if enemy.boss:
-		_draw_collector(enemy)
-		return
-	draw_circle(p + Vector2(4, 17), 23, Color("091d25", 0.5))
-	draw_rect(Rect2(p - Vector2(24, 16), Vector2(48, 35)), Color("152f3b"))
-	draw_rect(Rect2(p - Vector2(18, 13), Vector2(36, 27)), Color("9a5a66") if hit else Color("657c78"))
-	draw_rect(Rect2(p - Vector2(13, 8), Vector2(26, 10)), Color("253e48"))
-	draw_rect(Rect2(p - Vector2(7, 6), Vector2(14, 6)), PINK)
-	for side in [-1, 1]:
-		var x: float = p.x + side * 27
-		draw_rect(Rect2(x - 6, p.y - 10, 12, 19), Color("34525b"))
-		draw_rect(Rect2(x - 9, p.y - 1, 18, 4), Color("9d7b59"))
-	for j in 2:
-		draw_rect(Rect2(p.x - 14 + j * 27, p.y + 15, 9, 5), Color("263f47"))
-	draw_rect(Rect2(p - Vector2(20, 30), Vector2(40 * enemy.hp / 3.0, 3)), PINK)
-	if enemy.shot_cd < 0.27:
-		draw_arc(p, 29 + sin(clock * 12) * 2, 0, TAU, 24, Color(PINK, 0.5), 2)
-
-func _draw_collector(enemy: Dictionary) -> void:
-	var p: Vector2 = enemy.pos
-	draw_circle(p + Vector2(4, 25), 38, Color("1d1e22", 0.65))
-	draw_rect(Rect2(p - Vector2(36, 25), Vector2(72, 55)), Color("252629"))
-	draw_rect(Rect2(p - Vector2(30, 20), Vector2(60, 40)), Color("756b60") if enemy.hit_cd <= 0 else PINK)
-	draw_rect(Rect2(p - Vector2(23, 15), Vector2(46, 21)), Color("3b3837"))
-	for j in 4:
-		draw_rect(Rect2(p + Vector2(-20 + j * 12, -12), Vector2(5, 15)), Color("c29658"))
-	for side in [-1, 1]:
-		var anchor := p + Vector2(side * 31, 5)
-		draw_rect(Rect2(anchor - Vector2(10, 17), Vector2(20, 36)), Color("373738"))
-		draw_line(anchor + Vector2(side * 8, 9), anchor + Vector2(side * 25, 24), Color("bb8751"), 6)
-		draw_rect(Rect2(anchor + Vector2(side * 18 - 4, 23), Vector2(12, 8)), Color("262426"))
-	draw_rect(Rect2(p - Vector2(11, 20), Vector2(22, 8)), PINK)
-	draw_rect(Rect2(p - Vector2(36, 39), Vector2(72, 6)), Color("2c2529"))
-	draw_rect(Rect2(p - Vector2(35, 38), Vector2(70 * enemy.hp / 9.0, 4)), PINK)
-	if enemy.shot_cd < 0.3: draw_arc(p, 43, 0, TAU, 32, Color(PINK, 0.67), 3)
+		draw_rect(Rect2(enemy.pos + Vector2(-35, -54), Vector2(70, 4)), Color("15262b"))
+		draw_rect(Rect2(enemy.pos + Vector2(-35, -54), Vector2(70 * maxf(0, enemy.hp) / 9.0, 4)), PINK)

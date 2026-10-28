@@ -1,67 +1,65 @@
-# Distrito de Resíduos — direção, mapa e mecânicas
+# Distrito de Resíduos — bairro industrial de Aurora
 
-## Premissa e posição na campanha
+## Intenção
 
-Este é o segundo cenário da campanha, após a Operação Filtro. A coleta de Aurora envia resíduos misturados a uma instalação com esteiras travadas e biodigestores isolados. Lia recupera o fluxo de materiais e encontra, nos registros da usina, a composição do núcleo usado pela IA. A progressão prevista é **Águas → escolha de melhoria → Resíduos → escolha de melhoria → Energia**. A versão jogável atual abre a partir da conclusão de Águas e recebe a dificuldade e as melhorias já escolhidas. Salvar o progresso de Resíduos entre sessões, oferecer uma nova melhoria e seguir para Energia são passos futuros da campanha.
+O distrito é um pedaço construído da cidade: instalações de triagem, transformação e compostagem servidas por ruas, docas, rede elétrica e transporte de carga. A arquitetura explica como a coleta funcionava antes do colapso. Acúmulo nas docas, esteiras obstruídas e vazamento orgânico mostram a interrupção desse sistema.
 
-## Mapa e percurso
+O acabamento segue a introdução e o Distrito das Águas: pixel art detalhada, perspectiva superior em três quartos, metal pintado em azul petróleo, ferragens de latão e sombras coerentes. Asfalto, concreto miúdo, alvenaria e telhas metálicas dão identidade industrial própria. A umidade fica localizada na compostagem.
 
-Mapa externo em visão superior, com escala e silhueta de personagens compatíveis com o restante do jogo, mas **identidade ambiental própria**. É um pátio industrial de resíduos, seco, poeirento e congestionado, sem canais, reservatórios, piso úmido ou vegetação de brejo. A área de jogo mede 2.400 × 1.500 unidades. O eixo principal é oeste → leste, com um circuito sul que permite contornar a linha de esteiras. Cada trecho de passagem deve manter pelo menos 130 unidades livres para Lia, drones e tiros. As bordas industriais têm volume visual; o centro das arenas fica relativamente calmo.
+## Implantação
 
 ```text
-OESTE / entrada da rede hídrica                     LESTE / saída para Energia
-┌───────────────────┬───────────────────┬──────────────────────────┐
-│ TRIAGEM AURORA    │ RECICLAGEM PRISMA │ COMPOSTAGEM ÍRIS        │
-│ doca, balança     │ fornos frios,     │ biodigestores,          │
-│ quatro baias      │ prensa, depósito  │ leitos vivos            │
-│ M P V O           │                   │                          │
-│                   │                   │                          │
-│ esteira e passadiço de manutenção, com travessias e cruzamentos       │
-│                   │                   │                          │
-│ pátio de coleta   │ corredor de carga │ jardins filtrantes      │
-└───────────────────┴───────────────────┴──────────────────────────┘
+                    NORTE
+┌─────────────────────────┬───────┬──────────────────────────┐
+│ TRIAGEM AURORA          │ rua   │ RECICLAGEM PRISMA        │
+│ quatro baias           │ de    │ triturador → prensa      │
+│ entrada por esteira    │ apoio │ braço → forno → fardos   │
+│ cabine e empilhadeiras │       │ passarela e ventilação   │
+│   doca   doca   doca    │       │       doca principal     │
+╞═════════════════════════╪═══════╪══════════════════════════╡
+│       AVENIDA DE SERVIÇO / CALÇADAS / FAIXA DE PEDESTRES   │
+╞═════════════════════════╪═══════╪══════════════════════════╡
+│ quarteirão logístico   │ rua   │ portão da COMPOSTAGEM    │
+│ galpões fechados       │ de    │ depósito e ventilação    │
+│ caminhão de coleta     │ carga │ dois biodigestores       │
+│ escritórios, pátio     │       │ leiras cobertas e painel │
+└─────────────────────────┴───────┴──────────────────────────┘
 ```
 
-1. **Pátio de Triagem Aurora (x 100–790):** desembarque, aprendizagem da classificação, contêineres e um terminal central. O caminhamento abre em torno das baias; uma pilha de descarte delimita a rota sul. Risco inicial legível e poucos drones.
-2. **Núcleo de Reciclagem Prisma (x 830–1580):** esteiras, prensagem e armazenamento, com travessias metálicas sobre o circuito. Duas rotas entre norte e sul permitem reposicionamento em combate. A máquina ocupa a borda, o centro permanece aberto.
-3. **Jardins de Compostagem Íris (x 1620–2300):** tanques e canteiros ligados por tubos, vapor e vegetação retomando juntas. Resíduos orgânicos têm destino visível. O caminho final passa pelo biodigestor e pelo terminal de saída.
+A avenida fica acessível desde o início. O jogador se orienta pela esquina, pela faixa de pedestres, pelas portas de carga e pelos postes. A progressão bloqueia apenas as entradas da reciclagem e da compostagem. Galpões logísticos permanecem fechados; seus telhados não são piso caminhável.
 
-O roteiro de origem pede **quatro fases com um mini chefe final**. As quatro batidas da missão são: (1) separar os quatro materiais na Triagem; (2) liberar o corredor de sucata; (3) recuperar a prensagem no Prisma; (4) reabrir o fluxo orgânico em Íris, enfrentar a unidade coletora pesada e ativar o biodigestor. As três regiões físicas abrigam essas quatro etapas sem repetir o padrão de quatro setores de Águas.
+O mapa tem **1.920 × 1.280 unidades**, com arte de **1.536 × 1.024** aplicada em escala uniforme de 1,25. A altura da Lia permanece a da beta. Portas de pessoal, docas, empilhadeiras, controles e barreiras são conferidos junto dela nas capturas. A avenida possui aproximadamente 140 unidades de leito viário; docas e corredores são dimensionados para a colisão circular da personagem. Não há escalas independentes para alargar ou esticar máquinas.
 
-### Camadas e colisão
+## Instalações e leitura funcional
 
-- Piso de concreto **seco**, grafite e cinza quente, com pneus, pó, ferrugem, cacos e marcas laranja de carga. Nada de reflexos aquáticos ou musgo do Distrito das Águas. Lotes de detalhe são fixos no mundo; nada muda de lugar quando a câmera se move.
-- Esteiras, trilhos, dutos, bocas de ventilação e placas de manutenção explicam o fluxo **coleta → separação → reciclagem/compostagem**. As esteiras são acessíveis nas travessias; bordas e máquinas possuem colisão coerente com sua base.
-- Sucata e pilhas criam paredes localizadas, com contornos sólidos claros. Zonas tóxicas têm piso e brilho magenta esverdeado, produzem dano periódico e podem ser contornadas. Bloqueios interativos liberam rotas sem exigir que Lia atravesse a pilha.
-- Objetivos e drones ficam acima do piso; silhuetas usam o mesmo desenho de Lia e da arma da beta. Sombras acompanham bases, respeitam profundidade e não cobrem o HUD.
+| Instalação | Estrutura | Sinais do colapso | Ação do jogador |
+| --- | --- | --- | --- |
+| Centro de Triagem Aurora | Galpão aberto em corte, três docas, esteira atravessando a parede, quatro baias, cabine de controle, empilhadeiras e fardos | Materiais recebidos ficaram no pátio e a classificação foi interrompida | Recolher quatro materiais com E, entregar na baia correspondente e restaurar o painel |
+| Usina de Reciclagem Prisma | Triturador, prensa, braço mecânico, forno, esteiras ligadas e tubulações de exaustão | Duas obstruções na entrada e na área de trabalho; drones ocupam o corredor | Limpar os bloqueios com E, neutralizar as máquinas hostis e restaurar o painel |
+| Unidade de Compostagem Íris | Pátio cercado, dois biodigestores, leiras de matéria orgânica, galpão de ventilação e rede de aeração | Válvulas fechadas, vazamento localizado e coletora pesada | Reabrir duas válvulas com E, vencer a coletora e ativar o painel |
 
-## Mecânicas e objetivos
+As quatro batidas da missão são classificação, desobstrução, recuperação da reciclagem e recuperação orgânica com mini chefe. A classificação usa nome, forma e cor: fardo metálico, saco de plástico, caixa de vidro e saco orgânico. A entrega errada devolve o item à doca, trava temporariamente a triagem e alerta um drone. O material permanece disponível.
 
-| Etapa | Ação | Feedback e falha |
-| --- | --- | --- |
-| Classificar | Recolher um item por vez com **E** e levar à baia correta: metal, plástico, vidro, orgânico. Pictograma, nome e cor sempre aparecem juntos. | Acerto acende a baia e avança a esteira. Erro devolve o item à origem, trava brevemente a baia e chama a atenção de drones. Nunca se perde o material. |
-| Religação | Depois das quatro entregas, manter **E** no terminal Aurora. | Barras de progresso e luzes âmbar → ciano; a esteira principal se move. |
-| Rota de carga | Limpar três bloqueios com **E**, sob pressão de drones de coleta. | Sucata desaparece por estágios; a linha de piso e a direção da esteira ficam visíveis. |
-| Prisma | Acionar prensagem e recuperação do vidro, em duas estações, depois o terminal. | Linhas de energia e luz de serviço passam a ciano; máquina não liga antes de receber material separado. |
-| Íris | Reabrir dois dutos orgânicos, depois ativar o biodigestor. | Vapor contaminado cessa e luz vegetal cresce nos leitos. |
-| Saída | Neutralizar a patrulha restante e acessar o registro. | Registro revela liga metálica, polímero e vidro técnico usados no núcleo da IA. |
+## Arte, profundidade e iluminação
 
-Vida começa cheia ao entrar no cenário. Morte reinicia apenas este distrito, incluindo puzzle, inimigos e máquinas; melhorias obtidas em Águas devem persistir quando a campanha for integrada. Os drones de coleta são os inimigos da beta com aparência e comportamento já reconhecíveis. A separação é a decisão central: combate protege o trabalho, mas não substitui a classificação.
+- A base urbana é uma composição única: fachadas, calçadas, docas, postes, fiação, coberturas, produção e estoques compartilham perspectiva e acabamento. Os recortes interativos usam uma prancha da mesma família visual.
+- Consoles, materiais, sucata e válvulas são sprites ilustrados; Lia, drones e coletora usam a arte animada existente do jogo. Primitivas simples são reservadas a interface, indicadores e efeitos.
+- Objetos interativos, postes, empilhadeiras e vergas das docas respeitam a profundidade. Colisões seguem chão, paredes e bases medidas na arte. A personagem não pode atravessar prédios ou subir em telhados.
+- Os postes mantêm luz âmbar. Telas e indicadores recebem ciano ao restaurar uma instalação. O forno oscila suavemente; exaustão e vazamento têm efeitos discretos. Restaurar as válvulas reduz a emissão orgânica. Brilhos de material acompanham as esteiras recuperadas.
+- O shader trabalha em coordenadas da arte, ancoradas ao mundo. HUD e mapa ficam em uma camada própria. A trilha e os sons da beta acompanham combate, coleta, reparos e máquinas; o zumbido industrial varia com a proximidade de sistemas ativos.
 
-## Linguagem visual
+## Orientação e percurso humano
 
-Preservar apenas a **escala dos personagens, acabamento da arte, legibilidade e qualidade de iluminação** do Distrito das Águas. A paleta de Resíduos é distinta: grafite, concreto seco cinza quente, pó marrom, laranja de segurança, ferrugem, metal prensado, plástico fosco, vidro pálido, matéria orgânica ocre/oliva e contaminação magenta. O ciano aparece só em telas e indicadores de Aurora. Cores de classificação são acompanhadas de ícones e texto, inclusive no HUD, para não depender só de cor. Íris concentra a pouca vegetação do mapa em leitos de composto; não há brejo nem água aparente.
+O HUD ocupa os cantos, deixando a rua e as portas visíveis. A seta próxima à Lia e a direção do objetivo seguem uma rota que passa pelas entradas. O minimapa mostra posição, alvo e percurso; M abre o plano completo do bairro. O comando E aparece ao alcançar um objeto disponível. A barra de reparo fica junto da instrução contextual.
 
-Usar detalhes em grupos funcionais: parafusos em estruturas, trilhos paralelos nas esteiras, correntes perto de docas, números nas baias, sacos e fardos junto dos estoques, poeira e papéis nas juntas, solo orgânico apenas em Íris. Luz direcional constante cria sombras de contato e projeções curtas. Fontes locais âmbar indicam falha; ciano indica sistema recuperado. Perigos pulsam em magenta. Shaders usam coordenadas do mundo e atualização limitada a áreas visíveis; efeitos não incidem na interface.
+A navegação usa o mesmo chão e os mesmos obstáculos da movimentação. O teste percorre a fase com `_move_player`, em pequenos passos, verificando os acessos sem teleportar Lia até os objetivos. Também há uma busca independente para todas as baias e materiais. As células de navegação são armazenadas por estado dos portões e bloqueios.
 
-## Revisão de qualidade
+## Validação e limites
 
-Capturar entrada, as quatro baias, arena Prisma e jardins Íris em 960×540 e 1440×810, com e sem HUD. Conferir: rota e próximo alvo legíveis em menos de três segundos; itens distinguíveis sem cor; pulsos e Lia em primeiro plano; obstáculos com bases honestas; nenhum salto de luz ao mover câmera; tratamento visual perceptível ao restaurar cada sistema; desempenho da animação de esteira, vapor e luz no renderer Compatibility.
+`tests/test_residues.gd` cobre circulação, escala física dos corpos, docas, baias, bloqueios, válvulas, vitória, alerta de drone e transferência de melhorias. `tests/check_residue_transition.sh` cobre a passagem de Águas para Resíduos sem exceções de entrada.
 
-## Entrega incremental
+`tools/review_residues.gd` produz cinco vistas de jogo em 1.440 × 810, visão geral sem HUD, mapa e vista nativa em 960 × 540. As evidências ficam em `captures/residuos/`. A revisão compara portas e equipamentos com Lia, confere sobreposições, legibilidade e identidade urbana.
 
-1. **Recorte jogável:** mapa, separação, terminais, drones, bloqueios, vida e reinício do distrito.
-2. **Acabamento:** atlas próprio de máquinas e resíduos, animações de esteira e dutos, shader de luz e contaminação, som localizado e capturas revisadas.
-3. **Campanha:** transferência de melhorias e dificuldade da beta (feita em memória), save entre distritos, tela de recompensa e ligação ao Distrito de Energia.
+O progresso e as melhorias são transferidos em memória ao sair de Águas. Save de Resíduos entre sessões, escolha da próxima melhoria e transição para Energia continuam pendentes. O teste de percurso cobre circulação e interações; balanceamento de combate e duração precisam de playtest humano.
 
-O recorte jogável deve ficar acessível após a vitória em Águas e como cena isolada para revisão. Este documento descreve também o alvo de campanha completo; itens da terceira etapa não são condições para avaliar o mapa atual.
+Fontes e prompts: [arte do bairro](../../assets/residues/README.md).

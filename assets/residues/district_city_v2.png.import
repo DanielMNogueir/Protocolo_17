@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cqjl5ahpxe35u"
-path="res://.godot/imported/industrial_atlas.png-188691f78b0ac7c5dc048a2c37841479.ctex"
+uid="uid://dgppcgw6yre5x"
+path="res://.godot/imported/district_city_v2.png-41e494060085be658c336387de11077a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/residues/industrial_atlas.png"
-dest_files=["res://.godot/imported/industrial_atlas.png-188691f78b0ac7c5dc048a2c37841479.ctex"]
+source_file="res://assets/residues/district_city_v2.png"
+dest_files=["res://.godot/imported/district_city_v2.png-41e494060085be658c336387de11077a.ctex"]
 
 [params]
 
