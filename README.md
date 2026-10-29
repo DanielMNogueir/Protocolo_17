@@ -18,7 +18,9 @@ Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Tamb�
 
 [Mapa, mecânicas e direção visual](docs/direcao-visual/distrito-de-residuos.md) · [Revisão da prensa](captures/residuos/03-prisma.png) · [Revisão da compostagem](captures/residuos/04-iris.png).
 
-[Visão geral do bairro](captures/residuos/06-bairro-completo.png) · [Vista em 960×540](captures/residuos/08-triagem-960.png) · [Fontes da arte](assets/residues/README.md).
+[Visão geral do bairro](captures/residuos/06-bairro-completo.png) · [Vista em 960×540](captures/residuos/08-triagem-960.png) · [Auditoria de colisões](captures/residuos/09-colisoes.png) · [Fontes da arte](assets/residues/README.md).
+
+Resíduos reutiliza as poses, o recuo, o clarão e o pulso de Águas. Os galpões têm pisos de trabalho abertos, a triagem possui uma entrada ampla e os biodigestores deixam uma passagem central. Jogador, robôs e projéteis consultam a mesma geometria; esquivas verificam todo o deslocamento. O fundo usa quatro setores de 1536×1024, cobrindo o bairro em 3072×2048 sem aumentar a escala da personagem.
 
 ## Dificuldades
 
@@ -74,6 +76,8 @@ Substitua `godot` pelo caminho do Godot 4.7.1 instalado:
 godot --headless --path . --editor --import --quit
 godot --headless --path . --script tests/test_beta_rules.gd
 godot --headless --path . --script tests/test_residues.gd
+godot --headless --path . --script tests/test_residue_collision.gd
+godot --path . --audio-driver Dummy --script tests/test_residue_presentation.gd
 bash tests/check_residue_transition.sh
 godot --headless --path . --script tests/test_beta_input.gd
 godot --headless --path . --script tests/test_beta_storage.gd

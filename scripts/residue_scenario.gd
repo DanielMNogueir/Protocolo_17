@@ -4,8 +4,10 @@ extends Node2D
 const M = preload("res://scripts/residue_map.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
+const LIA_POSE = preload("res://scripts/lia_directional.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
+const BACKGROUND_SHADER = preload("res://scripts/residue_background.gdshader")
 const Sound = preload("res://scripts/audio.gd")
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
@@ -44,6 +46,8 @@ var toast := ""
 var toast_time := 0.0
 var _animation := LiaAnimation.new()
 var _light: Sprite2D
+var _backgrounds: Array[Sprite2D] = []
+var collision_audit := false
 var _light_material: ShaderMaterial
 var _hud: Control
 var difficulty := "operation"
@@ -68,16 +72,32 @@ func _ready() -> void:
 	sound.set_muted(_muted)
 	sound.set_mood("calm")
 	Actors.ENEMIES.prepare()
+	for i in 4:
+		var background := Sprite2D.new()
+		background.texture = M.SECTORS[i]
+		background.centered = false
+		background.scale = M.SIZE * 0.5 / background.texture.get_size()
+		background.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		background.z_index = -10
+		var background_material := ShaderMaterial.new()
+		background_material.shader = BACKGROUND_SHADER
+		background_material.set_shader_parameter("reference_plate", M.PLATE)
+		background_material.set_shader_parameter("quadrant", Vector2(i % 2, i / 2))
+		background.material = background_material
+		add_child(background)
+		_backgrounds.append(background)
 	_setup_lighting()
 	var layer := CanvasLayer.new()
 	layer.layer = 5
 	add_child(layer)
 	_hud = HUD.new()
 	_hud.game = self
+	_hud.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_hud)
 	_spawn_enemies()
+	M.prepare_navigation()
 	camera = pos.clamp(get_viewport_rect().size * 0.5, M.SIZE - get_viewport_rect().size * 0.5)
 	_light.position = M.SIZE * 0.5 + _offset()
 	_set_toast("LIA: os materiais estão misturados. Vou reabrir a triagem.")
@@ -154,8 +174,9 @@ func _physics_process(delta: float) -> void:
 		sound.play_sfx("dash")
 	dash_requested = false
 	velocity = velocity.move_toward(movement * (620.0 if dash_time > 0 else move_speed), 1800 * dt)
+	var previous := pos
 	_move_player(velocity * dt)
-	_animation.advance(dt, velocity, dash_time > 0)
+	_animation.advance(dt, (pos - previous) / dt, dash_time > 0)
 	if secondary_requested and secondary_cd <= 0.0:
 		_fire(target, true)
 		secondary_cd = 3.8
@@ -226,20 +247,23 @@ func _offset() -> Vector2:
 	return (get_viewport_rect().size * 0.5 - camera).round()
 
 func _move_player(change: Vector2) -> void:
-	var next_x := pos + Vector2(change.x, 0)
-	if M.walkable(next_x, 14.0, stage, cleared): pos.x = next_x.x
-	var next_y := pos + Vector2(0, change.y)
-	if M.walkable(next_y, 14.0, stage, cleared): pos.y = next_y.y
+	pos = M.slide(pos, change, 14.0, stage, cleared)
 
 func _fire(target: Vector2, secondary: bool = false) -> void:
 	fire_cd = fire_interval
 	sound.play_sfx("shoot")
-	var start := pos + aim * 27.0
-	bullets.append({"pos": start, "vel": aim * pulse_speed, "hostile": false, "life": 1.25, "damage": pulse_damage})
+	# Match Water's held pose, emitter, target correction and five-pulse burst.
+	var start: Vector2 = pos + LIA_POSE.pose(aim, _animation.elapsed, _animation.moving).muzzle
+	if not M.line_clear(pos, start, 3.0, stage, cleared): return
+	var direction := (target - start).normalized() if target.is_finite() and target.distance_squared_to(start) > 1.0 else aim
 	if secondary:
-		for spread in [-0.22, -0.11, 0.11, 0.22]:
-			bullets.append({"pos": start, "vel": aim.rotated(spread) * pulse_speed, "hostile": false, "life": 1.1, "damage": pulse_damage})
-		fire_cd = 0.55
+		for index in 5:
+			bullets.append({"pos": start, "source": start, "vel": direction.rotated(float(index - 2) * 0.12) * pulse_speed * 0.85, "hostile": false, "life": 1.2, "damage": pulse_damage + 1})
+	else:
+		bullets.append({"pos": start, "source": start, "vel": direction * pulse_speed, "hostile": false, "life": 1.7, "damage": pulse_damage})
+
+func shot_age() -> float:
+	return fire_interval - fire_cd if fire_cd > 0.0 else -1.0
 
 func _interact(dt: float, held: bool, pressed: bool) -> void:
 	var candidate := _interaction_candidate()
@@ -324,7 +348,11 @@ func _interaction_candidate() -> Dictionary:
 	var best := INF
 	for candidate in candidates:
 		var distance := pos.distance_to(candidate.pos)
-		if distance <= candidate.reach and distance < best:
+		# Ignore only the target's own base; walls and other machines still block E.
+		var body := ""
+		if candidate.kind == "block": body = ("sucata %d" if candidate.index < 2 else "válvula %d") % candidate.index
+		elif candidate.kind == "terminal": body = "terminal %d" % candidate.index
+		if distance <= candidate.reach and distance < best and M.line_clear(pos, candidate.pos, 0.5, stage, cleared, body):
 			closest = candidate
 			best = distance
 	return closest
@@ -374,7 +402,12 @@ func _update_guidance() -> void:
 	_guide_target = target
 	_guide_timer = 0.65
 	var reach := 35.0 if stage == 0 and (carried >= 0 or sorted.has(false)) else 65.0
-	guidance_path = M.path_between(pos, target, stage, cleared, reach)
+	var body := ""
+	for i in 4:
+		if target == M.BLOCKS[i]: body = ("sucata %d" if i < 2 else "válvula %d") % i
+	for i in 3:
+		if target == M.TERMINALS[i]: body = "terminal %d" % i
+	guidance_path = M.path_between(pos, target, stage, cleared, reach, 14.0, true, body)
 
 func guidance_point() -> Vector2:
 	var nearest := 0
@@ -396,10 +429,37 @@ func _update_enemies(dt: float) -> void:
 		enemy.shot_cd -= dt
 		enemy.phase += dt
 		var distance: float = enemy.pos.distance_to(pos)
-		if distance < 420 and distance > (145.0 if enemy.boss else 125.0):
-			var desired: Vector2 = enemy.pos + (pos - enemy.pos).normalized() * (35.0 if enemy.boss else 54.0) * dt
-			if M.walkable(desired, 25.0 if enemy.boss else 18.0, stage, cleared): enemy.pos = desired
-		if distance < 440 and enemy.shot_cd <= 0.0:
+		var visible := M.line_clear(enemy.pos, pos, 3.0, stage, cleared)
+		if distance < 520: enemy["engaged"] = true
+		var radius := 25.0 if enemy.boss else 18.0
+		if enemy.get("engaged", false) and (distance > (145.0 if enemy.boss else 125.0) or not visible):
+			enemy["route_timer"] = float(enemy.get("route_timer", 0.0)) - dt
+			var changed := int(enemy.get("route_geometry", -1)) != M._geometry_key(stage, cleared)
+			if changed or enemy.route_timer <= 0.0 or Vector2(enemy.get("route_target", Vector2.INF)).distance_to(pos) > 64.0:
+				enemy["route"] = M.path_between(enemy.pos, pos, stage, cleared, 85.0, radius, true)
+				if enemy.route.is_empty(): enemy.route = M.path_between(enemy.pos, pos, stage, cleared, 410.0, radius, true)
+				enemy["route_cursor"] = 0
+				enemy["route_timer"] = 1.0 + i * 0.07
+				enemy["route_target"] = pos
+				enemy["route_geometry"] = M._geometry_key(stage, cleared)
+			var route: PackedVector2Array = enemy.get("route", PackedVector2Array())
+			var cursor: int = enemy.get("route_cursor", 0)
+			while cursor < route.size() and enemy.pos.distance_to(route[cursor]) < 8.0: cursor += 1
+			enemy["route_cursor"] = cursor
+			if cursor < route.size():
+				var travel: Vector2 = (route[cursor] - Vector2(enemy.pos)).normalized() * (43.0 if enemy.boss else 68.0)
+				# Gentle separation prevents drones stacking in entrances. Floor and
+				# machine collision still govern the final displacement.
+				for j in enemies.size():
+					if j == i or enemies[j].hp <= 0 or enemies[j].zone > stage: continue
+					var away: Vector2 = enemy.pos - enemies[j].pos
+					var gap := radius + (25.0 if enemies[j].boss else 18.0) + 9.0
+					if away.length() < gap:
+						travel += away.normalized() * (gap - away.length()) * 3.0
+				var before: Vector2 = enemy.pos
+				enemy.pos = M.slide(before, travel.limit_length(80.0) * dt, radius, stage, cleared)
+				if enemy.pos.distance_to(before) < 0.1: enemy.route_timer = minf(enemy.route_timer, 0.15)
+		if distance < 440 and visible and enemy.shot_cd <= 0.0:
 			var direction: Vector2 = (pos - enemy.pos).normalized()
 			var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
 			for spread in spreads:
@@ -411,23 +471,28 @@ func _update_enemies(dt: float) -> void:
 func _update_bullets(dt: float) -> void:
 	for i in range(bullets.size() - 1, -1, -1):
 		var bullet: Dictionary = bullets[i]
-		bullet.pos += bullet.vel * dt
 		bullet.life -= dt
-		var gone: bool = bullet.life <= 0.0 or not M.walkable(bullet.pos, 3.0, stage, cleared)
-		if not gone and bullet.hostile:
-			if bullet.pos.distance_to(pos) < 16 and invuln <= 0.0:
-				_damage()
-				gone = true
-		elif not gone:
-			for j in enemies.size():
-				var enemy: Dictionary = enemies[j]
-				if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (32.0 if enemy.boss else 22.0):
-					enemy.hp -= bullet.damage
-					enemy.hit_cd = 0.18
-					if enemy.hp <= 0: sound.play_sfx("enemy_dead")
-					enemies[j] = enemy
+		var gone: bool = bullet.life <= 0.0
+		var steps := maxi(1, int(ceil(Vector2(bullet.vel).length() * dt / 4.0)))
+		for step in steps:
+			if gone: break
+			bullet.pos += bullet.vel * dt / steps
+			gone = not M.walkable(bullet.pos, 3.0, stage, cleared)
+			if gone: break
+			if bullet.hostile:
+				if bullet.pos.distance_to(pos) < 17 and invuln <= 0.0:
+					_damage()
 					gone = true
-					break
+			else:
+				for j in enemies.size():
+					var enemy: Dictionary = enemies[j]
+					if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (28.0 if enemy.boss else 21.0):
+						enemy.hp -= bullet.damage
+						enemy.hit_cd = 0.18
+						if enemy.hp <= 0: sound.play_sfx("enemy_dead")
+						enemies[j] = enemy
+						gone = true
+						break
 		if gone: bullets.remove_at(i)
 		else: bullets[i] = bullet
 
@@ -454,8 +519,9 @@ func _set_toast(message: String) -> void:
 
 func _draw() -> void:
 	var offset := _offset()
+	for i in _backgrounds.size(): _backgrounds[i].position = offset + Vector2(i % 2, i / 2) * M.SIZE * 0.5
 	draw_set_transform(offset)
-	M.draw_map(self, clock, stage, sorted, cleared, terminal_on, carried)
+	M.draw_map(self, clock, stage, sorted, cleared, terminal_on, carried, false)
 	var depth_entries: Array[Dictionary] = []
 	for prop in M.props(sorted, cleared, terminal_on, carried):
 		depth_entries.append({"kind": "prop", "depth": prop.depth, "data": prop})
@@ -473,9 +539,11 @@ func _draw() -> void:
 			"enemy": _draw_enemy(entry.data)
 			"lia": _draw_lia()
 	for bullet in bullets:
-		var color := PINK if bullet.hostile else CYAN
-		draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(color, 0.45), 6)
-		draw_circle(bullet.pos, 4 if bullet.hostile else 5, color)
+		if not bullet.hostile:
+			Actors.WEAPON.draw_pulse(self, bullet, clock)
+		else:
+			draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.45), 6)
+			draw_circle(bullet.pos, 4, PINK)
 	if state == "play":
 		var next := guidance_point()
 		if next.distance_to(pos) > 95.0:
@@ -487,11 +555,16 @@ func _draw() -> void:
 		var p: Vector2 = candidate.pos
 		draw_arc(p, 50, 0, TAU, 30, Color(CYAN, 0.64), 2)
 		draw_string(ThemeDB.fallback_font, p + Vector2(-6, -55), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, WHITE)
+	if collision_audit:
+		M.draw_collision_audit(self, stage, cleared)
+		draw_arc(pos, 14, 0, TAU, 24, Color.WHITE, 1)
+		for enemy in enemies:
+			if enemy.hp > 0 and enemy.zone <= stage: draw_arc(enemy.pos, 25 if enemy.boss else 18, 0, TAU, 24, Color("f4d977"), 1)
 	draw_set_transform(Vector2.ZERO)
 
 func _draw_lia() -> void:
 	var action := "repair" if hold_progress > 0 else ("fire" if fire_cd > 0 else "idle")
-	Actors.draw_lia(self, pos, aim, _animation.elapsed, _animation.moving, invuln > 0 and int(clock * 16) % 2 == 0, dash_time > 0, action, 0.05 if fire_cd > 0 else -1.0)
+	Actors.draw_lia(self, pos, aim, _animation.elapsed, _animation.moving, invuln > 0 and int(clock * 16) % 2 == 0, dash_time > 0, action, shot_age())
 	if carried >= 0:
 		M.draw_sprite(self, carried, pos + Vector2(-14, -25), 24)
 

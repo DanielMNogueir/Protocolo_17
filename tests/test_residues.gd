@@ -3,6 +3,7 @@ const M = preload("res://scripts/residue_map.gd")
 var checks := 0
 var traveled := 0.0
 var peak_route_ms := 0.0
+var failures := 0
 
 func _initialize() -> void: _run.call_deferred()
 
@@ -18,7 +19,7 @@ func _run() -> void:
 	_check(not M.walkable(M.GATES[0].get_center(), 14.0, 0, game.cleared), "recycling entrance locked")
 	_check(not M.walkable(M.GATES[1].get_center(), 14.0, 1, game.cleared), "compost entrance locked")
 	_check(M.path_between(M.START, M.TERMINALS[1], 0, game.cleared, 65).is_empty(), "factory cannot be reached through walls or its locked dock")
-	_check(not M.path_between(Vector2(1168, 700) * M.SCALE, M.BLOCKS[2], 2, game.cleared, 65).is_empty(), "guidance reaches aeration valve from eastern aisle")
+	_check(not M.path_between(Vector2(1070, 750) * M.SCALE, M.BLOCKS[2], 2, game.cleared, 65).is_empty(), "guidance reaches aeration valve from central aisle")
 	for i in 7:
 		_check(M.walkable(M.ENEMY_POSITIONS[i], 25.0 if i == 6 else 18.0, 2, game.cleared), "enemy %d fits physical ground" % i)
 	for i in 4:
@@ -80,11 +81,11 @@ func _run() -> void:
 	_check(transferred.move_speed == 225 and is_equal_approx(transferred.dash_recharge, 1.05), "mobility upgrade transfer")
 	transferred.queue_free()
 	remove_meta("p17_residue_handoff")
-	print("RESIDUES_TEST_OK: ", checks, " checks; physical route distance: ", int(traveled), "; peak route ms: ", snapped(peak_route_ms, 0.1))
+	print("RESIDUES_TEST_", "OK" if failures == 0 else "FAILED", ": ", checks, " checks; physical route distance: ", int(traveled), "; peak route ms: ", snapped(peak_route_ms, 0.1))
 	game.queue_free()
 	for frame in 3: await process_frame
 	await create_timer(0.12).timeout
-	quit(0)
+	quit(1 if failures else 0)
 
 func _travel(game: Node2D, target: Vector2, reach: float) -> bool:
 	var started := Time.get_ticks_usec()
@@ -92,6 +93,7 @@ func _travel(game: Node2D, target: Vector2, reach: float) -> bool:
 	peak_route_ms = maxf(peak_route_ms, (Time.get_ticks_usec() - started) / 1000.0)
 	if path.is_empty():
 		_check(false, "no street path to " + str(target / M.SCALE))
+		quit(1)
 		return false
 	for point in path:
 		for step in 1000:
@@ -101,6 +103,7 @@ func _travel(game: Node2D, target: Vector2, reach: float) -> bool:
 			traveled += before.distance_to(game.pos)
 			if before.distance_to(game.pos) < 0.01:
 				_check(false, "physical route blocked at " + str(game.pos / M.SCALE) + " going to " + str(point / M.SCALE))
+				quit(1)
 				return false
 	_check(game.pos.distance_to(target) <= reach + 1, "walked to " + str(target / M.SCALE))
 	return true
@@ -108,8 +111,8 @@ func _travel(game: Node2D, target: Vector2, reach: float) -> bool:
 func _check(value: bool, message: String) -> void:
 	checks += 1
 	if not value:
+		failures += 1
 		push_error("RESIDUES_TEST_FAILED: " + message)
-		quit(1)
 
 func _path_to(from: Vector2, target: Vector2, reach: float, stage: int, cleared: Array) -> bool:
 	var spacing := 18.0
