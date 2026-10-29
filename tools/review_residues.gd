@@ -20,8 +20,9 @@ func _run() -> void:
 		["01-triagem", Vector2(740, 540), 0, Vector2(740, 515)],
 		["02-baias", Vector2(463, 375), 0, Vector2(390, 288)],
 		["03-prisma", Vector2(1130, 335), 1, Vector2(1168, 288)],
-		["04-iris", Vector2(1168, 700), 2, Vector2(1180, 790)],
+		["04-iris", Vector2(1060, 734), 2, Vector2(1180, 790)],
 		["05-biodigestor", Vector2(1066, 876), 2, Vector2(1180, 815)],
+		["10-patio", Vector2(610, 800), 1, Vector2(560, 780)],
 	]
 	for entry in views:
 		game.stage = entry[2]
@@ -77,6 +78,18 @@ func _run() -> void:
 		await process_frame
 		await RenderingServer.frame_post_draw
 	assert(root.get_texture().get_image().save_png(out + "/08-triagem-960.png") == OK)
+	root.content_scale_size = Vector2i(game.M.SIZE)
+	root.size = Vector2i(1536, 1024)
+	game._hud.visible = false
+	game.stage = 2
+	game.collision_audit = true
+	game.camera = game.M.SIZE * 0.5
+	game._light.position = game.M.SIZE * 0.5
+	game.queue_redraw()
+	for frame in 4:
+		await process_frame
+		await RenderingServer.frame_post_draw
+	assert(root.get_texture().get_image().save_png(out + "/09-colisoes.png") == OK)
 	print("RESIDUE_REVIEW_OK: ", views.size(), " gameplay views + overview + map + native 960")
 	game.queue_free()
 	for frame in 4: await process_frame

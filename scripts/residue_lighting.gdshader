@@ -18,7 +18,7 @@ void fragment() {
         rgb += vec3(1.0, 0.69, 0.30) * light;
         alpha += light;
     }
-    vec2 controls[3] = vec2[3](vec2(218.0, 300.0), vec2(1170.0, 306.0), vec2(1100.0, 902.0));
+    vec2 controls[3] = vec2[3](vec2(224.0, 294.0), vec2(1325.0, 305.0), vec2(1100.0, 891.0));
     for (int i = 0; i < 3; i++) {
         float online = step(float(i) + 0.5, restored);
         float glow = exp(-length((p - controls[i]) / vec2(36.0, 25.0)) * 2.0) * (0.08 + 0.025 * sin(scene_time * 2.5));

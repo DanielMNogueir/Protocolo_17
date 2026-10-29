@@ -72,7 +72,7 @@ func _overlay(title: String, subtitle: String) -> void:
 	_text_center(subtitle, Vector2(size.x * 0.5, size.y * 0.5 + 20), 14, GOLD)
 
 func _draw_plan(area: Rect2, detailed: bool) -> void:
-	draw_texture_rect(M.PLATE, area, false, Color(0.6, 0.7, 0.69, 0.95))
+	M.draw_background(self, area, Color(0.6, 0.7, 0.69, 0.95))
 	var scale := area.size / M.SIZE
 	if detailed:
 		for i in 3:
