@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dlakc66w5gdkt"
-path="res://.godot/imported/concrete_floor.png-1303a1777371b7e9169acc4ca48ca915.ctex"
+uid="uid://bcer8h4c6jbr3"
+path="res://.godot/imported/interactions_v2.png-d0a0a053e80c19cb03a62a874b098527.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/residues/concrete_floor.png"
-dest_files=["res://.godot/imported/concrete_floor.png-1303a1777371b7e9169acc4ca48ca915.ctex"]
+source_file="res://assets/residues/interactions_v2.png"
+dest_files=["res://.godot/imported/interactions_v2.png-d0a0a053e80c19cb03a62a874b098527.ctex"]
 
 [params]
 
