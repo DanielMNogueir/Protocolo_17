@@ -8,6 +8,22 @@ func capture(label: String) -> void:
 	for frame in 5: await process_frame
 	await RenderingServer.frame_post_draw
 	assert(root.get_texture().get_image().save_png(out.path_join(label + ".png")) == OK)
+func verify_hud_clicks() -> void:
+	for action in ["map", "pause"]:
+		var candidates: Array = game.buttons.filter(func(button): return button.id == action)
+		assert(candidates.size() == 1, "HUD action appears exactly once: " + action)
+		var button: Dictionary = candidates[0]
+		assert(Rect2(Vector2.ZERO, game._size()).encloses(button.rect), "HUD button fits viewport")
+		var click := InputEventMouseButton.new()
+		click.button_index = MOUSE_BUTTON_LEFT
+		click.pressed = true
+		click.position = button.rect.get_center()
+		game._unhandled_input(click)
+		assert(game.mode == action, "HUD click opens " + action)
+		game._action("resume")
+		assert(game.mode == "play", "HUD action resumes gameplay")
+	game.ui_mouse_held = false
+
 func run() -> void:
 	if out.is_empty(): out = ProjectSettings.globalize_path("user://hud-review")
 	DirAccess.make_dir_recursive_absolute(out)
@@ -24,10 +40,14 @@ func run() -> void:
 	game.sim.start()
 	game.camera_pos = game.sim.pos
 	await capture("01-aguas-960")
+	verify_hud_clicks()
 	game.sim.hp = 1
 	game.sim.secondary_cd = 2.1
 	game.sim.dash_cd = 0.6
 	await capture("02-integridade-critica")
+	game.sim.max_hp = 14
+	game.sim.hp = 14
+	await capture("12-integridade-maxima")
 	for stage in 4:
 		game.sim.start(stage)
 		game.sim.enemies.clear()
@@ -58,6 +78,7 @@ func run() -> void:
 	await capture("10-chefe")
 	root.size = Vector2i(1440,810)
 	await capture("04-aguas-1440")
+	verify_hud_clicks()
 	game.free()
 	root.size = Vector2i(960,540)
 	game = load("res://scenes/residues.tscn").instantiate()
@@ -81,5 +102,5 @@ func run() -> void:
 	await capture("07-residuos-1440")
 	game.free()
 	for frame in 5: await process_frame
-	print("HUD_REVIEW_OK: 17 rendered scenarios")
+	print("HUD_REVIEW_OK: 18 rendered scenarios; map/pause mouse actions verified at both resolutions")
 	quit()

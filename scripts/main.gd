@@ -739,13 +739,13 @@ func _draw_hud() -> void:
 		detail = "Sistema restaurado"
 		status = "REDE EM OPERAÇÃO"
 	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4)
-	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO")
-	_button(Rect2(296, 52, 78, 28), "M  MAPA", "map", false)
-	_button(Rect2(382, 52, 104, 28), "ESC  PAUSA", "pause", false)
+	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO", pointer)
+	buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
+	buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
 	_draw_operation_hud()
 	FieldHUD.abilities(self, size.y, sim.secondary_cd, sim.secondary_recharge, sim.dash_cd, sim.dash_recharge)
-	_draw_minimap(Rect2(size.x - 182, size.y - 147, 160, 110))
-	_text_right("M  MAPA DO DISTRITO", Vector2(size.x - 22, size.y - 23), 10, MUTED)
+	_draw_minimap(Rect2(size.x - 202, size.y - 160, 186, 144))
+
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84 and sim.operation.ready():
 		var message: String = "[E] REPARAR " + Objectives.SYSTEMS[sim.stage] if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
 		if sim.restored>sim.stage: message = "SISTEMA RESTAURADO  /  " + Objectives.TITLES[sim.stage]
@@ -779,8 +779,7 @@ func _draw_crosshair(p: Vector2) -> void:
 	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), WHITE)
 
 func _draw_minimap(rect: Rect2) -> void:
-	FieldHUD.panel(self, rect)
-	var inner := Rect2(rect.position + Vector2(7, 7), rect.size - Vector2(14, 14))
+	var inner := FieldHUD.radar(self, rect)
 	var scale_value := minf(inner.size.x / World.SIZE.x, inner.size.y / World.SIZE.y)
 	var origin := inner.get_center() - World.SIZE * scale_value * 0.5
 	for i in 4:

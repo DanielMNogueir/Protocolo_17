@@ -16,8 +16,8 @@ func _draw() -> void:
 	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], _direction(direction) + "  " + game.objective_label(), "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3), game.stage, mini(game.stage, 3), 3)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL")
-	var mini_map := Rect2(size.x - 179, size.y - 132, 159, 106)
-	_panel(mini_map.grow(5))
+	var mini_map := FieldHUD.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
+
 	_draw_plan(mini_map, false)
 	var candidate: Dictionary = game._interaction_candidate()
 	if not candidate.is_empty():
