@@ -1,5 +1,6 @@
 extends Node2D
 ## Original alpha shell: presentation, input, camera, interface and checkpoint I/O.
+const FieldHUD = preload("res://scripts/field_hud.gd")
 const World = preload("res://scripts/world.gd")
 const StationArt = preload("res://scripts/station_art.gd")
 const Simulation = preload("res://scripts/simulation.gd")
@@ -728,49 +729,28 @@ func _draw_terminals() -> void:
 
 func _draw_hud() -> void:
 	var size := _size()
-	_panel(Rect2(22, 19, 248, 66))
-	_text("LIA", Vector2(37, 39), 11, CYAN)
-	_text("AGENTE DE RECUPERAÇÃO", Vector2(73, 39), 9, MUTED)
-	for i in sim.max_hp:
-		var step := minf(23, 216.0 / sim.max_hp)
-		draw_rect(Rect2(37 + i * step, 49, step - 4, 10), CYAN if i < sim.hp else Color("29424a"))
-	_text("INTEGRIDADE", Vector2(37, 74), 8, MUTED)
-	_text_right("%d / %d" % [sim.hp, sim.max_hp], Vector2(252, 74), 9, WHITE)
-	_panel(Rect2(size.x - 280, 19, 258, 66))
-	_text("SISTEMAS RESTAURADOS: %d / 4" % sim.restored, Vector2(size.x - 265, 38), 9, MUTED)
-	_text(SECTOR_SUBTITLES[sim.stage], Vector2(size.x - 265, 56), 12, WHITE)
-	for i in 4:
-		draw_rect(Rect2(size.x - 265 + i * 59, 69, 52, 3), CYAN if i < sim.restored else (GOLD if i == sim.stage else Color("29424a")))
-	_button(Rect2(size.x * 0.5 - 51, 20, 46, 26), "M", "map", false)
-	_button(Rect2(size.x * 0.5 + 5, 20, 46, 26), "ESC", "pause", false)
+	FieldHUD.vital(self, sim.hp, sim.max_hp, clock)
 	var alive := 0
-	for e in sim.enemies:
-		if e.hp > 0: alive += 1
-	var objective := "%02d DRONES  /  NEUTRALIZE AS AMEAÇAS" % alive
-	if sim.state == "activation":
-		objective = "ÁREA SEGURA  /  " + ("RESTAURE O SISTEMA" if sim.operation.ready() else "OPERAÇÃO DE CAMPO")
-	elif sim.restored>sim.stage:
-		objective = "SISTEMA RESTAURADO  /  REDE EM OPERAÇÃO"
-	_panel(Rect2(size.x*0.5-199,61,398,70))
-	_text_center(objective, Vector2(size.x * 0.5, 79), 10, CYAN if sim.state == "activation" else GOLD)
+	for enemy in sim.enemies:
+		if enemy.hp > 0: alive += 1
+	var detail: String = sim.operation.label() if not sim.operation.ready() else ("Restaure o terminal do setor" if sim.state == "activation" else "Neutralize os drones para liberar o terminal")
+	var status := "%02d DRONES  •  LEVA %d/3  •  TAREFAS %d/2" % [alive, mini(sim.wave + 1, 3), sim.operation.completed]
+	if sim.restored > sim.stage:
+		detail = "Sistema restaurado"
+		status = "REDE EM OPERAÇÃO"
+	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4)
+	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO")
+	_button(Rect2(296, 52, 78, 28), "M  MAPA", "map", false)
+	_button(Rect2(382, 52, 104, 28), "ESC  PAUSA", "pause", false)
 	_draw_operation_hud()
+	FieldHUD.abilities(self, size.y, sim.secondary_cd, sim.secondary_recharge, sim.dash_cd, sim.dash_recharge)
 	_draw_minimap(Rect2(size.x - 182, size.y - 147, 160, 110))
-	_text_right("M  MAPA DO DISTRITO", Vector2(size.x - 22, size.y - 23), 9, MUTED)
-	_panel(Rect2(22, size.y - 97, 268, 74))
-	_text("RAJADA  Q / BOTÃO DIREITO",Vector2(37,size.y-77),10,GOLD)
-	_text_right("PRONTA" if sim.secondary_cd<=0 else "%.1fs" % sim.secondary_cd,Vector2(274,size.y-77),9,GOLD if sim.secondary_cd<=0 else MUTED)
-	_text("PULSO", Vector2(37, size.y - 51), 10, CYAN)
-	_text("MOUSE / ESPAÇO", Vector2(89, size.y - 51), 9, MUTED)
-	_text("ESQUIVA", Vector2(37, size.y - 33), 10, WHITE)
-	var ready := sim.dash_cd <= 0
-	_text("SHIFT", Vector2(104, size.y - 33), 9, CYAN if ready else MUTED)
-	draw_rect(Rect2(152, size.y - 40, 111, 4), Color("29424a"))
-	draw_rect(Rect2(152, size.y - 40, 111 * (1 - clampf(sim.dash_cd / sim.dash_recharge, 0, 1)), 4), CYAN)
+	_text_right("M  MAPA DO DISTRITO", Vector2(size.x - 22, size.y - 23), 10, MUTED)
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84 and sim.operation.ready():
 		var message: String = "[E] REPARAR " + Objectives.SYSTEMS[sim.stage] if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
 		if sim.restored>sim.stage: message = "SISTEMA RESTAURADO  /  " + Objectives.TITLES[sim.stage]
-		var rect := Rect2(size.x * 0.5 - 190, size.y - 87, 380, 45)
-		_panel(rect)
+		var rect := Rect2(size.x * 0.5 - 190, size.y - 110, 380, 45)
+		FieldHUD.panel(self, rect)
 		_text_center(message, rect.get_center() + Vector2(0, 1), 10, CYAN if sim.state == "activation" else GOLD)
 		if sim.state == "activation":
 			draw_rect(Rect2(rect.position + Vector2(12, 35), Vector2((rect.size.x - 24) * sim.repair, 3)), CYAN)
@@ -785,8 +765,9 @@ func _draw_hud() -> void:
 			draw_colored_polygon(PackedVector2Array([anchor + dir * 6, anchor - dir * 4 + side * 4, anchor - dir * 4 - side * 4]), CYAN)
 	for enemy in sim.enemies:
 		if enemy.kind == "boss" and enemy.hp > 0 and enemy.pos.distance_to(sim.pos) < 480:
-			var rect := Rect2(size.x * 0.5 - 170, size.y - 41, 340, 5)
-			_text_center("GUARDIÃO DA REDE  /  FASE %d" % (int(enemy.tier)+1), Vector2(size.x * 0.5, size.y - 50), 9, MAGENTA)
+			FieldHUD.panel(self, Rect2(size.x * 0.5 - 190, size.y - 61, 380, 43), MAGENTA)
+			var rect := Rect2(size.x * 0.5 - 176, size.y - 33, 352, 5)
+			_text_center("GUARDIÃO DA REDE  /  FASE %d" % (int(enemy.tier)+1), Vector2(size.x * 0.5, size.y - 42), 10, MAGENTA)
 			draw_rect(rect, Color("352835"))
 			draw_rect(Rect2(rect.position, Vector2(rect.size.x * enemy.hp / enemy.max_hp, 5)), MAGENTA)
 
@@ -798,7 +779,7 @@ func _draw_crosshair(p: Vector2) -> void:
 	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), WHITE)
 
 func _draw_minimap(rect: Rect2) -> void:
-	_panel(rect)
+	FieldHUD.panel(self, rect)
 	var inner := Rect2(rect.position + Vector2(7, 7), rect.size - Vector2(14, 14))
 	var scale_value := minf(inner.size.x / World.SIZE.x, inner.size.y / World.SIZE.y)
 	var origin := inner.get_center() - World.SIZE * scale_value * 0.5
@@ -1086,22 +1067,18 @@ func _draw_operation_markers() -> void:
 
 func _draw_operation_hud() -> void:
 	var size := _size()
-	var level_index: int = Simulation.DIFFICULTIES.find(sim.difficulty)
-	_text_center("%s  /  LEVA %d / 3  /  CAMPO %d / 2" % [Simulation.DIFFICULTY_NAMES[level_index],sim.wave+1,sim.operation.completed],Vector2(size.x*0.5,101),10,MUTED)
-	if not sim.operation.ready():
-		_text_center(sim.operation.label()+"  /  MARCADOR "+str(sim.operation.completed+1),Vector2(size.x*0.5,121),11,GOLD)
 	if sim.state != "activation" or sim.operation.ready() or sim.pos.distance_to(sim.operation.target()) > 72: return
 	if sim.operation.wants_treatment(sim.pos):
 		var rect := Rect2(size.x*0.5-232,192,464,207)
-		_panel(rect)
+		FieldHUD.panel(self, rect)
 		_text_center("ANÁLISE DA AMOSTRA",Vector2(size.x*0.5,220),15,CYAN)
 		_text_center("Sólidos em suspensão. Qual etapa retém as partículas?",Vector2(size.x*0.5,246),12,WHITE)
 		var choices := ["1  /  DISTRIBUIR SEM TRATAMENTO","2  /  FILTRAR A ÁGUA","3  /  AUMENTAR A PRESSÃO"]
 		for index in 3:
 			_button(Rect2(rect.position.x+22,264+index*40,420,32),choices[index],"treatment_"+str(index),false)
 		return
-	var rect := Rect2(size.x*0.5-190,size.y-125,380,62)
-	_panel(rect)
+	var rect := Rect2(size.x*0.5-190,size.y-115,380,62)
+	FieldHUD.panel(self, rect)
 	var prompt := "SEGURE E  /  " + sim.operation.label()
 	if sim.stage == 1: prompt = "APERTE E QUANDO O INDICADOR ESTIVER VERDE"
 	_text_center(prompt,rect.position+Vector2(190,21),10,WHITE)
