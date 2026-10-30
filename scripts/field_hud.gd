@@ -230,3 +230,17 @@ static func perk_card(c: CanvasItem, r: Rect2, id: String, index: int, hover: bo
 	edge(c, install, color if hover else Color("56695f"), 1, 4)
 	c.draw_circle(install.position + Vector2(13, 14), 2, color)
 	centered(c, "INSTALAR MÓDULO  →", install.get_center() + Vector2(4, 4), 10, color if hover else WHITE)
+## Shared industrial control: one visual and one matching click target.
+static func control(c: Node2D, r: Rect2, label: String, id: String, key: String = "", accent: Color = GOLD) -> void:
+	var hover: bool = r.has_point(c.pointer)
+	plate(c, Rect2(r.position + Vector2(0, 2), r.size), Color("020b10"), 4)
+	plate(c, r, accent if hover else Color("56695f"), 4)
+	plate(c, r.grow(-2), Color("2b4843") if hover else Color("142b32"), 3)
+	var area := r.grow(-5)
+	if not key.is_empty():
+		var cap_width := maxf(20, ThemeDB.fallback_font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x + 10)
+		keycap(c, key, Rect2(r.position + Vector2(4, 3), Vector2(cap_width, r.size.y - 6)))
+		area.position.x += cap_width + 5
+		area.size.x -= cap_width + 5
+	centered(c, fit(label, area.size.x - 2, 9), area.get_center() + Vector2(0, 3), 9, accent if hover else WHITE)
+	c.buttons.append({"rect": r, "id": id})

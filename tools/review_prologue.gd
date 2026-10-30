@@ -1,5 +1,10 @@
 extends SceneTree
 const Intro = preload("res://scripts/prologue.gd")
+class Shell extends "res://scripts/main.gd":
+	func _save_checkpoint() -> void: pass
+	func _read_checkpoint() -> Dictionary: return {}
+	func _load_settings() -> void: pass
+	func _save_settings() -> void: pass
 var game: Node2D
 var output := "res://captures/prologo"
 
@@ -9,7 +14,7 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(output)
 	root.content_scale_size = Vector2i(960,540)
 	root.size = Vector2i(1440,810)
-	game = load("res://scenes/main.tscn").instantiate()
+	game = Shell.new()
 	root.add_child(game)
 	await process_frame
 	game.set_process(false)
@@ -38,6 +43,23 @@ func _run() -> void:
 		game.prologue = story
 		game.prologue_camera = Intro.Lab.camera(c[3],Vector2(960,540))
 		await _capture(c[0])
+	game.prologue.interaction_active = true
+	game.prologue.repair = 0.55
+	game.prologue.hp = 1
+	await _capture("12_reparo_critico")
+	game.prologue.interaction_active = false
+	game.prologue.repair = 0
+	game.prologue.phase = "retry"
+	await _capture("13_retomada")
+	var retry_buttons: Array = game.buttons.filter(func(button): return button.id=="intro_retry")
+	assert(retry_buttons.size()==1)
+	var retry_click := InputEventMouseButton.new()
+	retry_click.button_index = MOUSE_BUTTON_LEFT
+	retry_click.pressed = true
+	retry_click.position = retry_buttons[0].rect.get_center()
+	game._unhandled_input(retry_click)
+	assert(game.prologue.phase=="lab" and game.prologue.step==5 and game.prologue.hp==3,"Industrial retry control restores escape")
+	game.prologue.phase = "lab"
 	game.previous_mode = "prologue"
 	game.mode = "pause"
 	await _capture("07_pausa")
@@ -63,14 +85,17 @@ func _run() -> void:
 	game.free()
 	game = null
 	for cleanup in range(5): await process_frame
-	print("PROLOGUE_REVIEW_OK: 11 actual game views")
+	print("PROLOGUE_REVIEW_OK: 26 actual game captures; 13 states at two resolutions; controls fit viewport")
 	quit(0)
 
 func _capture(label: String) -> void:
-	for frame in range(5):
-		game.queue_redraw()
-		await process_frame
-	await RenderingServer.frame_post_draw
-	if root.get_texture().get_image().save_png(output+"/"+label+".png")!=OK:
-		push_error("Could not save prologue capture")
-		quit(1)
+	var logical: Vector2i = root.content_scale_size
+	for width in [960,1440]:
+		root.size = Vector2i(width,roundi(float(width)*logical.y/logical.x))
+		for frame in range(5):
+			game.queue_redraw()
+			await process_frame
+		await RenderingServer.frame_post_draw
+		for button in game.buttons:
+			assert(Rect2(Vector2.ZERO,game._size()).encloses(button.rect),"Prologue control fits: "+button.id)
+		assert(root.get_texture().get_image().save_png(output+"/"+label+"_%d.png" % width)==OK)

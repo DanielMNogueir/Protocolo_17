@@ -1,13 +1,14 @@
 class_name P17DialoguePanel
 extends RefCounted
 ## Screen-space RPG dialogue frame; speaker identity remains separate from text.
+const FieldHUD = preload("res://scripts/field_hud.gd")
 const Beatrix = preload("res://scripts/beatrix_art.gd")
 const AI_PORTRAIT: Texture2D = preload("res://assets/prologue/ai_portrait_v1.png")
-const INK := Color("0b202a")
-const TEXT := Color("e5ece3")
-const CYAN := Color("7de0cf")
-const BRONZE := Color("a58c65")
-const MUTED := Color("9eb9b8")
+const INK := FieldHUD.INK
+const TEXT := FieldHUD.WHITE
+const CYAN := FieldHUD.CYAN
+const BRONZE := FieldHUD.GOLD
+const MUTED := FieldHUD.MUTED
 const FONT_SIZE := 16
 const LINE_HEIGHT := 24
 
@@ -30,24 +31,10 @@ static func _outline(canvas: Node2D,rect: Rect2,color: Color,cut: float=7) -> vo
  canvas.draw_polyline(points,color,1)
 
 static func _frame(canvas: Node2D,rect: Rect2,accent: Color) -> void:
- canvas.draw_colored_polygon(_contour(Rect2(rect.position+Vector2(0,4),rect.size),9),Color("030e16",0.65))
- canvas.draw_colored_polygon(_contour(rect,9),Color("172a30"))
- _outline(canvas,rect,BRONZE,9)
- canvas.draw_colored_polygon(_contour(rect.grow(-3),7),Color("506466"))
- canvas.draw_colored_polygon(_contour(rect.grow(-5),5),Color(INK,0.98))
- _outline(canvas,rect.grow(-6),Color("2f4e55"),4)
- canvas.draw_line(rect.position+Vector2(15,4),Vector2(rect.end.x-15,rect.position.y+4),Color("d6bb87",0.7),1)
- canvas.draw_line(Vector2(rect.position.x+16,rect.end.y-33),rect.end-Vector2(16,33),Color("36555b"),1)
- # Machined corner fasteners and short emissive inlays, rather than a flat box.
- for x in [rect.position.x+9,rect.end.x-10]:
-  for y in [rect.position.y+10,rect.end.y-10]:
-   canvas.draw_rect(Rect2(x-2,y-2,4,4),Color("07151e"))
-   canvas.draw_rect(Rect2(x-1,y-1,2,2),Color("c0aa7b"))
- for x in [rect.position.x+23,rect.end.x-59]:
-  canvas.draw_rect(Rect2(x,rect.position.y+4,36,2),Color(accent,0.75))
-
+ FieldHUD.panel(canvas,rect,accent)
+ canvas.draw_line(rect.position+Vector2(16,rect.size.y-33),rect.end-Vector2(16,33),Color("4c6557"),1)
 static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time: float) -> void:
- canvas.draw_colored_polygon(_contour(rect,5),Color("243d43"))
+ FieldHUD.inset(canvas,rect)
  canvas.draw_colored_polygon(_contour(rect.grow(-2),4),Color("071a24"))
  _outline(canvas,rect,BRONZE,5)
  for y in range(int(rect.position.y)+7,int(rect.end.y)-3,6):
@@ -85,14 +72,14 @@ static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time:
 static func draw(canvas: Node2D,size: Vector2,speaker: String,label: String,text: String,complete: bool,fast: bool,time: float,alarm: bool=false,next_label: String="") -> void:
  var parts:=layout(size)
  var frame: Rect2=parts.frame
- var accent:=Color("ef8c98") if alarm and speaker=="terminal" else CYAN
+ var accent:=FieldHUD.RED if alarm and speaker=="terminal" else CYAN
  _frame(canvas,frame,accent)
  _speaker(canvas,parts.portrait,speaker,accent,time)
  # The brass name tab is visually attached to the portrait and the main frame.
  var width:=maxf(153,ThemeDB.fallback_font.get_string_size(label,HORIZONTAL_ALIGNMENT_LEFT,-1,10).x+28)
  var tab:=Rect2(frame.position+Vector2(133,-13),Vector2(width,26))
- canvas.draw_colored_polygon(_contour(tab,4),Color("142c35"))
- _outline(canvas,tab,BRONZE,4)
+ FieldHUD.plate(canvas,tab,Color("142c35"),4)
+ FieldHUD.edge(canvas,tab,FieldHUD.GOLD,1,4)
  if not label.is_empty(): canvas._text(label,tab.position+Vector2(13,17),10,accent)
  else:
   for n in range(16): canvas.draw_rect(Rect2(tab.position+Vector2(14+n*7,13-absf(sin(time*3+n))*4),Vector2(3,3+absf(sin(time*3+n))*8)),accent)
@@ -100,8 +87,8 @@ static func draw(canvas: Node2D,size: Vector2,speaker: String,label: String,text
  canvas._text("ENTER: AVANÇAR  •  SEGURE: ACELERAR",frame.position+Vector2(16,frame.size.y-13),8,MUTED)
  canvas._text("AGUARDANDO VOCÊ" if complete else "RECEBENDO FALA",frame.position+Vector2(281,frame.size.y-13),8,Color(accent,0.75))
  var action:=next_label if not next_label.is_empty() and complete else ("AVANÇAR / ENTER" if complete else "COMPLETAR / ENTER")
- canvas._button(parts.advance,action,"intro_next",false)
- canvas._button(parts.fast,"FALAS INSTANTÂNEAS: "+("SIM" if fast else "NÃO")+" / TAB","intro_fast",false)
+ FieldHUD.control(canvas,parts.advance,action.replace("/ ENTER", "").strip_edges(),"intro_next","ENTER",accent)
+ FieldHUD.control(canvas,parts.fast,"FALAS INSTANTÂNEAS: "+("SIM" if fast else "NÃO"),"intro_fast","TAB",accent)
  # Clicking the speech itself also completes/advances, without stealing footer controls.
  canvas.buttons.append({"rect":parts.body,"id":"intro_next"})
  if complete:
