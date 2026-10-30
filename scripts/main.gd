@@ -891,26 +891,29 @@ func _draw_settings() -> void:
 
 func _draw_upgrades() -> void:
 	var size := _size()
-	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.96))
-	_text_center("SISTEMA %02d RESTAURADO" % sim.restored, Vector2(size.x * 0.5, 59), 11, CYAN)
-	_text_center("Recuperar também transforma você.", Vector2(size.x * 0.5, 109), 29, WHITE)
-	_text_center("ESCOLHA UMA MELHORIA PARA ESTA OPERAÇÃO", Vector2(size.x * 0.5, 139), 10, MUTED)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.93))
+	var header := Rect2(size.x * 0.5 - 163, 23, 326, 36)
+	FieldHUD.panel(self, header)
+	FieldHUD.centered(self, "SISTEMA %02d RESTAURADO / OFICINA P17" % sim.restored, header.get_center() + Vector2(0, 4), 10, CYAN)
+	FieldHUD.centered(self, "Recuperar também transforma você.", Vector2(size.x * 0.5, 108), 27, WHITE)
+	FieldHUD.centered(self, "ESCOLHA UM MÓDULO PARA A PRÓXIMA ETAPA", Vector2(size.x * 0.5, 137), 10, MUTED)
 	var options: Array = sim.upgrade_options()
-	var width := (size.x - 128) / 3
+	var content_width := minf(size.x - 64, 1100)
+	var width := (content_width - 32) / 3
+	var height := minf(300, size.y - 250)
+	var top := maxf(169, (size.y - height) * 0.5 - 5)
+	var left := (size.x - content_width) * 0.5
 	for i in options.size():
 		var option: Dictionary = options[i]
-		var rect := Rect2(48 + i * (width + 16), 184, width, 256)
+		var rect := Rect2(left + i * (width + 16), top, width, height)
 		var hover := rect.has_point(pointer)
-		draw_rect(rect, Color("193a3c") if hover else PANEL)
-		draw_rect(rect, CYAN if hover else Color("3a5355"), false, 1)
-		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 3)), CYAN if i == 0 else (GOLD if i == 1 else MAGENTA))
-		_upgrade_icon(rect.position + Vector2(31, 40), [0, 2, 1][i])
-		_text("MÓDULO 0%d" % (i + 1), rect.position + Vector2(28, 103), 9, MUTED)
-		_wrapped(option.title.to_upper(), Rect2(rect.position + Vector2(27, 117), Vector2(width - 48, 50)), 19, WHITE, 24)
-		_wrapped(option.description, Rect2(rect.position + Vector2(28, 172), Vector2(width - 50, 61)), 12, MUTED, 18)
+		FieldHUD.perk_card(self, rect, option.id, i, hover)
+		_wrapped(option.title.to_upper(), Rect2(rect.position + Vector2(24, 112), Vector2(width - 48, 47)), 17, WHITE, 22)
+		_wrapped(option.description, Rect2(rect.position + Vector2(24, 174), Vector2(width - 48, 62)), 12, MUTED, 17)
 		buttons.append({"rect": rect, "id": "upgrade_%d" % i})
-		_text("[%d]  INSTALAR MÓDULO  →" % (i + 1), rect.position + Vector2(28, 238), 10, CYAN)
-	_text_center("VIDA CHEIA NO PRÓXIMO SETOR  /  ESCOLHA SUA MELHORIA PARA AVANÇAR", Vector2(size.x * 0.5, size.y - 40), 10, CYAN)
+	var footer := Rect2(size.x * 0.5 - 302, size.y - 56, 604, 34)
+	FieldHUD.panel(self, footer, CYAN)
+	FieldHUD.centered(self, "VIDA CHEIA NO PRÓXIMO SETOR  /  CLIQUE OU PRESSIONE 1, 2 OU 3", footer.get_center() + Vector2(0, 4), 10, CYAN)
 
 func _draw_defeat() -> void:
 	_overlay("CONEXÃO INTERROMPIDA", "Lia caiu. A missão ainda pode continuar.", MAGENTA)
@@ -954,20 +957,6 @@ func _radio_portrait(p: Vector2, lia: bool) -> void:
 			var h := 6 + absf(sin(clock * 4 + i * 0.7)) * 26
 			draw_rect(Rect2(p + Vector2(6 + i * 4, 30 - h * 0.5), Vector2(2, h)), CYAN)
 	_text_center("17", p + Vector2(26, 55), 8, MUTED)
-
-func _upgrade_icon(p: Vector2, index: int) -> void:
-	var col: Color = [CYAN, GOLD, MAGENTA][index]
-	draw_rect(Rect2(p, Vector2(45, 40)), Color(col, 0.08))
-	if index == 0:
-		draw_line(p + Vector2(10, 30), p + Vector2(31, 9), col, 4)
-		draw_line(p + Vector2(22, 9), p + Vector2(33, 9), col, 3)
-		draw_line(p + Vector2(32, 9), p + Vector2(32, 20), col, 3)
-	elif index == 1:
-		draw_polyline(PackedVector2Array([p + Vector2(12, 9), p + Vector2(25, 20), p + Vector2(12, 31)]), col, 3)
-		draw_polyline(PackedVector2Array([p + Vector2(24, 9), p + Vector2(37, 20), p + Vector2(24, 31)]), col, 3)
-	else:
-		draw_rect(Rect2(p + Vector2(19, 8), Vector2(7, 25)), col)
-		draw_rect(Rect2(p + Vector2(10, 17), Vector2(25, 7)), col)
 
 func _panel(rect: Rect2) -> void:
 	draw_rect(rect, Color(INK, 0.92))

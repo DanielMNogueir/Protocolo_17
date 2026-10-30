@@ -80,6 +80,10 @@ static func icon(c: CanvasItem, kind: String, r: Rect2, color: Color) -> void:
 			"dash": path = '<g stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="m34 19-10 12 12 8-13 16m1-24-9 1m21 7 12 7 9-3M31 23l12 6 8-8M4 18h14M1 30h10M6 43h9"/></g><circle cx="42" cy="10" r="6" fill="white"/>'
 			"water": path = '<path d="M32 4C27 17 12 29 12 41a20 20 0 0 0 40 0C52 29 37 17 32 4Z" fill="white"/><path d="M21 40q0 12 12 13" stroke="#10282c" stroke-width="4" fill="none"/>'
 			"network": path = '<g fill="none" stroke="white" stroke-width="4"><path d="M32 12v40M12 32h40"/><rect x="25" y="3" width="14" height="14" rx="2"/><rect x="25" y="47" width="14" height="14" rx="2"/><rect x="3" y="25" width="14" height="14" rx="2"/><rect x="47" y="25" width="14" height="14" rx="2"/></g>'
+			"coil": path = '<path d="M35 3 13 35h17l-4 26 25-35H34Z" fill="white"/><path d="M7 13h9M5 23h7m38 20h9m-13 9h10" stroke="white" stroke-width="3"/>'
+			"shield": path = '<path d="M32 4 9 13v19c0 15 23 28 23 28s23-13 23-28V13Z" fill="none" stroke="white" stroke-width="4"/><path d="M29 18h6v10h10v6H35v11h-6V34H19v-6h10Z" fill="white"/>'
+			"battery": path = '<g fill="none" stroke="white" stroke-width="4"><rect x="13" y="13" width="38" height="45" rx="5"/><path d="M24 13V5h16v8M24 36h16M32 28v16"/></g>'
+			"frequency": path = '<g stroke="white" stroke-width="4" fill="none" stroke-linecap="round"><path d="M4 32h9l7-20 11 40 11-40 7 20h11M8 10h5m38 44h5"/></g>'
 			"recycle": path = '<g stroke="white" stroke-width="5" fill="none" stroke-linejoin="round"><path d="m18 24 13-18 12 20M37 13l6 13-14-1m15 8 12 20H32m14 7-14-7 8-12M24 52H7l12-20m-1 14 1-14 14 3"/></g>'
 		var source := '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' + path + '</svg>'
 		var image := Image.new()
@@ -184,3 +188,45 @@ static func radar(c: CanvasItem, r: Rect2) -> Rect2:
 	var area := Rect2(r.position + Vector2(16, 30), r.size - Vector2(32, 45))
 	inset(c, area.grow(2))
 	return area
+## Every card is a real upgrade option; this lookup is presentation only.
+static func perk_visual(id: String) -> Dictionary:
+	var data := {
+		"focused_pulse": ["pulse", "+25%", "CADÊNCIA", "OFENSIVA", GOLD],
+		"reserve_cell": ["battery", "+2", "INTEGRIDADE", "PROTEÇÃO", CYAN],
+		"light_harness": ["dash", "+25", "VELOCIDADE", "MOBILIDADE", CYAN],
+		"induction_coil": ["coil", "+1", "DANO POR PULSO", "OFENSIVA", GOLD],
+		"reclaimed_armor": ["shield", "+2", "INTEGRIDADE", "PROTEÇÃO", CYAN],
+		"efficient_dash": ["dash", "−0,25 s", "RECARGA", "MOBILIDADE", CYAN],
+		"clean_frequency": ["frequency", "+20%", "CADÊNCIA", "OFENSIVA", GOLD],
+		"living_circuit": ["shield", "+2", "INTEGRIDADE", "PROTEÇÃO", CYAN],
+		"water_stride": ["dash", "−0,15 s", "RECARGA", "MOBILIDADE", CYAN],
+	}
+	var values: Array = data.get(id, ["network", "P17", "MÓDULO", "EQUIPAMENTO", GOLD])
+	return {"icon": values[0], "stat": values[1], "effect": values[2], "category": values[3], "color": values[4]}
+
+static func perk_card(c: CanvasItem, r: Rect2, id: String, index: int, hover: bool) -> void:
+	var visual := perk_visual(id)
+	var color: Color = visual.color
+	var p := r.position
+	panel(c, r, color if hover else GOLD)
+	if hover:
+		plate(c, r.grow(-11), Color(color, 0.045), 5)
+		edge(c, r.grow(-3), color, 2, 9)
+	# A removable cartridge with an inset icon display and physical shortcut.
+	panel(c, Rect2(p + Vector2(21, 23), Vector2(79, 75)), color)
+	var center := p + Vector2(60, 60)
+	c.draw_circle(center, 23, INK)
+	for tick in 8:
+		var angle := tick * TAU / 8
+		c.draw_arc(center, 23, angle, angle + 0.37, 4, Color(color, 0.8 if hover else 0.35), 2)
+	icon(c, visual.icon, Rect2(center - Vector2(18, 18), Vector2(36, 36)), color)
+	keycap(c, str(index + 1), Rect2(p + Vector2(r.size.x - 48, 23), Vector2(27, 22)))
+	text(c, visual.category, p + Vector2(114, 43), 9, color)
+	text(c, visual.stat, p + Vector2(114, 71), 23, WHITE)
+	text(c, visual.effect, p + Vector2(114, 89), 8, MUTED)
+	c.draw_line(p + Vector2(24, 161), p + Vector2(r.size.x - 24, 161), Color("4c6557"), 1)
+	var install := Rect2(p + Vector2(21, r.size.y - 49), Vector2(r.size.x - 42, 29))
+	plate(c, install, Color("304c45") if hover else Color("172e33"), 4)
+	edge(c, install, color if hover else Color("56695f"), 1, 4)
+	c.draw_circle(install.position + Vector2(13, 14), 2, color)
+	centered(c, "INSTALAR MÓDULO  →", install.get_center() + Vector2(4, 4), 10, color if hover else WHITE)
