@@ -236,11 +236,31 @@ static func control(c: Node2D, r: Rect2, label: String, id: String, key: String 
 	plate(c, Rect2(r.position + Vector2(0, 2), r.size), Color("020b10"), 4)
 	plate(c, r, accent if hover else Color("56695f"), 4)
 	plate(c, r.grow(-2), Color("2b4843") if hover else Color("142b32"), 3)
+	var font_size := 12 if r.size.y>=35 else 9
 	var area := r.grow(-5)
 	if not key.is_empty():
 		var cap_width := maxf(20, ThemeDB.fallback_font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x + 10)
-		keycap(c, key, Rect2(r.position + Vector2(4, 3), Vector2(cap_width, r.size.y - 6)))
+		var cap_height := minf(24,r.size.y-6)
+		keycap(c,key,Rect2(r.position+Vector2(4,(r.size.y-cap_height)/2),Vector2(cap_width,cap_height)))
 		area.position.x += cap_width + 5
 		area.size.x -= cap_width + 5
-	centered(c, fit(label, area.size.x - 2, 9), area.get_center() + Vector2(0, 3), 9, accent if hover else WHITE)
+	centered(c, fit(label, area.size.x - 2, font_size), area.get_center() + Vector2(0, 4), font_size, accent if hover else WHITE)
 	c.buttons.append({"rect": r, "id": id})
+static func menu_button(c: Node2D, r: Rect2, label: String, id: String, primary: bool = false, focused: bool = false) -> void:
+	var active := focused or r.has_point(c.pointer)
+	if primary:
+		panel(c,r,CYAN)
+		plate(c,r.grow(-9),Color("264c45") if active else Color("173b36"),3)
+		c.draw_rect(Rect2(r.position+Vector2(11,11),Vector2(3,r.size.y-22)),CYAN)
+		text(c,label,r.position+Vector2(23,r.size.y/2+5),14,CYAN)
+		var arrow := r.position+Vector2(r.size.x-26,r.size.y/2)
+		c.draw_line(arrow-Vector2(6,0),arrow+Vector2(6,0),CYAN,1)
+		c.draw_polyline(PackedVector2Array([arrow+Vector2(1,-5),arrow+Vector2(6,0),arrow+Vector2(1,5)]),CYAN,1)
+		if active: edge(c,r.grow(-3),CYAN,2)
+	else:
+		if active:
+			plate(c,r,Color("19352f"),3)
+			c.draw_rect(Rect2(r.position+Vector2(2,7),Vector2(2,r.size.y-14)),GOLD)
+		c.draw_line(r.position+Vector2(3,r.size.y-1),r.end-Vector2(3,1),Color("415c54"),1)
+		text(c,label,r.position+Vector2(15,r.size.y/2+4),12,CYAN if active else WHITE)
+	c.buttons.append({"rect":r,"id":id})
