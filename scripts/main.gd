@@ -1,5 +1,6 @@
 extends Node2D
 ## Original alpha shell: presentation, input, camera, interface and checkpoint I/O.
+const FieldHUD = preload("res://scripts/field_hud.gd")
 const World = preload("res://scripts/world.gd")
 const StationArt = preload("res://scripts/station_art.gd")
 const Simulation = preload("res://scripts/simulation.gd")
@@ -38,6 +39,9 @@ var lia_animation := LiaAnimation.new()
 var enemy_presentation := EnemyPresentation.new()
 var sound: Node
 var mode := "title"
+var menu_focus := ""
+var menu_focus_mode := ""
+var _brand_font: SystemFont
 var previous_mode := "play"
 var clock := 0.0
 var camera_pos := World.START
@@ -189,6 +193,7 @@ func _clamp_camera() -> void:
 	camera_pos = camera_pos.clamp(half, World.SIZE - half)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion: menu_focus = ""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and mode == "play" and dialogue.is_empty() and sim.state == "combat":
 		secondary_requested = true
 		return
@@ -208,6 +213,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_F10:
 		_toggle_sound()
 		return
+	if mode in ["title","pause","settings","difficulty"] and not buttons.is_empty():
+		if key in [KEY_UP,KEY_DOWN,KEY_LEFT,KEY_RIGHT,KEY_TAB]:
+			var index := -1
+			for n in buttons.size():
+				if buttons[n].id==menu_focus: index=n
+			var backward: bool = key in [KEY_UP,KEY_LEFT] or (key==KEY_TAB and event.shift_pressed)
+			index = posmod((0 if index<0 and backward else index)+(-1 if backward else 1),buttons.size())
+			menu_focus = buttons[index].id
+			sound.play_sfx("ui")
+			queue_redraw()
+			return
+		if key in [KEY_ENTER,KEY_KP_ENTER,KEY_SPACE] and not menu_focus.is_empty():
+			var target := menu_focus
+			_action(target)
+			return
 	if mode == "prologue":
 		match key:
 			KEY_P: _finish_prologue()
@@ -275,6 +295,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_action("difficulty_"+Simulation.DIFFICULTIES[key-KEY_1])
 
 func _action(id: String) -> void:
+	menu_focus = ""
 	_clear_pending_actions()
 	sound.play_sfx("ui")
 	match id:
@@ -524,6 +545,9 @@ func _draw() -> void:
 	laboratory_effects.present(prologue.elapsed if prologue!=null else 0.0,prologue!=null and prologue.step>=3,showing_prologue and prologue.phase in ["lab","ending","retry"])
 	water_surface.visible=not (showing_prologue or mode in ["title","briefing","difficulty"] or (mode=="settings" and settings_return=="title"))
 	district_effects.present(clock,sim.restored,water_surface.visible)
+	if menu_focus_mode != mode:
+		menu_focus = ""
+		menu_focus_mode = mode
 	buttons.clear()
 	if _font == null:
 		return
@@ -576,35 +600,47 @@ func _draw_opening() -> void:
 		for i in 35:
 			draw_line(Vector2(0, size.y * 0.65 + i * 8), Vector2(size.x, size.y * 0.65 + i * 8), Color("163339"))
 	draw_texture_rect(_shade, Rect2(Vector2.ZERO, size), false)
-	draw_rect(Rect2(0, size.y - 56, size.x, 56), Color(INK, 0.83))
+	draw_rect(Rect2(0, size.y - 32, size.x, 32), Color(INK, 0.88))
 	for i in 35:
 		var p := Vector2(fposmod(i * 181.73 + clock * (3 + i % 3), size.x), fposmod(i * 97.21 - clock * 7, size.y))
 		draw_rect(Rect2(p, Vector2(2, 2)), Color(CYAN, 0.1 + 0.2 * (sin(clock + i) + 1) * 0.5))
 
 func _draw_title() -> void:
 	var size := _size()
-	_text("UMA CIDADE PARA RECUPERAR.", Vector2(50, 66), 11, CYAN)
-	draw_line(Vector2(50, 81), Vector2(110, 81), CYAN, 2)
-	_text("PROTOCOLO", Vector2(45, 172), 60, WHITE)
-	_text("17", Vector2(44, 273), 112, CYAN)
-	_text("A U R O R A", Vector2(197, 229), 18, WHITE)
-	_text("A rede caiu. A esperança, ainda não.", Vector2(198, 255), 12, MUTED)
-	_text("AÇÃO  /  EXPLORAÇÃO  /  RECUPERAÇÃO", Vector2(50, 310), 10, MUTED)
-	var y := 343.0
+	var x := 52.0 + maxf(0,(size.x-960)*0.08)
+	var y := clampf((size.y-540)*0.18,0,45)
+	if _brand_font == null:
+		_brand_font = SystemFont.new()
+		_brand_font.font_names = PackedStringArray(["Bahnschrift","DejaVu Sans","Arial"])
+		_brand_font.font_weight = 600
+	FieldHUD.text(self,"UMA CIDADE PARA RECUPERAR.",Vector2(x,y+51),10,CYAN)
+	draw_line(Vector2(x,y+66),Vector2(x+49,y+66),CYAN,1)
+	draw_string(_brand_font,Vector2(x-3,y+128),"PROTOCOLO",HORIZONTAL_ALIGNMENT_LEFT,-1,53,FieldHUD.WHITE)
+	draw_line(Vector2(x+2,y+143),Vector2(x+100,y+143),GOLD,3)
+	draw_string(_brand_font,Vector2(x-7,y+232),"17",HORIZONTAL_ALIGNMENT_LEFT,-1,115,CYAN)
+	draw_string(_brand_font,Vector2(x+130,y+192),"A U R O R A",HORIZONTAL_ALIGNMENT_LEFT,-1,20,FieldHUD.WHITE)
+	draw_line(Vector2(x+132,y+207),Vector2(x+292,y+207),GOLD,1)
+	FieldHUD.text(self,"A rede caiu. A esperança, ainda não.",Vector2(x+132,y+225),10,MUTED)
+	FieldHUD.text(self,"AÇÃO / EXPLORAÇÃO / RECUPERAÇÃO",Vector2(x,y+257),9,MUTED)
+	FieldHUD.menu_button(self,Rect2(x-1,y+282,276,40),"CONTINUAR OPERAÇÃO" if has_save else "INICIAR OPERAÇÃO","continue" if has_save else "new",true,menu_focus==("continue" if has_save else "new"))
+	FieldHUD.text(self,"CHECKPOINT DISPONÍVEL" if has_save else "NOVA MISSÃO / DISTRITO DAS ÁGUAS",Vector2(x+11,y+339),8,CYAN)
+	var row := y+351
 	if has_save:
-		_button(Rect2(50, y, 300, 42), "CONTINUAR OPERAÇÃO", "continue", true)
-		y += 51
-		_button(Rect2(50, y, 194, 36), "NOVA OPERAÇÃO", "new", false)
-		_button(Rect2(252, y, 98, 36), "OPÇÕES", "settings", false)
-	else:
-		_button(Rect2(50, y, 300, 46), "INICIAR OPERAÇÃO", "new", true)
-		_button(Rect2(50, y + 56, 145, 36), "CONFIGURAÇÕES", "settings", false)
-		_button(Rect2(204, y + 56, 146, 36), "SAIR", "exit", false)
-	_text("01 / OPERAÇÃO FILTRO", Vector2(50, size.y - 25), 11, WHITE)
-	_button(Rect2(50,size.y-79,300,29),"REVER PRÓLOGO","intro_replay",false)
-	_text_right("BETA 0.2.1 RC  •  F11 TELA CHEIA", Vector2(size.x - 35, size.y - 25), 10, MUTED)
-	_text_right("DISTRITO DAS ÁGUAS", Vector2(size.x - 38, size.y - 84), 11, WHITE)
-	draw_circle(Vector2(size.x - 175, size.y - 88), 3, CYAN)
+		FieldHUD.menu_button(self,Rect2(x,row,274,28),"NOVA OPERAÇÃO","new",false,menu_focus=="new")
+		row+=31
+	for entry in [["CONFIGURAÇÕES","settings"],["REVER PRÓLOGO","intro_replay"],["SAIR","exit"]]:
+		FieldHUD.menu_button(self,Rect2(x,row,274,28),entry[0],entry[1],false,menu_focus==entry[1])
+		row+=31
+	FieldHUD.text(self,"LIA / AGENTE DE RECUPERAÇÃO",Vector2(size.x-322,size.y-64),9,MUTED)
+	draw_line(Vector2(38,size.y-32),Vector2(size.x-38,size.y-32),Color("415c54"),1)
+	draw_circle(Vector2(43,size.y-16),2,CYAN)
+	FieldHUD.text(self,"OPERAÇÃO FILTRO / SINAL LOCALIZADO",Vector2(53,size.y-12),8,MUTED)
+	FieldHUD.centered(self,"↑ ↓ SELECIONAR / ENTER CONFIRMAR",Vector2(size.x/2,size.y-12),8,MUTED)
+	_text_right("BETA 0.2.1 RC / F11 TELA CHEIA",Vector2(size.x-24,size.y-12),8,MUTED)
+
+func _menu_control(r: Rect2,label: String,id: String,key: String="",accent: Color=CYAN) -> void:
+	FieldHUD.control(self,r,label,id,key,accent)
+	if menu_focus==id: FieldHUD.edge(self,r.grow(1),accent,2,4)
 
 func _draw_briefing() -> void:
 	var size := _size()
@@ -728,49 +764,28 @@ func _draw_terminals() -> void:
 
 func _draw_hud() -> void:
 	var size := _size()
-	_panel(Rect2(22, 19, 248, 66))
-	_text("LIA", Vector2(37, 39), 11, CYAN)
-	_text("AGENTE DE RECUPERAÇÃO", Vector2(73, 39), 9, MUTED)
-	for i in sim.max_hp:
-		var step := minf(23, 216.0 / sim.max_hp)
-		draw_rect(Rect2(37 + i * step, 49, step - 4, 10), CYAN if i < sim.hp else Color("29424a"))
-	_text("INTEGRIDADE", Vector2(37, 74), 8, MUTED)
-	_text_right("%d / %d" % [sim.hp, sim.max_hp], Vector2(252, 74), 9, WHITE)
-	_panel(Rect2(size.x - 280, 19, 258, 66))
-	_text("SISTEMAS RESTAURADOS: %d / 4" % sim.restored, Vector2(size.x - 265, 38), 9, MUTED)
-	_text(SECTOR_SUBTITLES[sim.stage], Vector2(size.x - 265, 56), 12, WHITE)
-	for i in 4:
-		draw_rect(Rect2(size.x - 265 + i * 59, 69, 52, 3), CYAN if i < sim.restored else (GOLD if i == sim.stage else Color("29424a")))
-	_button(Rect2(size.x * 0.5 - 51, 20, 46, 26), "M", "map", false)
-	_button(Rect2(size.x * 0.5 + 5, 20, 46, 26), "ESC", "pause", false)
+	FieldHUD.vital(self, sim.hp, sim.max_hp, clock)
 	var alive := 0
-	for e in sim.enemies:
-		if e.hp > 0: alive += 1
-	var objective := "%02d DRONES  /  NEUTRALIZE AS AMEAÇAS" % alive
-	if sim.state == "activation":
-		objective = "ÁREA SEGURA  /  " + ("RESTAURE O SISTEMA" if sim.operation.ready() else "OPERAÇÃO DE CAMPO")
-	elif sim.restored>sim.stage:
-		objective = "SISTEMA RESTAURADO  /  REDE EM OPERAÇÃO"
-	_panel(Rect2(size.x*0.5-199,61,398,70))
-	_text_center(objective, Vector2(size.x * 0.5, 79), 10, CYAN if sim.state == "activation" else GOLD)
+	for enemy in sim.enemies:
+		if enemy.hp > 0: alive += 1
+	var detail: String = sim.operation.label() if not sim.operation.ready() else ("Restaure o terminal do setor" if sim.state == "activation" else "Neutralize os drones para liberar o terminal")
+	var status := "%02d DRONES  •  LEVA %d/3  •  TAREFAS %d/2" % [alive, mini(sim.wave + 1, 3), sim.operation.completed]
+	if sim.restored > sim.stage:
+		detail = "Sistema restaurado"
+		status = "REDE EM OPERAÇÃO"
+	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4)
+	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO", pointer)
+	buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
+	buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
 	_draw_operation_hud()
-	_draw_minimap(Rect2(size.x - 182, size.y - 147, 160, 110))
-	_text_right("M  MAPA DO DISTRITO", Vector2(size.x - 22, size.y - 23), 9, MUTED)
-	_panel(Rect2(22, size.y - 97, 268, 74))
-	_text("RAJADA  Q / BOTÃO DIREITO",Vector2(37,size.y-77),10,GOLD)
-	_text_right("PRONTA" if sim.secondary_cd<=0 else "%.1fs" % sim.secondary_cd,Vector2(274,size.y-77),9,GOLD if sim.secondary_cd<=0 else MUTED)
-	_text("PULSO", Vector2(37, size.y - 51), 10, CYAN)
-	_text("MOUSE / ESPAÇO", Vector2(89, size.y - 51), 9, MUTED)
-	_text("ESQUIVA", Vector2(37, size.y - 33), 10, WHITE)
-	var ready := sim.dash_cd <= 0
-	_text("SHIFT", Vector2(104, size.y - 33), 9, CYAN if ready else MUTED)
-	draw_rect(Rect2(152, size.y - 40, 111, 4), Color("29424a"))
-	draw_rect(Rect2(152, size.y - 40, 111 * (1 - clampf(sim.dash_cd / sim.dash_recharge, 0, 1)), 4), CYAN)
+	FieldHUD.abilities(self, size.y, sim.secondary_cd, sim.secondary_recharge, sim.dash_cd, sim.dash_recharge)
+	_draw_minimap(Rect2(size.x - 202, size.y - 160, 186, 144))
+
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84 and sim.operation.ready():
 		var message: String = "[E] REPARAR " + Objectives.SYSTEMS[sim.stage] if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
 		if sim.restored>sim.stage: message = "SISTEMA RESTAURADO  /  " + Objectives.TITLES[sim.stage]
-		var rect := Rect2(size.x * 0.5 - 190, size.y - 87, 380, 45)
-		_panel(rect)
+		var rect := Rect2(size.x * 0.5 - 190, size.y - 110, 380, 45)
+		FieldHUD.panel(self, rect)
 		_text_center(message, rect.get_center() + Vector2(0, 1), 10, CYAN if sim.state == "activation" else GOLD)
 		if sim.state == "activation":
 			draw_rect(Rect2(rect.position + Vector2(12, 35), Vector2((rect.size.x - 24) * sim.repair, 3)), CYAN)
@@ -785,8 +800,9 @@ func _draw_hud() -> void:
 			draw_colored_polygon(PackedVector2Array([anchor + dir * 6, anchor - dir * 4 + side * 4, anchor - dir * 4 - side * 4]), CYAN)
 	for enemy in sim.enemies:
 		if enemy.kind == "boss" and enemy.hp > 0 and enemy.pos.distance_to(sim.pos) < 480:
-			var rect := Rect2(size.x * 0.5 - 170, size.y - 41, 340, 5)
-			_text_center("GUARDIÃO DA REDE  /  FASE %d" % (int(enemy.tier)+1), Vector2(size.x * 0.5, size.y - 50), 9, MAGENTA)
+			FieldHUD.panel(self, Rect2(size.x * 0.5 - 190, size.y - 61, 380, 43), MAGENTA)
+			var rect := Rect2(size.x * 0.5 - 176, size.y - 33, 352, 5)
+			_text_center("GUARDIÃO DA REDE  /  FASE %d" % (int(enemy.tier)+1), Vector2(size.x * 0.5, size.y - 42), 10, MAGENTA)
 			draw_rect(rect, Color("352835"))
 			draw_rect(Rect2(rect.position, Vector2(rect.size.x * enemy.hp / enemy.max_hp, 5)), MAGENTA)
 
@@ -798,8 +814,7 @@ func _draw_crosshair(p: Vector2) -> void:
 	draw_rect(Rect2(p - Vector2.ONE, Vector2(2, 2)), WHITE)
 
 func _draw_minimap(rect: Rect2) -> void:
-	_panel(rect)
-	var inner := Rect2(rect.position + Vector2(7, 7), rect.size - Vector2(14, 14))
+	var inner := FieldHUD.radar(self, rect)
 	var scale_value := minf(inner.size.x / World.SIZE.x, inner.size.y / World.SIZE.y)
 	var origin := inner.get_center() - World.SIZE * scale_value * 0.5
 	for i in 4:
@@ -888,49 +903,64 @@ func _draw_dialogue() -> void:
 	_button(Rect2(rect.end.x - 157, rect.end.y - 28, 140, 22), "ENTENDIDO  ENTER", "dialogue", false)
 
 func _draw_pause() -> void:
-	_overlay("SINAL EM ESPERA", "A operação está pausada.")
-	var x := _size().x * 0.5 - 145
-	_button(Rect2(x, 253, 290, 42), "RETOMAR OPERAÇÃO", "resume", true)
-	_button(Rect2(x, 306, 290, 36), "CONFIGURAÇÕES", "settings", false)
-	_button(Rect2(x, 354, 290, 36), "VOLTAR AO INÍCIO", "title", false)
-	if previous_mode == "prologue":
-		_button(Rect2(x,402,290,30),"PULAR INTRODUÇÃO","intro_skip",false)
+	var size := _size()
+	draw_rect(Rect2(Vector2.ZERO,size),Color(INK,0.92))
+	var r := Rect2(size.x/2-240,size.y/2-182,480,364)
+	FieldHUD.panel(self,r)
+	FieldHUD.centered(self,"SINAL EM ESPERA",r.position+Vector2(240,44),26,WHITE)
+	FieldHUD.centered(self,"A operação está pausada.",r.position+Vector2(240,72),12,MUTED)
+	_menu_control(Rect2(r.position+Vector2(60,104),Vector2(360,40)),"RETOMAR OPERAÇÃO","resume","ESC")
+	_menu_control(Rect2(r.position+Vector2(60,158),Vector2(360,35)),"CONFIGURAÇÕES","settings")
+	_menu_control(Rect2(r.position+Vector2(60,207),Vector2(360,35)),"VOLTAR AO INÍCIO","title")
+	if previous_mode=="prologue":
+		_menu_control(Rect2(r.position+Vector2(60,256),Vector2(360,32)),"PULAR INTRODUÇÃO","intro_skip","P",GOLD)
 	else:
-		_text_center("O checkpoint guarda o início da etapa atual.", Vector2(_size().x * 0.5, 431), 11, MUTED)
+		FieldHUD.centered(self,"O checkpoint guarda o início da etapa atual.",r.position+Vector2(240,281),10,MUTED)
+	FieldHUD.centered(self,"↑ ↓ SELECIONAR / ENTER CONFIRMAR",r.position+Vector2(240,333),9,GOLD)
 
 func _draw_settings() -> void:
-	_overlay("CONFIGURAÇÕES", "Ajuste seu equipamento de campo.")
-	var x := _size().x * 0.5 - 190
-	_button(Rect2(x, 245, 380, 38), "ÁUDIO   " + ("DESLIGADO" if muted else "LIGADO") + "   /   F10", "sound", false)
-	_button(Rect2(x, 293, 380, 38), "TELA   " + ("CHEIA" if fullscreen else "JANELA") + "   /   F11", "fullscreen", false)
-	_text_center("WASD / SETAS   MOVER      MOUSE   MIRAR E DISPARAR", Vector2(_size().x * 0.5, 362), 11, WHITE)
-	var level_name: String = Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty if settings_return == "pause" else selected_difficulty)]
-	_text_center("Q / BOTÃO DIREITO   RAJADA      DIFICULDADE: " + level_name, Vector2(_size().x * 0.5, 407), 10, GOLD)
-	_text_center("SHIFT   ESQUIVA      E   RESTAURAR      M   MAPA      ESC   PAUSA", Vector2(_size().x * 0.5, 386), 10, MUTED)
-	_button(Rect2(x + 90, 423, 200, 39), "VOLTAR", "back", true)
-
+	var size := _size()
+	draw_rect(Rect2(Vector2.ZERO,size),Color(INK,0.92))
+	var r := Rect2(size.x/2-340,size.y/2-216,680,432)
+	FieldHUD.panel(self,r)
+	FieldHUD.centered(self,"CONFIGURAÇÕES",r.position+Vector2(340,43),26,WHITE)
+	FieldHUD.centered(self,"Ajuste seu equipamento de campo.",r.position+Vector2(340,69),12,MUTED)
+	_menu_control(Rect2(r.position+Vector2(40,96),Vector2(600,40)),"ÁUDIO / "+("DESLIGADO" if muted else "LIGADO"),"sound","F10")
+	_menu_control(Rect2(r.position+Vector2(40,149),Vector2(600,40)),"TELA / "+("CHEIA" if fullscreen else "JANELA"),"fullscreen","F11")
+	var area := Rect2(r.position+Vector2(40,212),Vector2(600,117))
+	FieldHUD.inset(self,area)
+	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,23),10,GOLD)
+	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,47),10,WHITE)
+	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,68),10,MUTED)
+	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,89),10,MUTED)
+	var level_name: String = Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty if settings_return=="pause" else selected_difficulty)]
+	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,356),9,GOLD)
+	_menu_control(Rect2(r.position+Vector2(240,371),Vector2(200,35)),"VOLTAR","back","ESC")
 func _draw_upgrades() -> void:
 	var size := _size()
-	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.96))
-	_text_center("SISTEMA %02d RESTAURADO" % sim.restored, Vector2(size.x * 0.5, 59), 11, CYAN)
-	_text_center("Recuperar também transforma você.", Vector2(size.x * 0.5, 109), 29, WHITE)
-	_text_center("ESCOLHA UMA MELHORIA PARA ESTA OPERAÇÃO", Vector2(size.x * 0.5, 139), 10, MUTED)
+	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.93))
+	var header := Rect2(size.x * 0.5 - 163, 23, 326, 36)
+	FieldHUD.panel(self, header)
+	FieldHUD.centered(self, "SISTEMA %02d RESTAURADO / OFICINA P17" % sim.restored, header.get_center() + Vector2(0, 4), 10, CYAN)
+	FieldHUD.centered(self, "Recuperar também transforma você.", Vector2(size.x * 0.5, 108), 27, WHITE)
+	FieldHUD.centered(self, "ESCOLHA UM MÓDULO PARA A PRÓXIMA ETAPA", Vector2(size.x * 0.5, 137), 10, MUTED)
 	var options: Array = sim.upgrade_options()
-	var width := (size.x - 128) / 3
+	var content_width := minf(size.x - 64, 1100)
+	var width := (content_width - 32) / 3
+	var height := minf(300, size.y - 250)
+	var top := maxf(169, (size.y - height) * 0.5 - 5)
+	var left := (size.x - content_width) * 0.5
 	for i in options.size():
 		var option: Dictionary = options[i]
-		var rect := Rect2(48 + i * (width + 16), 184, width, 256)
+		var rect := Rect2(left + i * (width + 16), top, width, height)
 		var hover := rect.has_point(pointer)
-		draw_rect(rect, Color("193a3c") if hover else PANEL)
-		draw_rect(rect, CYAN if hover else Color("3a5355"), false, 1)
-		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 3)), CYAN if i == 0 else (GOLD if i == 1 else MAGENTA))
-		_upgrade_icon(rect.position + Vector2(31, 40), [0, 2, 1][i])
-		_text("MÓDULO 0%d" % (i + 1), rect.position + Vector2(28, 103), 9, MUTED)
-		_wrapped(option.title.to_upper(), Rect2(rect.position + Vector2(27, 117), Vector2(width - 48, 50)), 19, WHITE, 24)
-		_wrapped(option.description, Rect2(rect.position + Vector2(28, 172), Vector2(width - 50, 61)), 12, MUTED, 18)
+		FieldHUD.perk_card(self, rect, option.id, i, hover)
+		_wrapped(option.title.to_upper(), Rect2(rect.position + Vector2(24, 112), Vector2(width - 48, 47)), 17, WHITE, 22)
+		_wrapped(option.description, Rect2(rect.position + Vector2(24, 174), Vector2(width - 48, 62)), 12, MUTED, 17)
 		buttons.append({"rect": rect, "id": "upgrade_%d" % i})
-		_text("[%d]  INSTALAR MÓDULO  →" % (i + 1), rect.position + Vector2(28, 238), 10, CYAN)
-	_text_center("VIDA CHEIA NO PRÓXIMO SETOR  /  ESCOLHA SUA MELHORIA PARA AVANÇAR", Vector2(size.x * 0.5, size.y - 40), 10, CYAN)
+	var footer := Rect2(size.x * 0.5 - 302, size.y - 56, 604, 34)
+	FieldHUD.panel(self, footer, CYAN)
+	FieldHUD.centered(self, "VIDA CHEIA NO PRÓXIMO SETOR  /  CLIQUE OU PRESSIONE 1, 2 OU 3", footer.get_center() + Vector2(0, 4), 10, CYAN)
 
 func _draw_defeat() -> void:
 	_overlay("CONEXÃO INTERROMPIDA", "Lia caiu. A missão ainda pode continuar.", MAGENTA)
@@ -974,20 +1004,6 @@ func _radio_portrait(p: Vector2, lia: bool) -> void:
 			var h := 6 + absf(sin(clock * 4 + i * 0.7)) * 26
 			draw_rect(Rect2(p + Vector2(6 + i * 4, 30 - h * 0.5), Vector2(2, h)), CYAN)
 	_text_center("17", p + Vector2(26, 55), 8, MUTED)
-
-func _upgrade_icon(p: Vector2, index: int) -> void:
-	var col: Color = [CYAN, GOLD, MAGENTA][index]
-	draw_rect(Rect2(p, Vector2(45, 40)), Color(col, 0.08))
-	if index == 0:
-		draw_line(p + Vector2(10, 30), p + Vector2(31, 9), col, 4)
-		draw_line(p + Vector2(22, 9), p + Vector2(33, 9), col, 3)
-		draw_line(p + Vector2(32, 9), p + Vector2(32, 20), col, 3)
-	elif index == 1:
-		draw_polyline(PackedVector2Array([p + Vector2(12, 9), p + Vector2(25, 20), p + Vector2(12, 31)]), col, 3)
-		draw_polyline(PackedVector2Array([p + Vector2(24, 9), p + Vector2(37, 20), p + Vector2(24, 31)]), col, 3)
-	else:
-		draw_rect(Rect2(p + Vector2(19, 8), Vector2(7, 25)), col)
-		draw_rect(Rect2(p + Vector2(10, 17), Vector2(25, 7)), col)
 
 func _panel(rect: Rect2) -> void:
 	draw_rect(rect, Color(INK, 0.92))
@@ -1058,19 +1074,20 @@ func _wrapped(text: String, rect: Rect2, size: int, color: Color, line_height: i
 
 
 func _draw_difficulty() -> void:
-	_overlay("ESCOLHA SUA OPERAÇÃO", "Quatro setores. Uma cidade para recuperar.")
-	var descriptions := [
-		"9 de vida. 37 inimigos. Mais tempo para reagir e sincronizar.",
-		"6 de vida. 57 inimigos. Tiros rápidos e pressão crescente.",
-		"5 de vida. 77 inimigos. Tiros mais rápidos e sincronização precisa."]
-	var x := _size().x*0.5-340
+	var size := _size()
+	draw_rect(Rect2(Vector2.ZERO,size),Color(INK,0.90))
+	var r := Rect2(size.x/2-360,size.y/2-235,720,470)
+	FieldHUD.panel(self,r)
+	FieldHUD.centered(self,"ESCOLHA SUA OPERAÇÃO",r.position+Vector2(360,44),26,WHITE)
+	FieldHUD.centered(self,"Quatro setores. Uma cidade para recuperar.",r.position+Vector2(360,72),12,MUTED)
+	var descriptions := ["9 de vida / 37 inimigos. Mais tempo para reagir e sincronizar.","6 de vida / 57 inimigos. Tiros rápidos e pressão crescente.","5 de vida / 77 inimigos. Tiros mais rápidos e sincronização precisa."]
 	for index in 3:
-		var y := 222.0+index*72
-		_button(Rect2(x,y,680,40),str(index+1)+"  /  "+Simulation.DIFFICULTY_NAMES[index],"difficulty_"+Simulation.DIFFICULTIES[index],index==1)
-		_text_center(descriptions[index],Vector2(_size().x*0.5,y+59),12,MUTED)
-	_button(Rect2(_size().x*0.5-90,455,180,34),"VOLTAR","difficulty_back",false)
-	_text_center("A dificuldade fica vinculada ao checkpoint da operação.",Vector2(_size().x*0.5,511),10,MUTED)
-
+		var id: String = "difficulty_"+Simulation.DIFFICULTIES[index]
+		var y := 99.0+index*88
+		_menu_control(Rect2(r.position+Vector2(35,y),Vector2(650,43)),Simulation.DIFFICULTY_NAMES[index]+(" / SELECIONADO" if selected_difficulty==Simulation.DIFFICULTIES[index] else ""),id,str(index+1),CYAN if index==1 else GOLD)
+		FieldHUD.centered(self,descriptions[index],r.position+Vector2(360,y+64),11,MUTED)
+	_menu_control(Rect2(r.position+Vector2(270,375),Vector2(180,34)),"VOLTAR","difficulty_back","ESC")
+	FieldHUD.centered(self,"A dificuldade fica vinculada ao checkpoint da operação.",r.position+Vector2(360,443),10,MUTED)
 func _draw_operation_markers() -> void:
 	for index in 2:
 		var point: Vector2 = sim.operation.points[index]
@@ -1086,22 +1103,18 @@ func _draw_operation_markers() -> void:
 
 func _draw_operation_hud() -> void:
 	var size := _size()
-	var level_index: int = Simulation.DIFFICULTIES.find(sim.difficulty)
-	_text_center("%s  /  LEVA %d / 3  /  CAMPO %d / 2" % [Simulation.DIFFICULTY_NAMES[level_index],sim.wave+1,sim.operation.completed],Vector2(size.x*0.5,101),10,MUTED)
-	if not sim.operation.ready():
-		_text_center(sim.operation.label()+"  /  MARCADOR "+str(sim.operation.completed+1),Vector2(size.x*0.5,121),11,GOLD)
 	if sim.state != "activation" or sim.operation.ready() or sim.pos.distance_to(sim.operation.target()) > 72: return
 	if sim.operation.wants_treatment(sim.pos):
 		var rect := Rect2(size.x*0.5-232,192,464,207)
-		_panel(rect)
+		FieldHUD.panel(self, rect)
 		_text_center("ANÁLISE DA AMOSTRA",Vector2(size.x*0.5,220),15,CYAN)
 		_text_center("Sólidos em suspensão. Qual etapa retém as partículas?",Vector2(size.x*0.5,246),12,WHITE)
 		var choices := ["1  /  DISTRIBUIR SEM TRATAMENTO","2  /  FILTRAR A ÁGUA","3  /  AUMENTAR A PRESSÃO"]
 		for index in 3:
 			_button(Rect2(rect.position.x+22,264+index*40,420,32),choices[index],"treatment_"+str(index),false)
 		return
-	var rect := Rect2(size.x*0.5-190,size.y-125,380,62)
-	_panel(rect)
+	var rect := Rect2(size.x*0.5-190,size.y-115,380,62)
+	FieldHUD.panel(self, rect)
 	var prompt := "SEGURE E  /  " + sim.operation.label()
 	if sim.stage == 1: prompt = "APERTE E QUANDO O INDICADOR ESTIVER VERDE"
 	_text_center(prompt,rect.position+Vector2(190,21),10,WHITE)
