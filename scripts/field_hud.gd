@@ -10,7 +10,6 @@ const FACE: Texture2D = preload("res://assets/lia_directional/idle.png")
 static var _icons: Dictionary = {}
 
 static func text(c: CanvasItem, value: String, p: Vector2, size: int, color: Color = WHITE) -> void:
-	c.draw_string(ThemeDB.fallback_font, p.round() + Vector2(0, 1), value, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0, 0, 0, 0.75))
 	c.draw_string(ThemeDB.fallback_font, p.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 static func centered(c: CanvasItem, value: String, p: Vector2, size: int, color: Color = WHITE) -> void:

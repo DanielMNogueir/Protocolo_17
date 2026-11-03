@@ -94,7 +94,9 @@ static func _draw_navigation(canvas: Node2D, story: P17Prologue, size: Vector2) 
 	var player: Vector2 = story.pos+offset
 	var screen: Vector2 = target+offset
 	var delta: Vector2 = screen-player
-	var bottom: float = size.y-121 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-48
+	var hint_top: float = (size.y-67 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-24)-48
+	# Keep the marker and its label entirely above the instruction panel.
+	var bottom := hint_top-37
 	var safe := Rect2(40,179,size.x-80,maxf(1,bottom-179))
 	if delta.length()<75 and safe.has_point(screen): return
 	var p: Vector2 = (player+delta.normalized()*52) if safe.has_point(screen) else screen
