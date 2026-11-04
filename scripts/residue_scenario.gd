@@ -34,6 +34,7 @@ var fire_cd := 0.0
 var secondary_cd := 0.0
 var dash_requested := false
 var secondary_requested := false
+var _map_mouse_held := false
 var dash_cd := 0.0
 var dash_time := 0.0
 var invuln := 0.0
@@ -146,6 +147,7 @@ func _physics_process(delta: float) -> void:
 	var dt := minf(delta, 0.05)
 	clock += dt
 	pointer = get_viewport().get_mouse_position()
+	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): _map_mouse_held=false
 	_update_audio()
 	if Input.is_physical_key_pressed(KEY_R) and state in ["defeat", "victory"]:
 		if state == "victory": get_tree().change_scene_to_file("res://scenes/main.tscn")
@@ -180,7 +182,7 @@ func _physics_process(delta: float) -> void:
 	if secondary_requested and secondary_cd <= 0.0:
 		_fire(target, true)
 		secondary_cd = 3.8
-	elif (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or _key(KEY_SPACE)) and fire_cd <= 0.0:
+	elif ((Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _map_mouse_held) or _key(KEY_SPACE)) and fire_cd <= 0.0:
 		_fire(target)
 	secondary_requested = false
 	var e_down := _key(KEY_E)
@@ -205,6 +207,13 @@ func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state=="map" and event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT and HUD.MapUI.close_rect(get_viewport_rect().size).has_point(event.position):
+		state="play"
+		_map_mouse_held=true
+		dash_requested=false
+		secondary_requested=false
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and state == "play":
 		secondary_requested = true
 		get_viewport().set_input_as_handled()
