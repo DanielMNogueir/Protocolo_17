@@ -1,5 +1,6 @@
 extends Node2D
 ## Original alpha shell: presentation, input, camera, interface and checkpoint I/O.
+const FieldMap = preload("res://scripts/field_map.gd")
 const FieldHUD = preload("res://scripts/field_hud.gd")
 const World = preload("res://scripts/world.gd")
 const StationArt = preload("res://scripts/station_art.gd")
@@ -348,6 +349,8 @@ func _action(id: String) -> void:
 			mode = "pause"
 		"map":
 			mode = "map"
+		"close_map":
+			mode = "play"
 		"resume":
 			mode = previous_mode
 		"retry":
@@ -843,54 +846,64 @@ func _draw_minimap(rect: Rect2) -> void:
 
 func _draw_map() -> void:
 	var size := _size()
-	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.97))
-	_text("DISTRITO DAS ÁGUAS", Vector2(45, 53), 24, WHITE)
-	_text("REDE DE RECUPERAÇÃO  /  AURORA", Vector2(46, 77), 10, CYAN)
-	_button(Rect2(size.x - 210, 32, 165, 37), "VOLTAR AO CAMPO  M", "resume", false)
-	var map_rect := Rect2(46, 104, size.x - 332, size.y - 141)
-	var ratio := minf(map_rect.size.x / World.SIZE.x, map_rect.size.y / World.SIZE.y)
-	var origin := map_rect.get_center() - World.SIZE * ratio * 0.5
-	for i in 3:
-		var gate: Rect2 = World.GATES[i]
-		var r := Rect2(origin + gate.position * ratio, gate.size * ratio)
-		draw_rect(r.grow(4), Color("233d43"))
-		draw_rect(r, CYAN if i < sim.stage else MAGENTA)
+	var parts := FieldMap.shell(self,size,"DISTRITO DAS ÁGUAS","REDE HIDRÁULICA / 4 SETORES",pointer)
+	buttons.append({"rect":FieldMap.close_rect(size),"id":"close_map"})
+	var area: Rect2 = parts.canvas
+	var ratio := minf(area.size.x/World.SIZE.x,area.size.y/World.SIZE.y)
+	var origin := area.get_center()-World.SIZE*ratio/2
 	for i in 4:
 		var region: Rect2 = World.REGIONS[i]
-		var r := Rect2(origin + region.position * ratio, region.size * ratio)
-		draw_rect(r, Color("20483e") if i < sim.restored else (Color("263c45") if i == sim.stage else Color("142831")))
-		draw_rect(r, CYAN if i <= sim.stage else Color("34505a"), false, 1)
-		_text("0%d" % (i + 1), r.position + Vector2(13, 30), 22, CYAN if i <= sim.stage else MUTED)
-		var label: String = ["CAPTAÇÃO", "ENERGIA", "FILTRAGEM", "DISTRIBUIÇÃO"][i]
-		_text(label, r.position + Vector2(13, 51), 11, WHITE)
-		_text("RESTAURADO" if i < sim.restored else ("SINAL ATIVO" if i == sim.stage else "SEM ACESSO"), r.position + Vector2(13, 68), 8, CYAN if i <= sim.stage else MUTED)
-		draw_circle(origin + World.GOALS[i] * ratio, 4, GOLD)
+		var r := Rect2(origin+region.position*ratio,region.size*ratio)
+		draw_rect(r,Color("173b34") if i<sim.restored else (Color("223b3f") if i==sim.stage else Color("14272e")))
+		draw_rect(r,CYAN if i<sim.restored else (GOLD if i==sim.stage else Color("405955")),false,1)
+	for bridge in World.BRIDGES:
+		draw_rect(Rect2(origin+bridge.position*ratio,bridge.size*ratio),Color("37524d"))
 	for channel in World.Wetlands.CHANNELS:
-		draw_rect(Rect2(origin+channel.position*ratio,channel.size*ratio),Color("103f4c"))
+		draw_rect(Rect2(origin+channel.position*ratio,channel.size*ratio),Color("0b2e3b"))
+	for basin in World.BASINS:
+		draw_rect(Rect2(origin+basin.position*ratio,basin.size*ratio),Color("0b2e3b"))
 	for crossing in World.Wetlands.CROSSINGS:
-		draw_rect(Rect2(origin+crossing.position*ratio,crossing.size*ratio),Color("709183"))
+		draw_rect(Rect2(origin+crossing.position*ratio,crossing.size*ratio),Color("607b6d"))
+	for i in 3:
+		var gate: Rect2 = World.GATES[i]
+		draw_rect(Rect2(origin+gate.position*ratio,gate.size*ratio).grow(1),CYAN if i<sim.stage else FieldMap.RED)
+	for i in 4:
+		var r := Rect2(origin+World.REGIONS[i].position*ratio,World.REGIONS[i].size*ratio)
+		var label: String = "%02d / %s" % [i+1,["CAPTAÇÃO","ENERGIA","FILTRAGEM","DISTRIBUIÇÃO"][i]]
+		var status := "RESTAURADO" if i<sim.restored else ("EM OPERAÇÃO" if i==sim.stage else "SEM ACESSO")
+		var occupied: Array[Vector2] = [origin+sim.pos*ratio]
+		for goal in World.GOALS: occupied.append(origin+goal*ratio)
+		for point in sim.operation.points: occupied.append(origin+point*ratio)
+		for enemy in sim.enemies:
+			if enemy.hp>0: occupied.append(origin+enemy.pos*ratio)
+		var anchor := FieldMap.label_anchor(r,[label,status],occupied)
+		FieldMap.tag(self,label,anchor,CYAN if i<sim.restored else WHITE)
+		FieldMap.tag(self,status,anchor+Vector2(0,14),CYAN if i<sim.restored else (GOLD if i==sim.stage else MUTED))
 	var route: Array = World.ROUTES[sim.stage]
-	for i in range(route.size() - 1):
-		draw_dashed_line(origin + route[i] * ratio, origin + route[i + 1] * ratio, Color(CYAN, 0.6), 1, 5)
-	for enemy in sim.enemies:
-		if enemy.hp > 0:
-			draw_circle(origin + enemy.pos * ratio, 3, MAGENTA)
+	for i in range(route.size()-1):
+		draw_dashed_line(origin+route[i]*ratio,origin+route[i+1]*ratio,Color(GOLD,0.65),1,4)
+	for i in 4: FieldMap.marker(self,origin+World.GOALS[i]*ratio,"terminal",i<sim.restored)
 	for index in 2:
-		var point: Vector2 = sim.operation.points[index]
-		draw_circle(origin+point*ratio,5,CYAN if index<sim.operation.completed else GOLD)
-		_text(str(index+1),origin+point*ratio+Vector2(8,-5),10,GOLD)
-	var player_p: Vector2 = origin + sim.pos * ratio
-	draw_circle(player_p, 7, Color(WHITE, 0.15))
-	draw_circle(player_p, 3, WHITE)
-	var x := size.x - 248
-	_text("SISTEMAS ONLINE", Vector2(x, 138), 11, MUTED)
-	_text("%d / 4" % sim.restored, Vector2(x, 185), 35, CYAN)
-	_wrapped("Cumpra as duas tarefas de campo, neutralize as três levas e restaure o terminal para liberar a passagem.", Rect2(x, 211, 195, 70), 12, WHITE, 19)
-	_text("●  LIA", Vector2(x, 316), 11, WHITE)
-	_text("●  DRONE CORROMPIDO", Vector2(x, 342), 10, MAGENTA)
-	_text("●  TERMINAL", Vector2(x, 368), 11, GOLD)
-	_text("—  ROTA SUGERIDA", Vector2(x, 394), 10, CYAN)
-	_text("SIMULAÇÃO PAUSADA", Vector2(x, size.y - 45), 9, MUTED)
+		var point: Vector2 = origin+sim.operation.points[index]*ratio
+		FieldMap.marker(self,point,"task",index<sim.operation.completed)
+		FieldMap.tag(self,str(index+1),point+Vector2(8,-5),CYAN if index<sim.operation.completed else GOLD)
+	var alive := 0
+	for enemy in sim.enemies:
+		if enemy.hp>0:
+			alive+=1
+			FieldMap.marker(self,origin+enemy.pos*ratio,"boss" if enemy.kind=="boss" else "enemy")
+	var objective := sim.operation.label() if not sim.operation.ready() else ("RESTAURE O TERMINAL DO SETOR" if sim.state=="activation" else "NEUTRALIZE OS DRONES PARA LIBERAR O TERMINAL")
+	var target: Vector2 = sim.operation.target() if not sim.operation.ready() else World.GOALS[sim.stage]
+	if sim.restored<=sim.stage: FieldMap.marker(self,origin+target*ratio,"objective")
+	else: objective="SISTEMA RESTAURADO / PASSAGEM LIBERADA"
+	var player: Vector2 = origin+sim.pos*ratio
+	FieldMap.marker(self,player,"player",false,sim.aim)
+	FieldMap.tag(self,"LIA",player+Vector2(11,13),WHITE)
+	var stats := [{"label":"TAREFAS DE CAMPO","value":"%d / 2" % sim.operation.completed}, {"label":"LEVA ATUAL","value":"%d / 3" % mini(sim.wave+1,3)}, {"label":"AMEAÇAS NO SETOR","value":"%02d" % alive,"color":FieldMap.RED if alive>0 else CYAN}]
+	var hint := "Complete as tarefas e as levas. Depois, restaure o terminal para liberar a passagem."
+	if sim.state=="activation": hint="Área segura. Aproxime-se do marcador e use E para operar o sistema."
+	if sim.restored>sim.stage: hint="Rede do setor restaurada. A passagem está liberada."
+	FieldMap.sidebar(self,parts.sidebar,sim.restored,4,SECTOR_SUBTITLES[sim.stage],objective,stats,hint)
 
 func _draw_dialogue() -> void:
 	var size := _size()

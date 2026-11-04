@@ -1,5 +1,6 @@
 extends Control
 
+const MapUI = preload("res://scripts/field_map.gd")
 const FieldHUD = preload("res://scripts/field_hud.gd")
 const M = preload("res://scripts/residue_map.gd")
 const WHITE := Color("e9ece0")
@@ -82,15 +83,54 @@ func _draw_plan(area: Rect2, detailed: bool) -> void:
 	if detailed: _text("LIA", lia + Vector2(9, 3), 9, WHITE)
 
 func _draw_map(size: Vector2) -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), INK)
-	_text("AURORA  /  BAIRRO INDUSTRIAL DE RESÍDUOS", Vector2(40, 42), 18, CYAN)
-	_text("AVENIDA DE SERVIÇO → DOCAS → INSTALAÇÕES", Vector2(41, 65), 11, WHITE)
-	var height := size.y - 136
-	var width := height * M.SIZE.x / M.SIZE.y
-	var area := Rect2((size.x - width) * 0.5, 83, width, height)
-	_draw_plan(area, true)
-	_text("● LIA    ◎ OBJETIVO    LINHA ÂMBAR: ROTA     M OU ESC PARA VOLTAR", Vector2(41, size.y - 23), 10, WHITE)
-
+	var parts := MapUI.shell(self,size,"DISTRITO DE RESÍDUOS","BAIRRO INDUSTRIAL / 3 INSTALAÇÕES",game.pointer)
+	var canvas: Rect2 = parts.canvas
+	var ratio := minf(canvas.size.x/M.SIZE.x,canvas.size.y/M.SIZE.y)
+	var area := Rect2(canvas.get_center()-M.SIZE*ratio/2,M.SIZE*ratio)
+	M.draw_background(self,area,Color(0.55,0.68,0.62,1))
+	draw_rect(area,Color(INK,0.34))
+	var scale := area.size/M.SIZE
+	var occupied: Array[Vector2] = [area.position+game.pos*scale]
+	if game.stage<3: occupied.append(area.position+game.objective_point()*scale)
+	for terminal in M.TERMINALS: occupied.append(area.position+terminal*scale)
+	for enemy in game.enemies:
+		if enemy.hp>0 and enemy.zone<=game.stage: occupied.append(area.position+Vector2(enemy.pos)*scale)
+	for i in 3:
+		var region := M.world_rect(M.FACILITIES[i])
+		var r := Rect2(area.position+region.position*scale,region.size*scale)
+		draw_rect(r,CYAN if game.terminal_on[i] else (GOLD if i==game.stage else Color("617970")),false,1)
+		var label: String = ["01 / TRIAGEM","02 / RECICLAGEM","03 / COMPOSTAGEM"][i]
+		MapUI.tag(self,label,MapUI.label_anchor(r,[label],occupied),CYAN if game.terminal_on[i] else WHITE)
+		MapUI.marker(self,area.position+M.TERMINALS[i]*scale,"terminal",game.terminal_on[i])
+	for i in 2:
+		var gate: Rect2 = M.GATES[i]
+		draw_rect(Rect2(area.position+gate.position*scale,gate.size*scale).grow(1),CYAN if i<game.stage else MapUI.RED)
+	if game.stage<3:
+		var route := PackedVector2Array()
+		route.append(area.position+game.pos*scale)
+		for point in game.guidance_path: route.append(area.position+point*scale)
+		for i in range(route.size()-1): draw_dashed_line(route[i],route[i+1],GOLD,2,4)
+		MapUI.marker(self,area.position+game.objective_point()*scale,"objective")
+	var alive := 0
+	for enemy in game.enemies:
+		if enemy.hp>0 and enemy.zone<=game.stage:
+			if enemy.zone==game.stage: alive+=1
+			MapUI.marker(self,area.position+Vector2(enemy.pos)*scale,"boss" if enemy.boss else "enemy")
+	var player: Vector2 = area.position+game.pos*scale
+	MapUI.marker(self,player,"player",false,game.aim)
+	MapUI.tag(self,"LIA",player+Vector2(11,13),WHITE)
+	var sorted_count := 0
+	for value in game.sorted:
+		if value: sorted_count+=1
+	var cleared_count := 0
+	for value in game.cleared:
+		if value: cleared_count+=1
+	var stats := [{"label":"MATERIAIS TRIADOS","value":"%d / 4" % sorted_count},{"label":"ROTAS LIBERADAS","value":"%d / 4" % cleared_count},{"label":"AMEAÇAS NO SETOR","value":"%02d" % alive,"color":MapUI.RED if alive>0 else CYAN}]
+	var location: String = ["CENTRO DE TRIAGEM","USINA DE RECICLAGEM","UNIDADE DE COMPOSTAGEM","DISTRITO RECUPERADO"][game.stage]
+	var hint := "Siga a rota âmbar pelas entradas das instalações e use E para interagir."
+	if game.carried>=0: hint="EM MÃOS: "+M.MATERIALS[game.carried]+". Entregue o material na baia indicada."
+	if game.stage==3: hint="Rede industrial recuperada. Os três sistemas estão em operação."
+	MapUI.sidebar(self,parts.sidebar,mini(game.stage,3),3,location,game.objective_label(),stats,hint)
 func _direction(vector: Vector2) -> String:
 	if vector.length() < 45: return "●"
 	return ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][posmod(int(round(vector.angle() / (PI / 4.0))), 8)]
