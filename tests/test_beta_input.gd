@@ -57,6 +57,7 @@ func _run() -> void:
 	check(game.mode=="map" and not game.interact_requested,"Map discards queued interaction")
 	game._action("title")
 	game._action("new")
+	game._action("district_water")
 	key(game,KEY_3)
 	game._action("intro_skip")
 	check(game.sim.difficulty=="veteran" and game.sim.max_hp==5,"Difficulty keyboard selection and intro preserve hard mode")

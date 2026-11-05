@@ -7,16 +7,21 @@ const WHITE := Color("e9ece0")
 const CYAN := Color("7be4ce")
 const GOLD := Color("e8bd74")
 const INK := Color("091922")
+const MUTED := FieldHUD.MUTED
 var game: Node2D
 
 func _draw() -> void:
 	if game == null: return
+	game.buttons.clear()
 	var size := get_viewport_rect().size
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
 	var direction: Vector2 = game.guidance_point() - game.pos
 	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], _direction(direction) + "  " + game.objective_label(), "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3), game.stage, mini(game.stage, 3), 3)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
-	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL")
+	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL", game.pointer)
+	if game.state == "play":
+		game.buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
+		game.buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
 	var mini_map := FieldHUD.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
 
 	_draw_plan(mini_map, false)
@@ -41,18 +46,40 @@ func _draw() -> void:
 		_panel(toast)
 		_text_center(game.toast, toast.get_center() + Vector2(0, 4), 10, WHITE)
 	match game.state:
-		"defeat": _overlay("CONEXÃO INTERROMPIDA", "R reinicia o Distrito de Resíduos")
+		"defeat":
+			game.buttons.clear()
+			_overlay("CONEXÃO INTERROMPIDA", "R reinicia o Distrito de Resíduos")
+			_overlay_buttons(true)
 		"victory":
+			game.buttons.clear()
 			_overlay("DISTRITO RECUPERADO", "Liga, polímero e vidro técnico encontrados no núcleo da IA.")
-			_text_center("R retorna ao Distrito das Águas", Vector2(size.x * 0.5, size.y * 0.5 + 71), 12, CYAN)
-		"pause": _overlay("OPERAÇÃO PAUSADA", "ESC continua  /  R reinicia o distrito")
-		"map": _draw_map(size)
+			_overlay_buttons(false)
+		"pause":
+			game.buttons.clear()
+			_overlay("OPERAÇÃO PAUSADA", "ESC continua  /  R reinicia o distrito")
+			_overlay_buttons(true)
+		"map":
+			game.buttons.clear()
+			_draw_map(size)
 	if game.state == "play":
 		var aim: Vector2 = game.pointer
 		for axis in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]: draw_line(aim + axis * 3, aim + axis * 7, CYAN, 1)
 
 func _panel(rect: Rect2) -> void:
 	FieldHUD.panel(self, rect)
+
+func _overlay_buttons(retry: bool) -> void:
+	var center := get_viewport_rect().size * 0.5
+	if game.state == "pause": _button(Rect2(center + Vector2(-150, 51), Vector2(300, 34)), "CONTINUAR / ESC", "resume")
+	elif retry: _button(Rect2(center + Vector2(-150, 51), Vector2(300, 34)), "TENTAR NOVAMENTE / R", "retry")
+	else: _button(Rect2(center + Vector2(-150, 51), Vector2(300, 34)), "JOGAR NOVAMENTE", "retry")
+	_button(Rect2(center + Vector2(-150, 98), Vector2(300, 34)), "ESCOLHER DISTRITO / B", "districts")
+	if game.state != "victory": _text_center("Ao sair, esta tentativa de Resíduos será reiniciada.", center + Vector2(0, 155), 10, MUTED)
+
+func _button(rect: Rect2, label: String, id: String) -> void:
+	FieldHUD.panel(self, rect, CYAN if rect.has_point(game.pointer) else GOLD)
+	_text_center(label, rect.get_center() + Vector2(0, 4), 11, CYAN if rect.has_point(game.pointer) else WHITE)
+	game.buttons.append({"rect": rect, "id": id})
 
 func _overlay(title: String, subtitle: String) -> void:
 	var size := get_viewport_rect().size

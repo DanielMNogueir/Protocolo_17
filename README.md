@@ -1,12 +1,22 @@
 # Protocolo 17 — Aurora
 
-Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. Esta branch também contém a primeira versão jogável do **Distrito de Resíduos**, acessível após concluir Águas.
+Beta candidata **0.2.2** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. O **Distrito de Resíduos** é desbloqueado permanentemente após concluir Águas.
+
+## Seleção de distritos — 0.2.2
+
+Iniciar operação abre a seleção de Águas e Resíduos. Águas está sempre disponível; Resíduos fica bloqueado até a primeira vitória em Águas. O desbloqueio e as três melhorias da última conclusão ficam em `user://aurora_campaign.json`, separados do checkpoint de Águas. Fechar o jogo ou iniciar Águas novamente não apaga o acesso a Resíduos. Ao escolher Resíduos, selecione a dificuldade; as melhorias da última conclusão de Águas serão aplicadas.
+
+Em Resíduos, use a pausa e **Escolher distrito** para voltar à seleção. A derrota e a vitória também oferecem esse retorno. Sair de uma tentativa reinicia as tarefas de Resíduos; o acesso e as melhorias continuam salvos. O progresso dentro de Resíduos ainda não é salvo entre sessões.
+
+Os inimigos de Resíduos usam a mesma regra de resistência do último setor de Águas: explorador com 11 de vida, sentinela com 13 e chefe com 80. Drones de alarme têm 11. Vida atual e máxima ficam registradas por inimigo e as barras usam esses valores; melhorias de dano continuam funcionando. Mapa e pausa do HUD de Resíduos também aceitam clique, e pausar descarta ataques pendentes.
+
+Validação adicional: `tests/test_campaign_selection.gd`, `tests/test_residue_health.gd`, `tests/test_residue_transition.gd` e `tools/review_district_selection.gd`. Execute testes de persistência com uma pasta de dados separada para não alterar seu progresso.
 
 ## Executar
 
 1. Abra o `project.godot` da raiz no Godot 4.7.1.
 2. Aguarde a importação dos recursos e pressione F5.
-3. Escolha uma nova operação e o nível de dificuldade. O prólogo existente pode ser pulado.
+3. Escolha uma nova operação, o distrito e o nível de dificuldade. O prólogo de Águas pode ser pulado.
 
 O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações da beta ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
 
