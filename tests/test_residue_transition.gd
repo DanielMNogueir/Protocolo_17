@@ -15,6 +15,9 @@ func _run() -> void:
 	current_scene = game
 	await process_frame
 	game.set_process(false)
+	game.sim.load_data({"version": 2, "stage": 3, "chosen": ["reserve_cell", "induction_coil", "water_stride"], "difficulty": "veteran"})
+	game.sim.state = "victory"
+	game._state_changed()
 	game.mode = "victory"
 	game.buttons.append({"rect": Rect2(0, 0, 100, 100), "id": "residues"})
 	var click := InputEventMouseButton.new()
@@ -25,6 +28,10 @@ func _run() -> void:
 	await process_frame
 	if current_scene == null or current_scene.scene_file_path != "res://scenes/residues.tscn":
 		push_error("RESIDUE_TRANSITION_FAILED: destination scene did not open")
+		quit(1)
+		return
+	if current_scene.difficulty != "veteran" or current_scene.pulse_damage != 2 or current_scene.enemies.back().max_hp != 80:
+		push_error("RESIDUE_TRANSITION_FAILED: campaign loadout or enemy health was lost")
 		quit(1)
 		return
 	print("RESIDUE_TRANSITION_OK")

@@ -226,19 +226,20 @@ func _spawn_reinforcements() -> void:
 	events.append("reinforcements")
 
 
+static func enemy_health(kind: String, sector: int) -> int:
+	if kind == "boss": return 80
+	return 5 + sector * 2 + (2 if kind == "sentry" else (3 if kind == "rammer" else 0))
+
 func _spawn_wave(kinds: Array, locations: Array) -> void:
 	for index in kinds.size():
 		var kind: String = str(kinds[index])
-		var enemy_hp: int = 5 + stage * 2
+		var enemy_hp := enemy_health(kind, stage)
 		var radius: float = 17.0
 		if kind == "sentry":
-			enemy_hp += 2
 			radius = 20.0
 		elif kind == "rammer":
-			enemy_hp += 3
 			radius = 21.0
 		elif kind == "boss":
-			enemy_hp = 80
 			radius = 44.0
 		var spawn: Vector2 = locations[index % locations.size()]
 		if wave > 0 or index >= locations.size():

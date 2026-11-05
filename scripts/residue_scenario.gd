@@ -9,12 +9,15 @@ const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
 const BACKGROUND_SHADER = preload("res://scripts/residue_background.gdshader")
 const Sound = preload("res://scripts/audio.gd")
+const Simulation = preload("res://scripts/simulation.gd")
+const CampaignProgress = preload("res://scripts/campaign_progress.gd")
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
 const PINK := Color("e36b92")
 const GOLD := Color("e8bd74")
 
 var state := "play"
+var buttons: Array[Dictionary] = []
 var pos: Vector2 = M.START
 var velocity := Vector2.ZERO
 var aim := Vector2.RIGHT
@@ -108,6 +111,12 @@ func _apply_handoff() -> void:
 		var data: Dictionary = get_tree().get_meta("p17_residue_handoff")
 		difficulty = data.get("difficulty", "operation")
 		upgrades = data.get("upgrades", []).duplicate()
+	else:
+		var campaign := CampaignProgress.new()
+		campaign.load_progress()
+		if campaign.water_completed:
+			difficulty = campaign.difficulty
+			upgrades = campaign.upgrades.duplicate()
 	max_hp = 9 if difficulty == "story" else (5 if difficulty == "veteran" else 6)
 	if "reserve_cell" in upgrades: max_hp += 2
 	if "reclaimed_armor" in upgrades: max_hp += 2
@@ -140,7 +149,10 @@ func _spawn_enemies() -> void:
 	enemies.clear()
 	for i in M.ENEMY_POSITIONS.size():
 		var boss := i == M.ENEMY_POSITIONS.size() - 1
-		enemies.append({"pos": M.ENEMY_POSITIONS[i], "home": M.ENEMY_POSITIONS[i], "hp": 9 if boss else (3 if i % 2 else 2), "zone": 2 if boss else i / 2,
+		var kind := "boss" if boss else ("scout" if i % 2 == 0 else "sentry")
+		# Continue the resistance of Water's last sector; never reset to prototype HP.
+		var health := Simulation.enemy_health(kind, 3)
+		enemies.append({"pos": M.ENEMY_POSITIONS[i], "home": M.ENEMY_POSITIONS[i], "kind": kind, "hp": health, "max_hp": health, "zone": 2 if boss else i / 2,
 		"shot_cd": 1.1 + i * 0.19, "hit_cd": 0.0, "phase": 0.0, "id": i, "boss": boss})
 
 func _physics_process(delta: float) -> void:
@@ -150,7 +162,7 @@ func _physics_process(delta: float) -> void:
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): _map_mouse_held=false
 	_update_audio()
 	if Input.is_physical_key_pressed(KEY_R) and state in ["defeat", "victory"]:
-		if state == "victory": get_tree().change_scene_to_file("res://scenes/main.tscn")
+		if state == "victory": _return_to_districts()
 		else: get_tree().reload_current_scene()
 		return
 	if state != "play":
@@ -207,6 +219,13 @@ func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		for button in buttons:
+			if button.rect.has_point(event.position):
+				_map_mouse_held = true
+				get_viewport().set_input_as_handled()
+				_action(button.id)
+				return
 	if state=="map" and event is InputEventMouseButton and event.pressed and event.button_index==MOUSE_BUTTON_LEFT and HUD.MapUI.close_rect(get_viewport_rect().size).has_point(event.position):
 		state="play"
 		_map_mouse_held=true
@@ -220,13 +239,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
+			_clear_pending_actions()
 			state = "play" if state in ["pause", "map"] else ("pause" if state == "play" else state)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_M and state in ["play", "map"]:
+			_clear_pending_actions()
 			state = "play" if state == "map" else "map"
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_R and state == "pause":
 			get_tree().reload_current_scene()
+		elif event.physical_keycode == KEY_B and state in ["pause", "victory", "defeat"]:
+			_return_to_districts()
 		elif event.physical_keycode == KEY_SHIFT and state == "play":
 			dash_requested = true
 		elif event.physical_keycode == KEY_Q and state == "play":
@@ -237,6 +260,29 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_F11:
 			var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if fullscreen else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+func _clear_pending_actions() -> void:
+	dash_requested = false
+	secondary_requested = false
+	interact_down = true
+	hold_progress = 0.0
+	hold_target = ""
+
+func _action(id: String) -> void:
+	_clear_pending_actions()
+	match id:
+		"map": state = "map"
+		"pause": state = "pause"
+		"resume": state = "play"
+		"retry": get_tree().reload_current_scene()
+		"districts": _return_to_districts()
+	queue_redraw()
+	_hud.queue_redraw()
+
+func _return_to_districts() -> void:
+	get_tree().set_meta("p17_open_districts", true)
+	if get_tree().has_meta("p17_residue_handoff"): get_tree().remove_meta("p17_residue_handoff")
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 func _update_audio() -> void:
 	var mood := "calm"
@@ -333,7 +379,8 @@ func _spawn_alarm_drone() -> void:
 		if enemy.get("alarm", false) and enemy.hp > 0: active += 1
 	if active >= 2: return
 	var location := Vector2(453, 455) * M.SCALE if active == 0 else Vector2(337, 470) * M.SCALE
-	enemies.append({"pos": location, "home": location, "hp": 2, "zone": 0,
+	var health := Simulation.enemy_health("scout", 3)
+	enemies.append({"pos": location, "home": location, "kind": "scout", "hp": health, "max_hp": health, "zone": 0,
 		"shot_cd": 0.5, "hit_cd": 0.0, "phase": 0.0, "id": enemies.size(), "boss": false, "alarm": true})
 
 func _interaction_candidate() -> Dictionary:
@@ -496,7 +543,7 @@ func _update_bullets(dt: float) -> void:
 				for j in enemies.size():
 					var enemy: Dictionary = enemies[j]
 					if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (28.0 if enemy.boss else 21.0):
-						enemy.hp -= bullet.damage
+						enemy.hp = maxi(0, enemy.hp - int(bullet.damage))
 						enemy.hit_cd = 0.18
 						if enemy.hp <= 0: sound.play_sfx("enemy_dead")
 						enemies[j] = enemy
@@ -579,14 +626,17 @@ func _draw_lia() -> void:
 
 func _draw_enemy(enemy: Dictionary) -> void:
 	var view := enemy.duplicate()
-	view["kind"] = "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry")
-	view["max_hp"] = 9 if enemy.boss else (3 if enemy.id % 2 else 2)
+	view["kind"] = enemy.get("kind", "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry"))
+	view["max_hp"] = enemy.get("max_hp", Simulation.enemy_health(view.kind, 3))
 	view["facing"] = (pos - Vector2(enemy.pos)).normalized()
 	view["phase"] = "windup" if enemy.shot_cd < 0.27 else "idle"
 	view["warning"] = 1.0 if enemy.shot_cd < 0.27 else 0.0
 	view["hurt"] = enemy.hit_cd
 	view["moving"] = enemy.pos.distance_to(pos) < 420
 	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
-	if enemy.boss:
-		draw_rect(Rect2(enemy.pos + Vector2(-35, -54), Vector2(70, 4)), Color("15262b"))
-		draw_rect(Rect2(enemy.pos + Vector2(-35, -54), Vector2(70 * maxf(0, enemy.hp) / 9.0, 4)), PINK)
+	if enemy.boss or enemy.hp < view.max_hp:
+		var width := 70.0 if enemy.boss else 34.0
+		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -54 if enemy.boss else -38), Vector2(width, 4))
+		draw_rect(bar.grow(1), Color("07171d"))
+		draw_rect(bar, Color("263b40"))
+		draw_rect(Rect2(bar.position, Vector2(width * clampf(float(enemy.hp) / view.max_hp, 0, 1), 4)), PINK)
