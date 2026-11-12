@@ -8,6 +8,9 @@ const MUSIC_DB := -13.0
 const EFFECT_DB := -9.0
 const MAX_VOICES := 10
 const EnemyAudio := preload("res://scripts/enemy_audio.gd")
+## "blackout" scores the dark Energy district; "grid" plays once power returns.
+const MOODS := ["menu", "calm", "combat", "boss", "victory", "suspense", "blackout", "grid"]
+const POWER_EFFECTS := ["arc", "discharge", "pulse_hit", "mirror", "relay", "vent", "emp", "power_up", "shield", "overload_start"]
 
 var _music: Array[AudioStreamPlayer] = []
 var _voices: Array[AudioStreamPlayer] = []
@@ -44,10 +47,10 @@ func warm_up() -> void:
 	if _warmed:
 		return
 	# Pay synthesis cost at boot, before play begins, never at an encounter trigger.
-	for mood in ["menu", "calm", "combat", "boss", "victory", "suspense"]:
+	for mood in MOODS:
 		if not _tracks.has(mood):
 			_tracks[mood] = _compose(mood)
-	for id in ["shoot", "hurt", "dash", "enemy_dead", "repair", "boss", "complete", "ui"]:
+	for id in ["shoot", "hurt", "dash", "enemy_dead", "repair", "boss", "complete", "ui"] + POWER_EFFECTS:
 		_effects[id] = _make_effect(id)
 	for kind in EnemyAudio.KINDS:
 		for event in EnemyAudio.EVENTS:
@@ -80,7 +83,7 @@ func _prepare_players() -> void:
 
 func set_mood(mood: String) -> void:
 	_prepare_players()
-	if mood not in ["menu", "calm", "combat", "boss", "victory", "suspense"]:
+	if mood not in MOODS:
 		mood = "calm"
 	if _mood == mood:
 		return
@@ -154,6 +157,8 @@ func play_sfx(id: String) -> void:
 
 
 func _compose(mood: String) -> AudioStreamWAV:
+	if mood in ["blackout", "grid"]:
+		return _compose_power(mood == "grid")
 	var urgent := mood in ["combat", "boss", "suspense"]
 	var boss := mood == "boss"
 	var suspense := mood == "suspense"
@@ -199,6 +204,43 @@ func _compose(mood: String) -> AudioStreamWAV:
 				_mix(result, _percussion("hat", 0.045), offset, 0.045 if beat % 2 else 0.075)
 		elif beat % 8 == 4:
 			_mix(result, _percussion("hat", 0.07), offset, 0.025)
+	return _wav(result, true)
+
+
+## Energy district score. Blackout: a mains-hum drone, sparse low plucks and a
+## relay tick, in A minor. Grid: the same phrase lifted to A major with a steady
+## pulse, for districts that are powered again.
+func _compose_power(powered: bool) -> AudioStreamWAV:
+	var step := 0.27 if powered else 0.32
+	var step_count := 32
+	var result := PackedFloat32Array()
+	result.resize(int(RATE * step * step_count))
+	var roots: Array[int] = [33, 29, 36, 31]
+	if powered: roots = [33, 38, 40, 36]
+	var melody: Array[int] = [57, 0, 60, 0, 64, 0, 62, 0, 53, 0, 57, 60, 0, 0, 59, 0,
+		60, 0, 64, 0, 67, 0, 64, 62, 55, 0, 59, 0, 62, 0, 0, 0]
+	if powered:
+		melody = [57, 61, 64, 69, 68, 64, 61, 64, 62, 66, 69, 74, 73, 69, 66, 69,
+			64, 68, 71, 76, 74, 71, 68, 71, 60, 64, 67, 72, 71, 67, 64, 61]
+	for beat in range(step_count):
+		var root_note: int = roots[beat / 8]
+		var offset := int(beat * step * RATE)
+		if beat % 8 == 0:
+			_mix(result, _tone(root_note, step * 7.9, "pad"), offset, 0.18)
+			_mix(result, _tone(root_note + 7, step * 7.9, "pad"), offset, 0.08)
+		if beat % 4 == 0: _mix(result, _tone(root_note, step * 3.8, "bass"), offset, 0.26 if powered else 0.2)
+		var note: int = melody[beat]
+		if note > 0: _mix(result, _tone(note, step * (1.1 if powered else 2.2), "pluck"), offset, 0.17 if powered else 0.13)
+		if powered:
+			_mix(result, _tone(root_note + 24, step * 0.5, "pulse"), offset, 0.05)
+			if beat % 4 == 0: _mix(result, _percussion("kick", step * 0.8), offset, 0.18)
+			_mix(result, _percussion("hat", 0.045), offset, 0.04 if beat % 2 else 0.06)
+		elif beat % 4 == 3:
+			_mix(result, _percussion("hat", 0.03), offset, 0.05)
+	# Mains hum under the whole loop: 55 Hz with a faint 165 Hz buzz.
+	for index in range(result.size()):
+		var t := float(index) / RATE
+		result[index] += (sin(TAU * 55.0 * t) * 0.05 + sin(TAU * 165.0 * t) * (0.012 if powered else 0.02))
 	return _wav(result, true)
 
 
@@ -264,6 +306,8 @@ func _percussion(kind: String, seconds: float) -> PackedFloat32Array:
 func _make_effect(id: String) -> AudioStreamWAV:
 	if id.begins_with("unit_"):
 		return EnemyAudio.make_effect(id)
+	if id in POWER_EFFECTS:
+		return _make_power_effect(id)
 	var duration := 0.18
 	match id:
 		"shoot": duration = 0.09
@@ -309,6 +353,60 @@ func _make_effect(id: String) -> AudioStreamWAV:
 			var note_phase := fmod(p * (4.0 if id == "repair" else 5.0), 1.0)
 			envelope *= minf(note_phase * 15.0, 1.0) * minf((1.0 - note_phase) * 8.0, 1.0)
 		samples[index] = lerpf(wave, noise, noise_amount) * envelope * 0.68
+	return _wav(samples, false)
+
+
+## Electrical effects for the Energy district: crackling arcs, discharges,
+## overload pips, mechanical mirror turns, relay chirps, venting and the EMP.
+func _make_power_effect(id: String) -> AudioStreamWAV:
+	var duration: float = {"arc": 0.42, "discharge": 0.75, "pulse_hit": 0.16, "mirror": 0.3, "relay": 0.34,
+		"vent": 0.55, "emp": 1.4, "power_up": 1.3, "shield": 0.14, "overload_start": 0.22}[id]
+	var samples := PackedFloat32Array()
+	samples.resize(int(duration * RATE))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 170717 + id.hash() % 1000
+	var phase := 0.0
+	var crackle := 0.0
+	for index in range(samples.size()):
+		var t := float(index) / RATE
+		var p := t / duration
+		var noise := rng.randf_range(-1.0, 1.0)
+		# Sparse, bright clicks: the texture shared by every electric sound.
+		if rng.randf() < 0.035: crackle = rng.randf_range(0.5, 1.0) * (1.0 if rng.randf() > 0.5 else -1.0)
+		crackle *= 0.86
+		var sample := 0.0
+		match id:
+			"arc":
+				phase += TAU * (120.0 + 30.0 * sin(t * 90.0)) / RATE
+				sample = signf(sin(phase)) * 0.25 + crackle * 0.6 + noise * 0.15
+				sample *= minf(t / 0.01, 1.0) * pow(1.0 - p, 0.8)
+			"discharge":
+				phase += TAU * lerpf(90.0, 35.0, p) / RATE
+				sample = (sin(phase) * 0.6 + crackle * 0.7 + noise * 0.35 * exp(-t * 6.0)) * exp(-t * 3.2)
+			"pulse_hit":
+				phase += TAU * lerpf(880.0, 1320.0, p) / RATE
+				sample = sin(phase) * 0.5 * pow(1.0 - p, 1.2) + crackle * 0.2
+			"mirror":
+				phase += TAU * (180.0 + 40.0 * floor(p * 3.0)) / RATE
+				sample = (sin(phase) * 0.45 + noise * 0.25) * exp(-fmod(t, 0.1) * 30.0) * (1.0 - p)
+			"relay":
+				phase += TAU * lerpf(400.0, 1600.0, pow(p, 0.6)) / RATE
+				sample = (sin(phase) * 0.45 + crackle * 0.35) * minf(t / 0.01, 1.0) * (1.0 - p)
+			"vent":
+				sample = noise * 0.4 * minf(t / 0.05, 1.0) * pow(1.0 - p, 1.4) + sin(TAU * 70.0 * t) * 0.15 * (1.0 - p)
+			"emp":
+				phase += TAU * lerpf(900.0, 40.0, pow(p, 0.4)) / RATE
+				sample = (sin(phase) * 0.55 + crackle * 0.5 + noise * 0.2 * (1.0 - p)) * pow(1.0 - p, 1.1)
+			"power_up":
+				phase += TAU * lerpf(110.0, 440.0, pow(p, 0.7)) / RATE
+				sample = (sin(phase) * 0.4 + sin(phase * 1.5) * 0.2 + sin(phase * 2.0) * 0.15) * minf(t / 0.2, 1.0) * minf((1.0 - p) * 6.0, 1.0)
+			"shield":
+				phase += TAU * 1900.0 / RATE
+				sample = sin(phase) * 0.35 * exp(-t * 30.0) + crackle * 0.2
+			"overload_start":
+				phase += TAU * lerpf(220.0, 660.0, p) / RATE
+				sample = sin(phase) * 0.4 * (1.0 - p) + crackle * 0.25
+		samples[index] = clampf(sample, -1.0, 1.0) * 0.7
 	return _wav(samples, false)
 
 

@@ -11,6 +11,7 @@ const BACKGROUND_SHADER = preload("res://scripts/residue_background.gdshader")
 const Sound = preload("res://scripts/audio.gd")
 const Simulation = preload("res://scripts/simulation.gd")
 const CampaignProgress = preload("res://scripts/campaign_progress.gd")
+const Loadout = preload("res://scripts/campaign_loadout.gd")
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
 const PINK := Color("e36b92")
@@ -57,8 +58,8 @@ var _hud: Control
 var difficulty := "operation"
 var upgrades: Array = []
 var move_speed := 205.0
-var fire_interval := 0.15
-var pulse_speed := 650.0
+var fire_interval := 0.145
+var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
 var guidance_path := PackedVector2Array()
@@ -66,6 +67,8 @@ var _guide_timer := 0.0
 var _guide_target := Vector2.INF
 var sound: Node
 var _muted := false
+var campaign := CampaignProgress.new()
+var module_notice := ""
 
 func _ready() -> void:
 	_apply_handoff()
@@ -107,29 +110,25 @@ func _ready() -> void:
 	_set_toast("LIA: os materiais estão misturados. Vou reabrir a triagem.")
 
 func _apply_handoff() -> void:
+	campaign.load_progress()
 	if get_tree().has_meta("p17_residue_handoff"):
 		var data: Dictionary = get_tree().get_meta("p17_residue_handoff")
 		difficulty = data.get("difficulty", "operation")
 		upgrades = data.get("upgrades", []).duplicate()
 	else:
-		var campaign := CampaignProgress.new()
-		campaign.load_progress()
 		if campaign.water_completed:
 			difficulty = campaign.difficulty
 			upgrades = campaign.upgrades.duplicate()
-	max_hp = 9 if difficulty == "story" else (5 if difficulty == "veteran" else 6)
-	if "reserve_cell" in upgrades: max_hp += 2
-	if "reclaimed_armor" in upgrades: max_hp += 2
-	if "living_circuit" in upgrades: max_hp += 2
-	if "light_harness" in upgrades: move_speed += 25
-	if "water_stride" in upgrades: move_speed += 20
-	if "focused_pulse" in upgrades: fire_interval *= 0.8
-	if "clean_frequency" in upgrades:
-		fire_interval /= 1.2
-		pulse_speed *= 1.15
-	if "induction_coil" in upgrades: pulse_damage += 1
-	if "efficient_dash" in upgrades: dash_recharge -= 0.25
-	if "water_stride" in upgrades: dash_recharge -= 0.15
+	# Same base values and perk effects as Water; see campaign_loadout.gd.
+	var loadout := Loadout.new()
+	loadout.configure(difficulty, upgrades)
+	difficulty = loadout.difficulty
+	max_hp = loadout.max_hp
+	move_speed = loadout.move_speed
+	fire_interval = loadout.fire_interval
+	pulse_speed = loadout.pulse_speed
+	pulse_damage = loadout.pulse_damage
+	dash_recharge = loadout.dash_recharge
 	hp = max_hp
 
 func _setup_lighting() -> void:
@@ -161,9 +160,8 @@ func _physics_process(delta: float) -> void:
 	pointer = get_viewport().get_mouse_position()
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): _map_mouse_held=false
 	_update_audio()
-	if Input.is_physical_key_pressed(KEY_R) and state in ["defeat", "victory"]:
-		if state == "victory": _return_to_districts()
-		else: get_tree().reload_current_scene()
+	if Input.is_physical_key_pressed(KEY_R) and state == "defeat":
+		get_tree().reload_current_scene()
 		return
 	if state != "play":
 		queue_redraw()
@@ -248,6 +246,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_R and state == "pause":
 			get_tree().reload_current_scene()
+		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and state == "victory":
+			_action("modules")
+		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3] and state == "upgrade":
+			_action("module_%d" % (event.physical_keycode - KEY_1))
 		elif event.physical_keycode == KEY_B and state in ["pause", "victory", "defeat"]:
 			_return_to_districts()
 		elif event.physical_keycode == KEY_SHIFT and state == "play":
@@ -276,8 +278,35 @@ func _action(id: String) -> void:
 		"resume": state = "play"
 		"retry": get_tree().reload_current_scene()
 		"districts": _return_to_districts()
+		"modules":
+			if state == "victory": state = "upgrade"
+		_:
+			if id.begins_with("module_") and state == "upgrade":
+				choose_module(int(id.trim_prefix("module_")))
 	queue_redraw()
 	_hud.queue_redraw()
+
+## Records Residues, installs the fourth module and opens Energy. A failed save
+## keeps the player on the module screen so the choice can be retried.
+func choose_module(index: int) -> bool:
+	if state != "upgrade" or index < 0 or index >= Loadout.RESIDUE_UPGRADES.size(): return false
+	var id: String = Loadout.RESIDUE_UPGRADES[index].id
+	var loadout := {"difficulty": difficulty, "upgrades": upgrades.duplicate() + [id]}
+	# A scene opened directly in the editor has no Water save to extend.
+	if campaign.water_completed:
+		if campaign.complete_residues(difficulty, id) != OK:
+			module_notice = "Não foi possível salvar o progresso. Tente novamente."
+			return false
+		loadout = campaign.energy_loadout(difficulty)
+	module_notice = ""
+	sound.play_sfx("complete")
+	_open_power(loadout)
+	return true
+
+func _open_power(loadout: Dictionary) -> void:
+	if get_tree().has_meta("p17_residue_handoff"): get_tree().remove_meta("p17_residue_handoff")
+	get_tree().set_meta("p17_power_handoff", loadout)
+	get_tree().change_scene_to_file("res://scenes/power.tscn")
 
 func _return_to_districts() -> void:
 	get_tree().set_meta("p17_open_districts", true)
@@ -286,7 +315,7 @@ func _return_to_districts() -> void:
 
 func _update_audio() -> void:
 	var mood := "calm"
-	if state == "victory": mood = "victory"
+	if state in ["victory", "upgrade"]: mood = "victory"
 	elif state == "play":
 		for enemy in enemies:
 			if enemy.hp > 0 and enemy.zone <= stage and enemy.pos.distance_to(pos) < 340:

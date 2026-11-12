@@ -232,6 +232,22 @@ Cada sistema de energia possui uma barra de carga. O jogador precisa ativar o si
 - Após uma falha, o jogador deve esperar o tempo de recuperação e tentar novamente.
 - Restaurar uma região pode acender o mapa, habilitar máquinas, revelar rotas e abrir áreas antes inacessíveis.
 
+### Implementação — Operação Corrente
+
+A fase segue as regras acima. Cada instalação acrescenta uma mecânica própria, que o confronto final reutiliza. Detalhes em `docs/direcao-visual/distrito-de-energia.md`.
+
+- **Apagão:** o distrito começa escuro. A Lia enxerga com uma luz curta e uma lanterna. Cada instalação restaurada acende seu setor e abre o portão seguinte.
+- **Central Solar Aurora:** três espelhos girados a tiros levam o feixe ao coletor. A Sobrecarga pede três toques numa faixa que se move e encolhe. A falha causa a descarga e o tempo de recuperação descritos acima.
+- **Torre de Distribuição Norte:**
+  - pilones descarregam em ritmo no corredor de cabos;
+  - um transformador corrompido protege os drones com escudo;
+  - três relés precisam ser energizados a tiros dentro de uma janela;
+  - a Sobrecarga acompanha uma oscilação da rede.
+- **Banco de Baterias Central:** a carga só sobe com a Lia no anel. Células que superaquecem precisam ser aliviadas nos consoles, enquanto ondas de drones atacam. A conclusão neutraliza os drones restantes do setor.
+- **Inimigos elétricos:** Faísca (investida com rastro elétrico), Bobina (torreta fixa; pares formam um arco que bloqueia tiros) e transformador corrompido (escudo), além de explorador e sentinela.
+- **Narrativa:** três fragmentos do registro de Beatrix, um por instalação, revelam que a ordem dos drones veio da própria rede. Major 0 é o nome único do rádio.
+- **Encerramento:** a fase termina no Elevador do Núcleo, que leva ao confronto final.
+
 ### Confronto final
 
 Depois de restaurar a rede e avançar pelo complexo, Lia enfrenta a forma física da IA. Ao ser derrotada, a estrutura robótica é destruída e o núcleo entra em pausa.

@@ -3,6 +3,7 @@ extends Control
 const MapUI = preload("res://scripts/field_map.gd")
 const FieldHUD = preload("res://scripts/field_hud.gd")
 const M = preload("res://scripts/residue_map.gd")
+const Loadout = preload("res://scripts/campaign_loadout.gd")
 const WHITE := Color("e9ece0")
 const CYAN := Color("7be4ce")
 const GOLD := Color("e8bd74")
@@ -52,8 +53,10 @@ func _draw() -> void:
 			_overlay_buttons(true)
 		"victory":
 			game.buttons.clear()
-			_overlay("DISTRITO RECUPERADO", "Liga, polímero e vidro técnico encontrados no núcleo da IA.")
-			_overlay_buttons(false)
+			_draw_victory(size)
+		"upgrade":
+			game.buttons.clear()
+			_draw_modules(size)
 		"pause":
 			game.buttons.clear()
 			_overlay("OPERAÇÃO PAUSADA", "ESC continua  /  R reinicia o distrito")
@@ -67,6 +70,60 @@ func _draw() -> void:
 
 func _panel(rect: Rect2) -> void:
 	FieldHUD.panel(self, rect)
+
+func _draw_victory(size: Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.95))
+	_text_center("DISTRITO DE RESÍDUOS  /  RECUPERADO", Vector2(size.x * 0.5, 62), 11, CYAN)
+	_text_center("A cidade volta a separar o que pode renascer.", Vector2(size.x * 0.5, 110), 26, WHITE)
+	_text_center("Triagem. Reciclagem. Compostagem. Nada mais se acumula nos bairros.", Vector2(size.x * 0.5, 140), 12, MUTED)
+	var record := Rect2(size.x * 0.5 - 330, 172, 660, 128)
+	_panel(record)
+	draw_rect(Rect2(record.position, Vector2(3, record.size.y)), GOLD)
+	_text("REGISTRO RECUPERADO  /  NÚCLEO DA IA", record.position + Vector2(22, 27), 10, GOLD)
+	_wrapped("LIA: Liga metálica, polímero e vidro técnico. Os materiais saíram daqui para montar o núcleo da IA… e seguiram pela rede elétrica.", Rect2(record.position + Vector2(22, 38), Vector2(record.size.x - 44, 50)), 13, WHITE, 19)
+	_text("DESTINO DO ÚLTIMO LOTE: DISTRITO DE ENERGIA", record.position + Vector2(22, 108), 10, Color("e36b92"))
+	var center := Vector2(size.x * 0.5, 0)
+	_button(Rect2(center + Vector2(-150, 322), Vector2(300, 36)), "INSTALAR MÓDULO  /  ENTER", "modules")
+	_button(Rect2(center + Vector2(-150, 368), Vector2(300, 32)), "ESCOLHER DISTRITO / B", "districts")
+	_text_center("DISTRITO DE RESÍDUOS  /  ODS 12 — CONSUMO E PRODUÇÃO RESPONSÁVEIS", Vector2(size.x * 0.5, size.y - 19), 9, MUTED)
+
+func _draw_modules(size: Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.95))
+	var header := Rect2(size.x * 0.5 - 170, 23, 340, 36)
+	FieldHUD.panel(self, header)
+	FieldHUD.centered(self, "RESÍDUOS RECUPERADO / OFICINA P17", header.get_center() + Vector2(0, 4), 10, CYAN)
+	FieldHUD.centered(self, "Prepare-se para a rede elétrica.", Vector2(size.x * 0.5, 104), 25, WHITE)
+	FieldHUD.centered(self, "ESCOLHA UM MÓDULO PARA O DISTRITO DE ENERGIA", Vector2(size.x * 0.5, 132), 10, MUTED)
+	var options: Array = Loadout.RESIDUE_UPGRADES
+	var content_width := minf(size.x - 64, 1100)
+	var width := (content_width - 32) / 3
+	var height := minf(300, size.y - 236)
+	var top := maxf(158, (size.y - height) * 0.5 - 5)
+	var left := (size.x - content_width) * 0.5
+	for i in options.size():
+		var option: Dictionary = options[i]
+		var rect := Rect2(left + i * (width + 16), top, width, height)
+		FieldHUD.perk_card(self, rect, option.id, i, rect.has_point(game.pointer))
+		_wrapped(str(option.title).to_upper(), Rect2(rect.position + Vector2(24, 112), Vector2(width - 48, 47)), 16, WHITE, 21)
+		_wrapped(option.description, Rect2(rect.position + Vector2(24, 174), Vector2(width - 48, 62)), 12, MUTED, 17)
+		game.buttons.append({"rect": rect, "id": "module_%d" % i})
+	var footer := Rect2(size.x * 0.5 - 302, size.y - 50, 604, 32)
+	FieldHUD.panel(self, footer, CYAN)
+	var notice: String = game.module_notice
+	FieldHUD.centered(self, notice if notice != "" else "MÓDULOS ANTERIORES PRESERVADOS  /  CLIQUE OU PRESSIONE 1, 2 OU 3", footer.get_center() + Vector2(0, 4), 10, Color("e36b92") if notice != "" else CYAN)
+
+func _wrapped(value: String, rect: Rect2, font_size: int, color: Color, line_height: int) -> void:
+	var line := ""
+	var y := rect.position.y + font_size
+	for word in value.split(" "):
+		var candidate := word if line.is_empty() else line + " " + word
+		if ThemeDB.fallback_font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > rect.size.x and not line.is_empty():
+			_text(line, Vector2(rect.position.x, y), font_size, color)
+			line = word
+			y += line_height
+		else:
+			line = candidate
+	_text(line, Vector2(rect.position.x, y), font_size, color)
 
 func _overlay_buttons(retry: bool) -> void:
 	var center := get_viewport_rect().size * 0.5

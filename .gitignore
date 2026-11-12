@@ -19,6 +19,8 @@ captures/*
 !captures/beta_021/*.png
 !captures/residuos/
 !captures/residuos/*.png
+!captures/energia/
+!captures/energia/*.png
 
 # Generated distribution and local tooling
 outputs/
@@ -27,3 +29,4 @@ __pycache__/
 captures/beta/*.import
 captures/beta_021/*.import
 captures/residuos/*.import
+captures/energia/*.import
