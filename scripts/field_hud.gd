@@ -83,7 +83,10 @@ static func icon(c: CanvasItem, kind: String, r: Rect2, color: Color) -> void:
 			"shield": path = '<path d="M32 4 9 13v19c0 15 23 28 23 28s23-13 23-28V13Z" fill="none" stroke="white" stroke-width="4"/><path d="M29 18h6v10h10v6H35v11h-6V34H19v-6h10Z" fill="white"/>'
 			"battery": path = '<g fill="none" stroke="white" stroke-width="4"><rect x="13" y="13" width="38" height="45" rx="5"/><path d="M24 13V5h16v8M24 36h16M32 28v16"/></g>'
 			"frequency": path = '<g stroke="white" stroke-width="4" fill="none" stroke-linecap="round"><path d="M4 32h9l7-20 11 40 11-40 7 20h11M8 10h5m38 44h5"/></g>'
-			"recycle": path = '<g stroke="white" stroke-width="5" fill="none" stroke-linejoin="round"><path d="m18 24 13-18 12 20M37 13l6 13-14-1m15 8 12 20H32m14 7-14-7 8-12M24 52H7l12-20m-1 14 1-14 14 3"/></g>'
+			"grounded": path = '<g stroke="white" stroke-width="4" fill="none" stroke-linecap="round"><path d="M32 4v26M14 30h36M20 39h24M26 48h12M30 57h4"/></g><path d="M40 6 31 20h7l-4 10 11-15h-7Z" fill="white"/>'
+			"chain": path = '<g fill="none" stroke="white" stroke-width="4"><circle cx="13" cy="44" r="8"/><circle cx="51" cy="20" r="8"/></g><path d="M20 39 30 28l2 8 10-13" stroke="white" stroke-width="4" fill="none" stroke-linejoin="round"/><path d="M38 52h18M8 12h14" stroke="white" stroke-width="3"/>'
+			"sun": path = '<circle cx="32" cy="32" r="11" fill="white"/><g stroke="white" stroke-width="4" stroke-linecap="round"><path d="M32 4v9M32 51v9M4 32h9M51 32h9M12 12l6 6M46 46l6 6M12 52l6-6M46 18l6-6"/></g>'
+			"recycle": path ='<g stroke="white" stroke-width="5" fill="none" stroke-linejoin="round"><path d="m18 24 13-18 12 20M37 13l6 13-14-1m15 8 12 20H32m14 7-14-7 8-12M24 52H7l12-20m-1 14 1-14 14 3"/></g>'
 		var source := '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">' + path + '</svg>'
 		var image := Image.new()
 		if image.load_svg_from_string(source) == OK: _icons[kind] = ImageTexture.create_from_image(image)
@@ -128,10 +131,10 @@ static func fit(value: String, width: float, size: int) -> String:
 		if font.get_string_size(line + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= width: return line + "…"
 	return ""
 
-static func mission(c: CanvasItem, width: float, title: String, detail: String, status: String, stage: int, restored: int, total: int) -> void:
+static func mission(c: CanvasItem, width: float, title: String, detail: String, status: String, stage: int, restored: int, total: int, kind: String = "") -> void:
 	var p := Vector2(width - 346, 16)
 	panel(c, Rect2(p, Vector2(330, 120)))
-	icon(c, "water" if total == 4 else "recycle", Rect2(p + Vector2(16, 17), Vector2(18, 22)), GOLD)
+	icon(c, kind if not kind.is_empty() else ("water" if total == 4 else "recycle"), Rect2(p + Vector2(16, 17), Vector2(18, 22)), GOLD)
 	text(c, fit(title, 270, 14), p + Vector2(42, 32), 14, GOLD)
 	c.draw_line(p + Vector2(17, 41), p + Vector2(313, 41), Color("4c6557"), 1)
 	text(c, fit(detail, 292, 11), p + Vector2(18, 59), 11, WHITE)
@@ -199,6 +202,9 @@ static func perk_visual(id: String) -> Dictionary:
 		"clean_frequency": ["frequency", "+20%", "CADÊNCIA", "OFENSIVA", GOLD],
 		"living_circuit": ["shield", "+2", "INTEGRIDADE", "PROTEÇÃO", CYAN],
 		"water_stride": ["dash", "−0,15 s", "RECARGA", "MOBILIDADE", CYAN],
+		"grounded_suit": ["grounded", "−50%", "DANO ELÉTRICO", "PROTEÇÃO", CYAN],
+		"steady_hand": ["frequency", "+30%", "JANELA DE SINCRONIA", "OPERAÇÃO", GOLD],
+		"conductive_pulse": ["chain", "×2", "ALVOS POR PULSO", "OFENSIVA", GOLD],
 	}
 	var values: Array = data.get(id, ["network", "P17", "MÓDULO", "EQUIPAMENTO", GOLD])
 	return {"icon": values[0], "stat": values[1], "effect": values[2], "category": values[3], "color": values[4]}

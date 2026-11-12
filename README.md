@@ -1,18 +1,47 @@
 # Protocolo 17 — Aurora
 
-Beta candidata **0.2.1** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. Esta branch também contém a primeira versão jogável do **Distrito de Resíduos**, acessível após concluir Águas.
+Beta candidata **0.2.2** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. O **Distrito de Resíduos** é desbloqueado permanentemente após concluir Águas.
+
+## Seleção de distritos — 0.2.2
+
+Iniciar operação abre a seleção de Águas, Resíduos e Energia. Águas está sempre disponível; Resíduos fica bloqueado até a primeira vitória em Águas, e Energia até a vitória em Resíduos. O desbloqueio e as três melhorias da última conclusão ficam em `user://aurora_campaign.json`, separados do checkpoint de Águas. Fechar o jogo ou iniciar Águas novamente não apaga o acesso a Resíduos. Ao escolher Resíduos, selecione a dificuldade; as melhorias da última conclusão de Águas serão aplicadas.
+
+Em Resíduos, use a pausa e **Escolher distrito** para voltar à seleção. A derrota e a vitória também oferecem esse retorno. Sair de uma tentativa reinicia as tarefas de Resíduos; o acesso e as melhorias continuam salvos. O progresso dentro de Resíduos ainda não é salvo entre sessões.
+
+Os inimigos de Resíduos usam a mesma regra de resistência do último setor de Águas: explorador com 11 de vida, sentinela com 13 e chefe com 80. Drones de alarme têm 11. Vida atual e máxima ficam registradas por inimigo e as barras usam esses valores; melhorias de dano continuam funcionando. Mapa e pausa do HUD de Resíduos também aceitam clique, e pausar descarta ataques pendentes.
+
+Validação adicional: `tests/test_campaign_selection.gd`, `tests/test_residue_health.gd`, `tests/test_residue_transition.gd` e `tools/review_district_selection.gd`. Execute testes de persistência com uma pasta de dados separada para não alterar seu progresso.
 
 ## Executar
 
 1. Abra o `project.godot` da raiz no Godot 4.7.1.
 2. Aguarde a importação dos recursos e pressione F5.
-3. Escolha uma nova operação e o nível de dificuldade. O prólogo existente pode ser pulado.
+3. Escolha uma nova operação, o distrito e o nível de dificuldade. O prólogo de Águas pode ser pulado.
 
 O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações da beta ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
 
 ## Distrito de Resíduos
 
-Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Também é possível abrir `scenes/residues.tscn` diretamente no editor para revisar a fase. O bairro industrial possui uma avenida de serviço, ruas de acesso, galpão de triagem com docas abertas, usina de reciclagem e compostagem cercada. Prensas, esteiras, braços, postes, caminhão de coleta e estoques explicam o funcionamento do lugar. Use **E** para recolher e classificar materiais, liberar as esteiras e reabrir a ventilação; **M** mostra o mapa e a rota pelas entradas. Dificuldade e melhorias de Águas são transferidas durante a execução. Salvar Resíduos entre sessões e seguir para Energia ainda não estão implementados.
+Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Também é possível abrir `scenes/residues.tscn` diretamente no editor para revisar a fase. O bairro industrial possui uma avenida de serviço, ruas de acesso, galpão de triagem com docas abertas, usina de reciclagem e compostagem cercada. Prensas, esteiras, braços, postes, caminhão de coleta e estoques explicam o funcionamento do lugar. Use **E** para recolher e classificar materiais, liberar as esteiras e reabrir a ventilação; **M** mostra o mapa e a rota pelas entradas. Dificuldade e melhorias de Águas são transferidas durante a execução. A vitória em Resíduos abre a **oficina de módulos** (Isolamento, Sobrecarga controlada ou Pulso condutor), salva a conclusão e segue direto para o Distrito de Energia.
+
+## Distrito de Energia — Operação Corrente
+
+Última fase antes do confronto final, desbloqueada após Resíduos (card **03 / ENERGIA**). A IA apagou o distrito: a Lia avança no escuro com uma lanterna, e cada instalação restaurada acende o setor.
+
+- **Central Solar Aurora:** atire nos espelhos para levar o feixe ao coletor. Depois faça a **Sobrecarga**: três toques de E na faixa verde, que se move e encolhe. Errar descarrega e trava o console.
+- **Torre de Distribuição Norte:** atravesse os arcos rítmicos do corredor e destrua o transformador que dá escudo aos drones. Energize os três relés com tiros dentro da janela e estabilize a rede oscilante.
+- **Banco de Baterias Central:** fique no anel para carregar a reserva enquanto alivia as células críticas nos consoles, sob quatro ondas.
+- **Elevador do Núcleo:** encerra a operação.
+
+Os três fragmentos do registro de Beatrix fecham a história do comando redigido. A vitória salva a campanha; o card **04 / NÚCLEO AURORA** aparece como "em produção".
+
+A arte atual é provisória, desenhada em código sobre a geometria final. Os prompts do Codex estão em [assets/power/PROMPTS.md](assets/power/PROMPTS.md); o jogo troca para os setores pintados assim que os arquivos existirem.
+
+![Sobrecarga na Central Solar](captures/energia/03-sobrecarga.png)
+
+[Mapa, mecânicas e inimigos](docs/direcao-visual/distrito-de-energia.md) · [Design do chefe final](docs/direcao-visual/nucleo-aurora.md) · [Distrito apagado](captures/energia/08-distrito-apagado.png) · [Distrito aceso](captures/energia/08-distrito-aceso.png) · [Banco de Baterias](captures/energia/06-baterias.png).
+
+Testes: `test_power_mechanics`, `test_power`, `test_power_collision`, `test_power_smoke` e `test_campaign_flow`. Capturas: `tools/review_power.gd` (precisa de renderização, sem `--headless`).
 
 ![Triagem no Distrito de Resíduos](captures/residuos/02-baias.png)
 

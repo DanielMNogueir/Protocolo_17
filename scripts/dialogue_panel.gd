@@ -41,6 +41,15 @@ static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time:
   canvas.draw_line(Vector2(rect.position.x+4,y),Vector2(rect.end.x-4,y),Color("35565a",0.18),1)
  if kind=="beatrix":
   Beatrix.portrait(canvas,rect.grow(-4))
+ elif kind=="beatrix_record":
+  _beatrix_record(canvas,rect.grow(-4),time)
+ elif kind=="lia":
+  # Lia's own front three-quarter sprite, the same crop the field HUD uses.
+  var area:=rect.grow(-4)
+  var crop:=Rect2(318,270,116,142)
+  var scale_value:=minf(area.size.x/crop.size.x,area.size.y/crop.size.y)
+  var extent:=crop.size*scale_value
+  canvas.draw_texture_rect_region(FieldHUD.FACE,Rect2(area.get_center()-extent*0.5,extent),crop)
  elif kind=="terminal":
   var area:=rect.grow(-4)
   var scale_value:=minf(area.size.x/AI_PORTRAIT.get_width(),area.size.y/AI_PORTRAIT.get_height())
@@ -68,6 +77,26 @@ static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time:
   canvas.draw_rect(Rect2(rect.position+Vector2(28,80),Vector2(52,3)),Color("5d7777"))
   for n in range(3): canvas.draw_rect(Rect2(rect.position+Vector2(36+n*14,90),Vector2(5,2)),accent)
  canvas.draw_rect(Rect2(rect.position+Vector2(11,rect.size.y-3),Vector2(29,2)),accent)
+
+## Beatrix's preserved record, replayed through the power grid. Uses the painted
+## hologram when assets/power/beatrix_digital.png exists, otherwise tints the
+## prologue portrait with scanlines and a rolling interference band.
+static func _beatrix_record(canvas: Node2D,area: Rect2,time: float) -> void:
+ var path:="res://assets/power/beatrix_digital.png"
+ if ResourceLoader.exists(path):
+  var texture: Texture2D=load(path)
+  var scale_value:=minf(area.size.x/texture.get_width(),area.size.y/texture.get_height())
+  var extent:=texture.get_size()*scale_value
+  canvas.draw_texture_rect(texture,Rect2(area.get_center()-extent*0.5,extent),false)
+ else:
+  Beatrix.portrait(canvas,area)
+  canvas.draw_rect(area,Color(0.25,0.85,0.95,0.22))
+ var band:=fposmod(time*38.0,area.size.y+20)-10
+ canvas.draw_rect(Rect2(area.position.x,area.position.y+band,area.size.x,5).intersection(area),Color(0.62,0.95,1.0,0.22))
+ for y in range(int(area.position.y),int(area.end.y),3):
+  canvas.draw_line(Vector2(area.position.x,y),Vector2(area.end.x,y),Color(0.02,0.1,0.14,0.35),1)
+ if fposmod(time,2.7)<0.08:
+  canvas.draw_rect(Rect2(area.position+Vector2(0,area.size.y*0.4),Vector2(area.size.x,6)),Color(0.62,0.95,1.0,0.5))
 
 static func draw(canvas: Node2D,size: Vector2,speaker: String,label: String,text: String,complete: bool,fast: bool,time: float,alarm: bool=false,next_label: String="") -> void:
  var parts:=layout(size)
