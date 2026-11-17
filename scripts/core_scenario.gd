@@ -289,7 +289,7 @@ func _interact_pillars(pressed: bool) -> void:
 			_damage(true)
 		"fallen":
 			active_pillar = -1
-			sound.play_sfx("emp")
+			sound.play_sfx("pillar_fall")
 			_emit(Map.pillars()[index], HUD.CYAN, 0.5)
 
 
@@ -363,14 +363,14 @@ func _boss_events() -> void:
 						state = "collapse"
 						sound.set_mood("boss")
 					"down":
-						sound.set_mood("calm")
+						sound.set_mood("decision")
 						_talk(Story.CHOICE_INTRO, "choice")
 			"attack_warn":
-				sound.play_sfx("overload_start")
+				sound.play_sfx("laser_warn" if boss.attack == "laser" else "overload_start")
 			"laser_fire":
-				sound.play_sfx("discharge")
+				sound.play_sfx("laser_fire")
 			"sunrise":
-				sound.play_sfx("power_up")
+				sound.play_sfx("sunrise")
 		if event in Story.TOASTS:
 			toast = Story.TOASTS[event]
 			if event == "adaptive":
@@ -579,12 +579,14 @@ func _start_ending() -> void:
 	_clear_input()
 	ending.start(choice.result)
 	state = "ending"
-	sound.set_mood("grid" if choice.result == "ai" else "victory")
-	sound.play_sfx("power_up" if choice.result == "ai" else "complete")
+	sound.set_mood("final_ai" if choice.result == "ai" else "victory")
+	sound.play_sfx("antenna_beam" if choice.result == "ai" else "complete")
 
 
 func _advance_ending(skip: bool, dt: float = 0.0) -> void:
+	var previous := ending.sequence
 	var transition := ending.step(dt, skip)
+	if previous != ending.sequence and ending.sequence == "signal": sound.play_sfx("radio_static")
 	match transition:
 		"human_dialogue": _talk(Story.ISOLATE_DONE, "overlook")
 		"ai_dialogue": _talk(Story.RELEASE_DONE, "ai_cards")
@@ -609,7 +611,7 @@ func _reopen() -> void:
 	pos = Map.ARRIVAL
 	velocity = Vector2.ZERO
 	state = "choice"
-	sound.set_mood("calm")
+	sound.set_mood("decision")
 
 
 func _talk(lines: Array, next: String) -> void:
@@ -618,6 +620,7 @@ func _talk(lines: Array, next: String) -> void:
 	after_dialogue = next
 	state = "dialogue"
 	velocity = Vector2.ZERO
+	if not dialogue.is_empty() and dialogue[0].speaker == "major_glitch": sound.play_sfx("radio_static")
 	_clear_input()
 
 
@@ -777,6 +780,8 @@ func _present(dt: float) -> void:
 	guide.update(dt, pos, _waypoint, point, Transform2D(0.0, world_offset()), HUD.Field.guide_safe_rect(size, -1.0, 201.0, 195.0 if active_pillar >= 0 else HUD.Field.GUIDE_BOTTOM),
 		active, objective.place, size)
 	guide.cues(dt, sound)
+	var hum := clampf(1.0 - pos.distance_to(Map.CENTER) / 650.0, 0.0, 1.0)
+	sound.set_structure_hum(not in_gallery and state in ["arena", "choice", "overlook"], hum, true)
 	queue_redraw()
 	_fx.queue_redraw()
 	_hud.queue_redraw()

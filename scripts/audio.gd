@@ -9,7 +9,11 @@ const EFFECT_DB := -9.0
 const MAX_VOICES := 10
 const EnemyAudio := preload("res://scripts/enemy_audio.gd")
 ## "blackout" scores the dark Energy district; "grid" plays once power returns.
-const MOODS := ["menu", "calm", "combat", "boss", "victory", "suspense", "blackout", "grid"]
+const MOODS := ["menu", "calm", "combat", "boss", "victory", "suspense", "blackout", "grid", "decision", "final_ai"]
+const CORE_EFFECTS := {
+	"laser_warn": 1.0, "laser_fire": 0.9, "pillar_fall": 0.64,
+	"sunrise": 1.7, "antenna_beam": 3.0, "radio_static": 0.4,
+}
 const POWER_EFFECTS := ["arc", "discharge", "pulse_hit", "mirror", "relay", "vent", "emp", "power_up", "shield", "overload_start"]
 
 var _music: Array[AudioStreamPlayer] = []
@@ -104,11 +108,15 @@ func set_mood(mood: String) -> void:
 			_music[old].stop()
 		return
 	_fade = create_tween().set_parallel(true)
-	_fade.tween_property(next, "volume_db", MUSIC_DB, 0.8)
+	_fade.tween_property(next, "volume_db", _music_volume(), 0.8)
 	if old >= 0:
 		var previous := _music[old]
 		_fade.tween_property(previous, "volume_db", -50.0, 0.7)
 		_fade.chain().tween_callback(previous.stop)
+
+
+func _music_volume() -> float:
+	return MUSIC_DB + (linear_to_db(0.6) if _mood == "decision" else 0.0)
 
 
 func set_muted(value: bool) -> void:
@@ -116,7 +124,7 @@ func set_muted(value: bool) -> void:
 	if is_instance_valid(_fade):
 		_fade.kill()
 	for index in range(_music.size()):
-		_music[index].volume_db = MUSIC_DB if not value and index == _current else -80.0
+		_music[index].volume_db = _music_volume() if not value and index == _current else -80.0
 		if index != _current:
 			_music[index].stop()
 	if value:
@@ -126,15 +134,15 @@ func set_muted(value: bool) -> void:
 			_structure_hum.stop()
 
 
-func set_structure_hum(active: bool, proximity: float) -> void:
+func set_structure_hum(active: bool, proximity: float, core: bool = false) -> void:
 	_prepare_players()
 	if _muted or not active or proximity <= 0.01:
 		if _structure_hum.playing:
 			_structure_hum.stop()
 		return
 	if _structure_hum.stream == null:
-		_structure_hum.stream = _make_structure_hum()
-	_structure_hum.volume_db = lerpf(-34.0, -20.0, clampf(proximity, 0.0, 1.0))
+		_structure_hum.stream = _make_structure_hum(core)
+	_structure_hum.volume_db = lerpf(-34.0, -20.0, clampf(proximity, 0.0, 1.0)) - (4.0 if core else 0.0)
 	if not _structure_hum.playing:
 		_structure_hum.play()
 
@@ -158,11 +166,11 @@ func play_sfx(id: String) -> void:
 
 
 func _compose(mood: String) -> AudioStreamWAV:
-	if mood in ["blackout", "grid"]:
-		return _compose_power(mood == "grid")
-	var urgent := mood in ["combat", "boss", "suspense"]
+	if mood in ["blackout", "grid", "final_ai"]:
+		return _compose_power(mood != "blackout", mood == "final_ai")
+	var urgent := mood in ["combat", "boss", "suspense", "decision"]
 	var boss := mood == "boss"
-	var suspense := mood == "suspense"
+	var suspense := mood in ["suspense", "decision"]
 	var bright := mood == "victory"
 	var step := 0.30 if not urgent else (0.19 if boss else 0.235)
 	if suspense:
@@ -211,7 +219,7 @@ func _compose(mood: String) -> AudioStreamWAV:
 ## Energy district score. Blackout: a mains-hum drone, sparse low plucks and a
 ## relay tick, in A minor. Grid: the same phrase lifted to A major with a steady
 ## pulse, for districts that are powered again.
-func _compose_power(powered: bool) -> AudioStreamWAV:
+func _compose_power(powered: bool, minor: bool = false) -> AudioStreamWAV:
 	var step := 0.27 if powered else 0.32
 	var step_count := 32
 	var result := PackedFloat32Array()
@@ -223,6 +231,10 @@ func _compose_power(powered: bool) -> AudioStreamWAV:
 	if powered:
 		melody = [57, 61, 64, 69, 68, 64, 61, 64, 62, 66, 69, 74, 73, 69, 66, 69,
 			64, 68, 71, 76, 74, 71, 68, 71, 60, 64, 67, 72, 71, 67, 64, 61]
+	if minor:
+		for beat in step_count:
+			if melody[beat] % 12 in [1, 6, 8]:
+				melody[beat] -= 1
 	for beat in range(step_count):
 		var root_note: int = roots[beat / 8]
 		var offset := int(beat * step * RATE)
@@ -242,6 +254,7 @@ func _compose_power(powered: bool) -> AudioStreamWAV:
 	for index in range(result.size()):
 		var t := float(index) / RATE
 		result[index] += (sin(TAU * 55.0 * t) * 0.05 + sin(TAU * 165.0 * t) * (0.012 if powered else 0.02))
+		if minor: result[index] += sin(TAU * 27.5 * t) * 0.14
 	return _wav(result, true)
 
 
@@ -309,6 +322,8 @@ func _make_effect(id: String) -> AudioStreamWAV:
 		return EnemyAudio.make_effect(id)
 	if id in POWER_EFFECTS:
 		return _make_power_effect(id)
+	if id in CORE_EFFECTS:
+		return _make_core_effect(id)
 	var duration := 0.18
 	match id:
 		"shoot": duration = 0.09
@@ -413,13 +428,56 @@ func _make_power_effect(id: String) -> AudioStreamWAV:
 	return _wav(samples, false)
 
 
-func _make_structure_hum() -> AudioStreamWAV:
-	var duration := 1.6
+func _make_core_effect(id: String) -> AudioStreamWAV:
+	var duration: float = CORE_EFFECTS[id]
+	var samples := PackedFloat32Array()
+	samples.resize(roundi(duration * RATE))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 170827
+	var phase := 0.0
+	var noise := 0.0
+	for index in samples.size():
+		var t := float(index) / RATE
+		var p := t / duration
+		noise = lerpf(noise, rng.randf_range(-1.0, 1.0), 0.2)
+		var hz := 0.0
+		var gain := 0.25
+		var grit := 0.0
+		match id:
+			"laser_warn":
+				hz = lerpf(400.0, 900.0, p)
+				gain = 0.12 + 0.16 * p
+			"laser_fire":
+				hz = 88.0
+				grit = 0.8
+			"pillar_fall":
+				hz = lerpf(155.0, 39.0, p)
+				grit = 0.64
+			"sunrise":
+				var note := mini(floori(p * 3.0), 2)
+				hz = [330.0, 440.0, 554.37][note]
+				gain *= pow(1.0 - fposmod(p * 3.0, 1.0), 0.5)
+			"antenna_beam":
+				hz = lerpf(82.0, 440.0, p)
+				grit = 0.19
+			"radio_static":
+				grit = 0.73
+		phase += TAU * hz / RATE
+		var envelope := minf(1.0, t / 0.018) * minf(1.0, (1.0 - p) * 6.0)
+		samples[index] = (sin(phase) * gain + noise * grit) * envelope
+	return _wav(samples, false)
+
+
+func _make_structure_hum(core: bool = false) -> AudioStreamWAV:
+	var duration := 2.0 if core else 1.6
 	var samples := PackedFloat32Array()
 	samples.resize(int(duration * RATE))
 	for index in range(samples.size()):
 		var t := float(index) / RATE
 		var low := sin(TAU * 55.0 * t) * 0.25 + sin(TAU * 110.0 * t) * 0.09
+		if core:
+			samples[index] = low * (0.7 + 0.3 * sin(TAU * 3.0 * t)) * 0.44
+			continue
 		var motor := sin(TAU * 27.5 * t + sin(TAU * 0.625 * t) * 0.12) * 0.08
 		var pulse := pow(maxf(0.0, sin(TAU * 1.25 * t)), 12.0) * sin(TAU * 330.0 * t) * 0.10
 		samples[index] = (low + motor + pulse) * 0.42

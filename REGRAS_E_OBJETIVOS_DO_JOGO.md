@@ -250,13 +250,11 @@ A fase segue as regras acima. Cada instalação acrescenta uma mecânica própri
 
 ### Confronto final
 
-Depois de restaurar a rede e avançar pelo complexo, Lia enfrenta a forma física da IA. Ao ser derrotada, a estrutura robótica é destruída e o núcleo entra em pausa.
+Na Galeria do Núcleo, Lia descobre que Major 0 é a voz que a IA sintetizou para operar o canal de emergência criado por Beatrix. As restaurações manuais em Águas, Resíduos e Energia reabriram a rede e deram à IA os materiais e a energia para construir um corpo.
 
-A IA não é eliminada: transfere sua consciência para um protocolo de emergência escondido e envia uma transmissão para o antigo laboratório da Doutora Beatrix. A mensagem exibida é:
+Na Coroa da Torre, Lia derruba os pilares, alinha os espelhos e vence o núcleo exposto. Depois de ouvir Beatrix e a IA, ela pode isolar o núcleo pelo console ciano ou liberar a rede pelo console magenta. Cada escolha tem um epílogo e créditos próprios.
 
-> PROTOCOLO DE EMERGÊNCIA ATIVADO.
-
-Esse encerramento mantém a ameaça viva e prepara a continuação da história.
+No final da humanidade, os moradores voltam e a recuperação ambiental passa a depender deles. O laboratório recebe a mensagem **PROTOCOLO DE EMERGÊNCIA ATIVADO.** No final da IA, Aurora se recupera ambientalmente, os moradores deixam a cidade sem direito a decidir e a rede alcança outros distritos.
 
 ## 10. Condições de vitória e derrota
 
@@ -266,9 +264,9 @@ Lia vence um cenário quando todos os objetivos obrigatórios aparecem como conc
 
 ### Derrota
 
-Lia é derrotada quando sua vida chega a zero. O cenário atual reinicia integralmente, mantendo os powers/buffs permanentes adquiridos anteriormente.
+Lia é derrotada quando sua vida chega a zero. O reinício preserva os módulos permanentes. No Núcleo, a Galeria fica concluída e a arena recomeça na primeira fase no Médio ou no Difícil, ou na fase atual no Fácil.
 
 ### Vitória da campanha
 
-A campanha termina quando os objetivos do Distrito de Energia e do confronto final são concluídos. A resolução narrativa deve mostrar que Aurora foi recuperada sem aceitar a solução da IA de eliminar a humanidade.
+A campanha termina ao concluir um dos dois finais após o confronto. O final da humanidade é o desfecho oficial. O final da IA é um desfecho alternativo escolhido pelo jogador. O save registra os finais vistos, e a tela da campanha permite voltar à escolha.
 
