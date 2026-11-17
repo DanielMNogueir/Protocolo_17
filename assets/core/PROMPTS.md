@@ -81,6 +81,6 @@ Anexar:
 
 ## Depois de gerar
 
-1. Rode `tools/import_core_art.gd` (ver o plano em `docs/codex/PLANO_FASE_FINAL.md`, etapa 2). Ele recorta as folhas pelo canal alfa e escreve `assets/core/frames.json`.
+1. Rode `tools/import_core_art.gd` (ver o plano em `docs/codex/PLANO_FASE_FINAL.md`, etapa 3). Ele recorta as folhas pelo canal alfa e escreve `assets/core/frames.json`.
 2. Rode `tools/review_core.gd` e abra as capturas em `captures/nucleo/`.
 3. Confira três coisas: a Lia e os inimigos nunca ficam escondidos pelos pilares ou pelo núcleo; os pés de todos os objetos encostam no chão; as versões de noite e de amanhecer da arena se sobrepõem sem deslocamento.

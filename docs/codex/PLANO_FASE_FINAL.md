@@ -4,6 +4,7 @@
 > **Quem escreveu:** o Claude. O Luiz aprovou a reviravolta "Major 0 era a IA" e a Decisão com dois finais. O restante é a proposta do Claude; os pontos ainda em aberto estão logo abaixo. Siga este documento. Se algo aqui contradisser o código, o código atual vence nos detalhes técnicos e este plano vence nas decisões de jogo.
 > **Plano visual com imagens de blocagem:** abra `docs/codex/blocagem/nucleo-aurora-plano.html` num navegador. As imagens ficam em `docs/codex/blocagem/img/`.
 > **Prompts de arte:** [`assets/core/PROMPTS.md`](../../assets/core/PROMPTS.md)
+> **UI e indicadores de objetivo (todas as fases):** [`PLANO_UI_INDICADORES.md`](PLANO_UI_INDICADORES.md). Em UI, HUD, setas e textos, vale ele. As etapas abaixo foram renumeradas para incluí-lo; os números de etapa na página de blocagem em HTML são da versão anterior.
 
 ### Decisões em aberto (confirmar com o Luiz e a equipe; até lá, use o valor indicado)
 
@@ -12,7 +13,7 @@
 | A equipe aprova mudar o papel de Major 0 e ter um final alternativo da IA? | sim |
 | Números canônicos: 41 dias, 87%, 94%, 410 t/dia, 48.000 moradores | usar estes |
 | Checkpoint por fase só no modo história | sim (6.4) |
-| A etapa 4 (IA dos inimigos) mexe em Energia? | não |
+| A etapa 5 (IA dos inimigos) mexe em Energia? | não |
 | Nomes dos créditos | "EQUIPE PROTOCOLO 17" |
 | A build da apresentação sai com o botão de teste? | decidir antes da build (3.4) |
 
@@ -32,7 +33,7 @@
 11. Arte: provisória agora, final depois
 12. Arquivos a criar e alterar
 13. Testes e verificação
-14. Etapa 4: IA dos inimigos
+14. Etapa 5: IA dos inimigos
 15. Pendências do repositório
 16. Lista de aceite antes da apresentação
 
@@ -56,7 +57,7 @@
   Ferramentas de captura (`tools/review_*.gd`) precisam de renderizador, então rode **sem** `--headless`.
 - **Rodar o Godot reescreve as quebras de linha dos arquivos `.import`.** Antes de commitar, desfaça isso com `git checkout -- '*.import'` nos arquivos que você não alterou de propósito.
 - **Falhas que já existiam:** `test_dialogue_panel` e `test_hydraulics` travam em modo headless, e `test_beta_endurance` falha em veterano/rota 1 no setor 4. As três coisas já aconteciam antes desta etapa e não indicam regressão.
-- **Não altere a jogabilidade de Energia.** O Luiz a considera perfeita. A única mudança permitida em Energia é o elevador carregar a fase final (seção 3).
+- **Não altere a jogabilidade de Energia.** O Luiz a considera perfeita. As únicas mudanças permitidas em Energia são o elevador carregar a fase final (seção 3) e a **apresentação** da UI descrita em `PLANO_UI_INDICADORES.md` (seta, farol, prompts, fontes). Mecânicas, números, tempos, colisão e a rota de `guidance_point()` não mudam.
 - **Ninguém fica escondido:** atores atrás de estruturas altas recebem silhueta com `scripts/occlusion.gd` (`Occlusion.is_hidden`, `draw_lia_ghost` e `draw_drone_ghost`). Use isso na galeria e na arena, para pilares, núcleo e consoles.
 
 ---
@@ -65,10 +66,11 @@
 
 | Etapa | Entrega | Pronto quando |
 |---|---|---|
-| **1. Jogo inteiro jogável** (prioridade da apresentação) | Elevador → Galeria → luta de 3 fases → Decisão → dois finais → créditos → tela de campanha. Arte provisória em código, reaproveitando assets que já existem. | Um jogador vai do prólogo aos créditos sem o botão de teste. Os testes da seção 13 passam. |
-| **2. Arte final** | As 8 imagens de `assets/core/PROMPTS.md`, importadas e integradas | `tools/review_core.gd` gera capturas sem ninguém escondido e com noite e amanhecer alinhados |
-| **3. Acabamento** | Áudio, sementes narrativas nos distritos anteriores, REGRAS e README | Lista de aceite da seção 16 |
-| **4. IA dos inimigos** | `scripts/enemy_brain.gd` em Águas e Resíduos | Seção 14 |
+| **1. Jogo inteiro jogável** (prioridade da apresentação) | **Comece criando `scripts/objective_guide.gd` e o teste dele (`PLANO_UI_INDICADORES.md`, seção 1)**, para o Núcleo já nascer com o guia novo. Depois: Elevador → Galeria → luta de 3 fases → Decisão → dois finais → créditos → tela de campanha. Arte provisória em código, reaproveitando assets que já existem. | Um jogador vai do prólogo aos créditos sem o botão de teste. Os testes da seção 13 passam. |
+| **2. UI e indicadores em todas as fases** (antes da apresentação) | `PLANO_UI_INDICADORES.md`, seção 7: guia único no prólogo, em Águas, em Resíduos e em Energia; fontes legíveis; prompts unificados; opção de intensidade do guia; dica da primeira vez | Lista de aceite da seção 9 de `PLANO_UI_INDICADORES.md` |
+| **3. Arte final** | As 8 imagens de `assets/core/PROMPTS.md`, importadas e integradas | `tools/review_core.gd` gera capturas sem ninguém escondido e com noite e amanhecer alinhados |
+| **4. Acabamento** | Áudio, sementes narrativas nos distritos anteriores, REGRAS e README | Lista de aceite da seção 16 |
+| **5. IA dos inimigos** | `scripts/enemy_brain.gd` em Águas e Resíduos | Seção 14 |
 
 Commite ao fim de cada etapa, com mensagens no estilo do histórico ("feat: …").
 
@@ -232,7 +234,7 @@ const PIER_RADIO := "Agente, recebemos um sinal do cais. A rede não responde."
 
 **Observação sobre a última fala do final da IA:** `PIER_RADIO` repete de propósito a primeira fala de Major 0 no prólogo (`scripts/prologue_presentation.gd`: "Lia, recebemos um sinal do cais. A rede não responde."), trocando o nome da agente. A IA vai repetir o golpe em outra cidade.
 
-### 2.5 Sementes nos distritos anteriores (etapa 3)
+### 2.5 Sementes nos distritos anteriores (etapa 4)
 
 Estas linhas preparam o argumento da IA e mostram que os números dela são reais. São linhas de dado frio, sem opinião.
 
@@ -324,7 +326,7 @@ Sala de passagem, **sem combate**, com cerca de 60 a 90 segundos. Ela também é
 - Elevador aberto e terminal online de `assets/power/terminals_atlas.png`, células 4 e 2.
 - Consoles de `assets/power/props_atlas.png`.
 - Racks, esteira e berço desenhados em código.
-- Na etapa 2, troque tudo por `assets/core/gallery.png` com os bloqueios medidos sobre a arte.
+- Na etapa 3, troque tudo por `assets/core/gallery.png` com os bloqueios medidos sobre a arte.
 
 ---
 
@@ -366,7 +368,7 @@ Reaproveite `scripts/power_lighting.gdshader` (uniformes `darkness`, `lights[40]
 | Fase 3 e Decisão | 0.15 | `#ffb978`, alfa 0.12 | tudo |
 | Final da IA | 0.3 | magenta `#e36b92`, alfa 0.22 | feixe da antena |
 
-Na etapa 2, a arena de noite (`arena_night.png`) e a de amanhecer (`arena_dawn.png`) fazem um crossfade guiado por `dawn_amount`, que vai de 0 a 1 entre o meio da fase 2 e o início da fase 3.
+Na etapa 3, a arena de noite (`arena_night.png`) e a de amanhecer (`arena_dawn.png`) fazem um crossfade guiado por `dawn_amount`, que vai de 0 a 1 entre o meio da fase 2 e o início da fase 3.
 
 ---
 
@@ -626,7 +628,7 @@ Siga `scripts/power_hud.gd`.
 | Decisão | A DECISÃO | OUÇA OS DOIS LADOS (E) / SEGURE E PARA DECIDIR | 2 (lados ouvidos) |
 | Mirante | MIRANTE | VÁ ATÉ O GUARDA-CORPO | — |
 
-- **Seta guia:** a divisa dourada de Energia (`power_scenario.gd::_update_guidance` / `guidance_point`), sempre apontando para o objetivo atual:
+- **Seta guia:** use `P17ObjectiveGuide` (`scripts/objective_guide.gd`, especificado em `PLANO_UI_INDICADORES.md`, seção 1): seta junto da Lia, farol no destino e marcador de borda. A rota segue o padrão de `power_scenario.gd::_update_guidance` / `guidance_point`. O destino é sempre o objetivo atual:
   - fase 1: pilar de pé mais próximo;
   - fase 2: espelho desalinhado mais próximo, ou o núcleo durante a queima;
   - fase 3: o núcleo;
@@ -686,7 +688,7 @@ Siga `scripts/power_hud.gd`.
 - **Consoles da Decisão:** relé ligado (`props_atlas` linha 3, coluna 2) como console ciano e console crítico (linha 4, coluna 2) como console magenta.
 - **Faíscas:** `assets/power/spark.png`, com a lógica de Energia.
 
-### 11.2 Etapa 2: arte final
+### 11.2 Etapa 3: arte final
 
 1. Gere as imagens de `assets/core/PROMPTS.md`.
 2. Crie `tools/import_core_art.gd` com base em `tools/import_enemy_art.gd`:
@@ -731,7 +733,9 @@ Siga `scripts/power_hud.gd`.
 | `scripts/main.gd` | alterar | Card 04, `_open_core`, "Continuar", detalhe no título, semente de Águas, estatísticas de Águas, `DEV_TOOLS` |
 | `scripts/residue_scenario.gd`, `scripts/residue_hud.gd` | alterar | Estatísticas e semente (2.5) |
 | `scripts/dialogue_panel.gd` | alterar | Speakers `major_glitch` e `beatrix_live` (2.3) |
-| `scripts/field_hud.gd` | alterar | `campaign(c, 4, t)` = tudo concluído |
+| `scripts/field_hud.gd` | alterar | `campaign(c, 4, t)` = tudo concluído; constantes de painéis, `guide_safe_rect`, `prompt` e fontes (`PLANO_UI_INDICADORES.md`) |
+| `scripts/objective_guide.gd` | criar | Guia de objetivo único para todas as cenas (`PLANO_UI_INDICADORES.md`, seção 1) |
+| `tests/test_objective_guide.gd` | criar | `PLANO_UI_INDICADORES.md`, seção 8 |
 | `scripts/audio.gd` | alterar | Seção 10 |
 | `tools/import_core_art.gd`, `tools/review_core.gd` | criar | Seção 11 |
 | `tests/…` | criar e alterar | Seção 13 |
@@ -787,6 +791,7 @@ Rode depois de cada etapa:
 - **Campanha e regras:** `test_beta_rules`, `test_simulation`, `test_beta_input`, `test_beta_storage`, `test_campaign_flow`, `test_campaign_selection`, `test_beta_playthrough`.
 - **Águas e mundo:** `test_world`, `test_water_layout`, `test_objectives`, `test_occlusion`.
 - **Com renderizador:** `test_residue_presentation`, `test_water_rendering`, `test_district_architecture`.
+- **UI:** `test_objective_guide` e as capturas de `tools/review_hud.gd` em `captures/ui/` (`PLANO_UI_INDICADORES.md`, seção 8).
 
 ### 13.3 Jogar de verdade
 
@@ -794,7 +799,7 @@ Abra o projeto no Godot e jogue do título aos créditos, uma vez para cada fina
 
 ---
 
-## 14. Etapa 4: IA dos inimigos (depois do jogo completo)
+## 14. Etapa 5: IA dos inimigos (depois do jogo completo)
 
 **Escopo:** Águas (`scripts/simulation.gd`) e Resíduos (`scripts/residue_scenario.gd`). **Energia só com aprovação do Luiz.** Crie `scripts/enemy_brain.gd`, lógica pura usada pelos dois.
 
@@ -841,7 +846,7 @@ Abra o projeto no Godot e jogue do título aos créditos, uma vez para cada fina
 ## 16. Lista de aceite antes da apresentação
 
 - [ ] Do título aos créditos sem o botão de teste, nos dois finais, sem erro no console.
-- [ ] Em toda tela da arena, o jogador sabe **onde está** (topo da torre, cidade embaixo), **o que fazer** (painel de objetivo e seta) e **em que ponto da campanha está** (faixa "DISTRITO 4/4" e barra do chefe com a fase).
+- [ ] Em toda tela da arena, o jogador sabe **onde está** (topo da torre, cidade embaixo), **o que fazer** (painel de objetivo e seta) e **em que ponto da campanha está** (faixa "CONFRONTO FINAL" e barra do chefe com a fase).
 - [ ] A Lia, as Faíscas e o núcleo nunca ficam escondidos por pilares, espelhos ou consoles. Quando ficam atrás de algo, aparece a silhueta.
 - [ ] Todo ataque do chefe tem aviso antes do dano, e todo anel tem brecha.
 - [ ] A revelação de Major 0 acontece na galeria, como pista, e se confirma na abertura da arena. A fala `PIER_RADIO` repete a primeira fala do prólogo.
@@ -851,3 +856,4 @@ Abra o projeto no Godot e jogue do título aos créditos, uma vez para cada fina
 - [ ] O FPS fica estável na arena com espiral, Faíscas e luz. Meta: 60 FPS em 960×540.
 - [ ] Testes da seção 13 passando. As falhas antigas listadas na seção 0 seguem iguais.
 - [ ] Capturas de `tools/review_core.gd` revisadas uma a uma.
+- [ ] Lista de aceite da UI (`PLANO_UI_INDICADORES.md`, seção 9) cumprida em todas as fases.
