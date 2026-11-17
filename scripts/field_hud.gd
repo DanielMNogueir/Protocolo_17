@@ -19,6 +19,7 @@ static func centered(c: CanvasItem, value: String, p: Vector2, size: int, color:
 static func outline(r: Rect2, cut: float = 9.0) -> PackedVector2Array:
 	var p := r.position
 	var e := r.end
+	cut = clampf(cut, 0.0, maxf(0.0, minf(r.size.x, r.size.y) * 0.5 - 0.5))
 	return PackedVector2Array([p + Vector2(cut, 0), Vector2(e.x - cut, p.y), Vector2(e.x, p.y + cut), e - Vector2(0, cut), e - Vector2(cut, 0), Vector2(p.x + cut, e.y), Vector2(p.x, e.y - cut), p + Vector2(0, cut)])
 
 static func plate(c: CanvasItem, r: Rect2, color: Color, cut: float = 9.0) -> void:
@@ -150,10 +151,38 @@ static func mission(c: CanvasItem, width: float, title: String, detail: String, 
 const CAMPAIGN := ["ÁGUAS", "RESÍDUOS", "ENERGIA", "NÚCLEO"]
 const CAMPAIGN_RECT := Rect2(320, 88, 220, 56)
 
+const MAP_BUTTON := Rect2(333, 28, 78, 23)
+const PAUSE_BUTTON := Rect2(419, 28, 107, 23)
+const GUIDE_BOTTOM := 172.0
+
+static func guide_safe_rect(size: Vector2, dialogue_top: float = -1.0, hud_bottom: float = 194.0) -> Rect2:
+	var top := maxf(CAMPAIGN_RECT.end.y, hud_bottom) + 12.0
+	var bottom := size.y - GUIDE_BOTTOM
+	if dialogue_top >= 0.0:
+		bottom = minf(bottom, dialogue_top - 24.0)
+	return Rect2(24.0, top, size.x - 48.0, maxf(52.0, bottom - top))
+
+static func prompt(c: CanvasItem, size: Vector2, key: String, verb: String, color: Color = GOLD, progress: float = -1.0) -> void:
+	var r := Rect2(size.x * 0.5 - 240.0, size.y - 118.0, 480, 52)
+	panel(c, r, color)
+	var x := 18.0
+	if progress >= 0.0:
+		text(c, "SEGURE", r.position + Vector2(x, 29), 10, color)
+		x += 52.0
+	if not key.is_empty():
+		keycap(c, key, Rect2(r.position + Vector2(x, 10), Vector2(30, 22)))
+		x += 42.0
+	text(c, fit(verb, r.size.x - x - 16.0, 13), r.position + Vector2(x, 28), 13)
+	if progress >= 0.0:
+		bar(c, Rect2(r.position + Vector2(16, 39), Vector2(r.size.x - 32, 4)), progress, color)
+
 static func campaign(c: CanvasItem, current: int, time: float) -> void:
 	var r := CAMPAIGN_RECT
 	panel(c, r)
-	text(c, "OPERAÇÃO AURORA  •  DISTRITO %d/3" % mini(current + 1, 3), r.position + Vector2(18, 22), 8, MUTED)
+	var title := "OPERAÇÃO AURORA  •  DISTRITO %d/3" % mini(current + 1, 3)
+	if current >= 3:
+		title = "OPERAÇÃO AURORA  •  " + ("CONFRONTO FINAL" if current == 3 else "CONCLUÍDA")
+	text(c, title, r.position + Vector2(18, 22), 8, MUTED)
 	var nodes: Array[Vector2] = []
 	for i in CAMPAIGN.size(): nodes.append(r.position + Vector2(31 + i * 52.0, 31))
 	for i in CAMPAIGN.size() - 1:
@@ -214,7 +243,7 @@ static func abilities(c: CanvasItem, height: float, secondary: float, recharge: 
 static func navigation(c: CanvasItem, title: String, subtitle: String, pointer: Vector2 = Vector2(-999, -999)) -> void:
 	var p := Vector2(320, 16)
 	panel(c, Rect2(p, Vector2(220, 66)))
-	for item in [[Rect2(333, 28, 78, 23), "M", "MAPA"], [Rect2(419, 28, 107, 23), "ESC", "PAUSA"]]:
+	for item in [[MAP_BUTTON, "M", "MAPA"], [PAUSE_BUTTON, "ESC", "PAUSA"]]:
 		var r: Rect2 = item[0]
 		plate(c, r, Color("253e40") if r.has_point(pointer) else Color("172e33"), 3)
 		edge(c, r, GOLD if r.has_point(pointer) else Color("4e655b"), 1, 3)

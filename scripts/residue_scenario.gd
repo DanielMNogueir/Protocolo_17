@@ -62,6 +62,8 @@ var dialogue_chars := 0.0
 var dialogue_fast := false
 var effects: Array[Dictionary] = []
 var kills := 0
+var deaths := 0
+var elapsed := 0.0
 var _taunts := {}
 var _dialogue_layer: Node2D
 var _animation := LiaAnimation.new()
@@ -132,6 +134,10 @@ func _ready() -> void:
 
 func _apply_handoff() -> void:
 	campaign.load_progress()
+	var retry: Dictionary = get_tree().get_meta("p17_residues_retry", {})
+	if get_tree().has_meta("p17_residues_retry"): get_tree().remove_meta("p17_residues_retry")
+	deaths = retry.get("deaths", 0)
+	elapsed = retry.get("time", 0.0)
 	if get_tree().has_meta("p17_residue_handoff"):
 		var data: Dictionary = get_tree().get_meta("p17_residue_handoff")
 		difficulty = data.get("difficulty", "operation")
@@ -182,7 +188,7 @@ func _physics_process(delta: float) -> void:
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): _map_mouse_held=false
 	_update_audio()
 	if Input.is_physical_key_pressed(KEY_R) and state == "defeat":
-		get_tree().reload_current_scene()
+		_retry()
 		return
 	if state == "dialogue":
 		dialogue_chars += dt * (400.0 if dialogue_fast else 46.0)
@@ -192,6 +198,7 @@ func _physics_process(delta: float) -> void:
 		_hud.queue_redraw()
 		_dialogue_layer.queue_redraw()
 		return
+	elapsed += dt
 	var movement := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
 		float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP))).normalized()
 	var target := pointer - get_viewport_rect().size * 0.5 + camera
@@ -286,7 +293,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			state = "play" if state == "map" else "map"
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_R and state == "pause":
-			get_tree().reload_current_scene()
+			_retry()
 		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and state == "victory":
 			_action("modules")
 		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3] and state == "upgrade":
@@ -317,7 +324,7 @@ func _action(id: String) -> void:
 		"map": state = "map"
 		"pause": state = "pause"
 		"resume": state = "play"
-		"retry": get_tree().reload_current_scene()
+		"retry": _retry()
 		"districts": _return_to_districts()
 		"modules":
 			if state == "victory": state = "upgrade"
@@ -335,7 +342,7 @@ func choose_module(index: int) -> bool:
 	var loadout := {"difficulty": difficulty, "upgrades": upgrades.duplicate() + [id]}
 	# A scene opened directly in the editor has no Water save to extend.
 	if campaign.water_completed:
-		if campaign.complete_residues(difficulty, id) != OK:
+		if campaign.complete_residues(difficulty, id, {"kills": kills, "deaths": deaths, "time": elapsed}) != OK:
 			module_notice = "Não foi possível salvar o progresso. Tente novamente."
 			return false
 		loadout = campaign.energy_loadout(difficulty)
@@ -348,6 +355,10 @@ func _open_power(loadout: Dictionary) -> void:
 	if get_tree().has_meta("p17_residue_handoff"): get_tree().remove_meta("p17_residue_handoff")
 	get_tree().set_meta("p17_power_handoff", loadout)
 	get_tree().change_scene_to_file("res://scenes/power.tscn")
+
+func _retry() -> void:
+	get_tree().set_meta("p17_residues_retry", {"deaths": deaths, "time": elapsed})
+	get_tree().reload_current_scene()
 
 func _return_to_districts() -> void:
 	get_tree().set_meta("p17_open_districts", true)
@@ -649,6 +660,7 @@ func _damage() -> void:
 	hp -= 1
 	invuln = 0.68
 	if hp <= 0:
+		deaths += 1
 		state = "defeat"
 		_set_toast("O distrito será reiniciado; Águas permanece recuperado.")
 

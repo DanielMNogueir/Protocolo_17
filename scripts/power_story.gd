@@ -31,10 +31,6 @@ const BANK := [
 	{"speaker": "radio", "label": "MAJOR 0", "text": "Aurora inteira está acesa outra vez, Lia. Termine isso."},
 ]
 
-const ELEVATOR := [
-	{"speaker": "lia", "label": "LIA", "text": "Sol. Transmissão. Reserva. Tudo voltou a funcionar. Agora falta a decisão dela."},
-]
-
 ## Short in-play transmissions from the AI (toasts, no pause).
 const AI_TAUNTS := {
 	"corridor": "IA: O corredor segue um ritmo. Você também seguirá.",

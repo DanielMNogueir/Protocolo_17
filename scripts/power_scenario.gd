@@ -9,6 +9,7 @@ extends Node2D
 const M = preload("res://scripts/power_map.gd")
 const Art = preload("res://scripts/power_art.gd")
 const Mechanics = preload("res://scripts/power_mechanics.gd")
+const CoreStory = preload("res://scripts/core_story.gd")
 const Story = preload("res://scripts/power_story.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
@@ -54,6 +55,7 @@ var camera: Vector2 = M.START
 var pointer := Vector2.ZERO
 var clock := 0.0
 var elapsed := 0.0
+var deaths := 0
 var hp := 6
 var max_hp := 6
 var stage := 0
@@ -138,6 +140,10 @@ func _ready() -> void:
 
 func _apply_handoff() -> void:
 	campaign.load_progress()
+	var retry: Dictionary = get_tree().get_meta("p17_energy_retry", {})
+	if get_tree().has_meta("p17_energy_retry"): get_tree().remove_meta("p17_energy_retry")
+	deaths = retry.get("deaths", 0)
+	elapsed = retry.get("time", 0.0)
 	if get_tree().has_meta("p17_power_handoff"):
 		var data: Dictionary = get_tree().get_meta("p17_power_handoff")
 		difficulty = data.get("difficulty", "operation")
@@ -324,7 +330,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_clear_pending_actions()
 				state = "play" if state == "map" else "map"
 		KEY_R:
-			if state in ["pause", "defeat"]: get_tree().reload_current_scene()
+			if state in ["pause", "defeat"]: _retry()
 		KEY_B:
 			if state in ["pause", "victory", "defeat"]: _return_to_districts()
 		KEY_SHIFT:
@@ -352,12 +358,16 @@ func _action(id: String) -> void:
 		"map": state = "map"
 		"pause": state = "pause"
 		"resume": state = "play"
-		"retry": get_tree().reload_current_scene()
+		"retry": _retry()
 		"districts": _return_to_districts()
 		"intro_next": _advance_dialogue()
 		"intro_fast":
 			dialogue_fast = not dialogue_fast
 	queue_redraw()
+
+func _retry() -> void:
+	get_tree().set_meta("p17_energy_retry", {"deaths": deaths, "time": elapsed})
+	get_tree().reload_current_scene()
 
 func _return_to_districts() -> void:
 	get_tree().set_meta("p17_open_districts", true)
@@ -392,7 +402,13 @@ func _advance_dialogue() -> void:
 func _finish_dialogue() -> void:
 	dialogue.clear()
 	state = after_dialogue
-	if state == "victory": _complete_campaign()
+	if state == "to_core":
+		_complete_campaign()
+		if campaign.residues_completed and not campaign.energy_completed:
+			state = "play"
+			_set_toast(victory_notice)
+		else:
+			_open_core()
 	_clear_pending_actions()
 
 # ---------------------------------------------------------------- player
@@ -437,6 +453,7 @@ func _damage(shock: bool = false) -> void:
 	shake = maxf(shake, 4.0)
 	if hp <= 0:
 		hp = 0
+		deaths += 1
 		state = "defeat"
 		_set_toast("A rede desligou Lia. O distrito será reiniciado; os módulos permanecem.")
 
@@ -473,7 +490,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 				hold_progress = 0.0
 				hold_target = ""
 				sound.play_sfx("power_up")
-				_start_dialogue(Story.ELEVATOR, "victory")
+				_start_dialogue(CoreStory.ELEVATOR, "to_core")
 
 func _press_overload(index: int) -> void:
 	var overload = overloads[index]
@@ -587,7 +604,23 @@ func _complete_campaign() -> void:
 	if not campaign.residues_completed:
 		victory_notice = "Sessão de teste: progresso não registrado."
 		return
-	victory_notice = "OPERAÇÃO CORRENTE REGISTRADA  /  PROGRESSO SALVO" if campaign.complete_energy(difficulty) == OK else "Não foi possível salvar o progresso desta operação."
+	victory_notice = "OPERAÇÃO CORRENTE REGISTRADA  /  PROGRESSO SALVO" if campaign.complete_energy(difficulty, {"kills": kills, "deaths": deaths, "time": elapsed}) == OK else "Não foi possível salvar o progresso desta operação."
+
+func _open_core() -> void:
+	var data := {"difficulty": difficulty, "upgrades": upgrades.duplicate(), "stats": {"kills": kills, "time": elapsed}}
+	if campaign.path != CampaignProgress.PATH: data["save_path"] = campaign.path
+	get_tree().set_meta("p17_core_handoff", data)
+	if get_tree().has_meta("p17_power_handoff"): get_tree().remove_meta("p17_power_handoff")
+	var overlay := CanvasLayer.new()
+	overlay.layer = 10
+	add_child(overlay)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0)
+	overlay.add_child(shade)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var transition := create_tween()
+	transition.tween_property(shade, "color:a", 1.0, 0.6)
+	transition.tween_callback(get_tree().change_scene_to_file.bind("res://scenes/core.tscn"))
 
 # ---------------------------------------------------------------- hazards
 

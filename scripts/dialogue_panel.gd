@@ -4,6 +4,8 @@ extends RefCounted
 const FieldHUD = preload("res://scripts/field_hud.gd")
 const Beatrix = preload("res://scripts/beatrix_art.gd")
 const AI_PORTRAIT: Texture2D = preload("res://assets/prologue/ai_portrait_v1.png")
+const BEATRIX_DIGITAL: Texture2D = preload("res://assets/power/beatrix_digital.png")
+const MAGENTA := Color("e36b92")
 const INK := FieldHUD.INK
 const TEXT := FieldHUD.WHITE
 const CYAN := FieldHUD.CYAN
@@ -41,8 +43,10 @@ static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time:
   canvas.draw_line(Vector2(rect.position.x+4,y),Vector2(rect.end.x-4,y),Color("35565a",0.18),1)
  if kind=="beatrix":
   Beatrix.portrait(canvas,rect.grow(-4))
- elif kind=="beatrix_record":
+ elif kind in ["beatrix_record", "beatrix_live"]:
   _beatrix_record(canvas,rect.grow(-4),time)
+  if kind=="beatrix_live":
+   canvas.draw_circle(rect.end-Vector2(11,10),3,Color(CYAN,0.75+0.2*sin(time*TAU)))
  elif kind=="lia":
   # Lia's own front three-quarter sprite, the same crop the field HUD uses.
   var area:=rect.grow(-4)
@@ -76,21 +80,20 @@ static func _speaker(canvas: Node2D,rect: Rect2,kind: String,accent: Color,time:
    canvas.draw_rect(Rect2(screen.position+Vector2(6+n*5,26-height/2),Vector2(2,height)),Color(accent,0.85))
   canvas.draw_rect(Rect2(rect.position+Vector2(28,80),Vector2(52,3)),Color("5d7777"))
   for n in range(3): canvas.draw_rect(Rect2(rect.position+Vector2(36+n*14,90),Vector2(5,2)),accent)
+ if kind=="major_glitch":
+  var area:=rect.grow(-4)
+  for y in range(0,int(area.size.y)-3,6):
+   if posmod(y+floori(time*12.0),5)>1: continue
+   var dest:=Rect2(area.position+Vector2(0,y),Vector2(area.size.x,3))
+   var source:=Rect2(Vector2(0,y*AI_PORTRAIT.get_height()/area.size.y),Vector2(AI_PORTRAIT.get_width(),3*AI_PORTRAIT.get_height()/area.size.y))
+   canvas.draw_texture_rect_region(AI_PORTRAIT,dest,source,Color(1.0,0.6,0.88,0.65))
  canvas.draw_rect(Rect2(rect.position+Vector2(11,rect.size.y-3),Vector2(29,2)),accent)
 
-## Beatrix's preserved record, replayed through the power grid. Uses the painted
-## hologram when assets/power/beatrix_digital.png exists, otherwise tints the
-## prologue portrait with scanlines and a rolling interference band.
+## Beatrix's preserved record, with scanlines and a rolling interference band.
 static func _beatrix_record(canvas: Node2D,area: Rect2,time: float) -> void:
- var path:="res://assets/power/beatrix_digital.png"
- if ResourceLoader.exists(path):
-  var texture: Texture2D=load(path)
-  var scale_value:=minf(area.size.x/texture.get_width(),area.size.y/texture.get_height())
-  var extent:=texture.get_size()*scale_value
-  canvas.draw_texture_rect(texture,Rect2(area.get_center()-extent*0.5,extent),false)
- else:
-  Beatrix.portrait(canvas,area)
-  canvas.draw_rect(area,Color(0.25,0.85,0.95,0.22))
+ var scale_value:=minf(area.size.x/BEATRIX_DIGITAL.get_width(),area.size.y/BEATRIX_DIGITAL.get_height())
+ var extent:=BEATRIX_DIGITAL.get_size()*scale_value
+ canvas.draw_texture_rect(BEATRIX_DIGITAL,Rect2(area.get_center()-extent*0.5,extent),false)
  var band:=fposmod(time*38.0,area.size.y+20)-10
  canvas.draw_rect(Rect2(area.position.x,area.position.y+band,area.size.x,5).intersection(area),Color(0.62,0.95,1.0,0.22))
  for y in range(int(area.position.y),int(area.end.y),3):
@@ -101,7 +104,7 @@ static func _beatrix_record(canvas: Node2D,area: Rect2,time: float) -> void:
 static func draw(canvas: Node2D,size: Vector2,speaker: String,label: String,text: String,complete: bool,fast: bool,time: float,alarm: bool=false,next_label: String="") -> void:
  var parts:=layout(size)
  var frame: Rect2=parts.frame
- var accent:=FieldHUD.RED if alarm and speaker=="terminal" else CYAN
+ var accent:=MAGENTA if speaker=="major_glitch" or (speaker=="terminal" and label=="NÚCLEO AURORA") else (FieldHUD.RED if alarm and speaker=="terminal" else CYAN)
  _frame(canvas,frame,accent)
  _speaker(canvas,parts.portrait,speaker,accent,time)
  # The brass name tab is visually attached to the portrait and the main frame.
@@ -110,7 +113,8 @@ static func draw(canvas: Node2D,size: Vector2,speaker: String,label: String,text
  FieldHUD.plate(canvas,tab,Color("142c35"),4)
  FieldHUD.edge(canvas,tab,FieldHUD.GOLD,1,4)
  if not label.is_empty(): canvas._text(label,tab.position+Vector2(13,17),10,accent)
- else:
+ if speaker=="major_glitch": canvas.draw_line(tab.position+Vector2(12,13),tab.position+Vector2(66,13),MAGENTA,1.5)
+ if label.is_empty():
   for n in range(16): canvas.draw_rect(Rect2(tab.position+Vector2(14+n*7,13-absf(sin(time*3+n))*4),Vector2(3,3+absf(sin(time*3+n))*8)),accent)
  canvas._wrapped(text,parts.body,FONT_SIZE,TEXT,LINE_HEIGHT)
  canvas._text("ENTER: AVANÇAR  •  SEGURE: ACELERAR",frame.position+Vector2(16,frame.size.y-13),8,MUTED)

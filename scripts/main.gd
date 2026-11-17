@@ -19,6 +19,7 @@ const Prologue = preload("res://scripts/prologue.gd")
 const PrologueView = preload("res://scripts/prologue_presentation.gd")
 const LaboratoryEffects = preload("res://scripts/laboratory_effects.gd")
 const DistrictLighting = preload("res://scripts/district_lighting.gd")
+const DEV_TOOLS := true
 const SAVE_PATH := "user://aurora_beta_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -122,7 +123,7 @@ func _ready() -> void:
 	has_save = _read_checkpoint().size() > 0
 	_load_settings()
 	campaign.load_progress()
-	free_select = get_tree().get_meta("p17_free_select", false) == true
+	free_select = DEV_TOOLS and get_tree().get_meta("p17_free_select", false) == true
 	if get_tree().has_meta("p17_open_districts"):
 		get_tree().remove_meta("p17_open_districts")
 		mode = "districts"
@@ -296,7 +297,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mode == "difficulty":
 			_action("difficulty_"+selected_difficulty)
 		elif mode == "title":
-			_action("continue" if has_save else "new")
+			_action("continue" if _can_continue() else "new")
 		elif mode == "briefing":
 			_advance_briefing()
 		elif not dialogue.is_empty() and mode == "play":
@@ -311,8 +312,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_action("upgrade_%d" % (key - KEY_1))
 	elif mode == "difficulty" and key in [KEY_1,KEY_2,KEY_3]:
 		_action("difficulty_"+Simulation.DIFFICULTIES[key-KEY_1])
-	elif mode == "districts" and key in [KEY_1,KEY_2,KEY_3]:
-		_action(["district_water", "district_residues", "district_energy"][key - KEY_1])
+	elif mode == "districts" and key in [KEY_1, KEY_2, KEY_3, KEY_4]:
+		_action(["district_water", "district_residues", "district_energy", "district_core"][key - KEY_1])
 	elif mode == "districts" and key == KEY_T:
 		_action("district_free")
 
@@ -329,6 +330,7 @@ func _action(id: String) -> void:
 			selected_district = "water"
 			mode = "difficulty"
 		"district_free":
+			if not DEV_TOOLS: return
 			free_select = not free_select
 			get_tree().set_meta("p17_free_select", free_select)
 		"district_residues":
@@ -339,6 +341,11 @@ func _action(id: String) -> void:
 		"district_energy":
 			if _district_open(2):
 				selected_district = "energy"
+				selected_difficulty = campaign.difficulty
+				mode = "difficulty"
+		"district_core":
+			if _district_open(3):
+				selected_district = "core"
 				selected_difficulty = campaign.difficulty
 				mode = "difficulty"
 		"difficulty_back": mode = "districts"
@@ -356,6 +363,9 @@ func _action(id: String) -> void:
 			if prologue != null: prologue.fast_text = instant_prologue_text
 			_save_settings()
 		"continue":
+			if campaign.energy_completed and not campaign.core_completed:
+				_open_core(campaign.difficulty)
+				return
 			var data := _read_checkpoint()
 			if not data.is_empty() and sim.load_data(data):
 				enemy_presentation.reset()
@@ -422,6 +432,8 @@ func _action(id: String) -> void:
 					if _district_open(1): _open_residues(level)
 				elif selected_district == "energy":
 					if _district_open(2): _open_power(level)
+				elif selected_district == "core":
+					if _district_open(3): _open_core(level)
 				else:
 					_start_prologue(false)
 			if id.begins_with("upgrade_") and mode == "upgrade":
@@ -445,10 +457,9 @@ func _start_prologue(replay: bool) -> void:
 	mode = "prologue"
 	sound.set_mood("calm")
 
-## Card index 0 Águas, 1 Resíduos, 2 Energia. The test toggle opens every card.
+## The test toggle also opens districts without campaign progress.
 func _district_open(index: int) -> bool:
-	if free_select: return true
-	return [true, campaign.water_completed, campaign.residues_completed][index]
+	return index >= 0 and index < 4 and (free_select or [true, campaign.water_completed, campaign.residues_completed, campaign.energy_completed][index])
 
 func _open_residues(level: String) -> void:
 	get_tree().set_meta("p17_residue_handoff", campaign.residue_loadout(level))
@@ -458,8 +469,15 @@ func _open_power(level: String) -> void:
 	get_tree().set_meta("p17_power_handoff", campaign.energy_loadout(level))
 	get_tree().change_scene_to_file("res://scenes/power.tscn")
 
+func _can_continue() -> bool:
+	return has_save or (campaign.energy_completed and not campaign.core_completed)
+
+func _open_core(level: String) -> void:
+	get_tree().set_meta("p17_core_handoff", campaign.core_loadout(level))
+	get_tree().change_scene_to_file("res://scenes/core.tscn")
+
 func _complete_water_campaign() -> void:
-	if campaign.complete_water(sim.difficulty, sim.chosen) == OK:
+	if campaign.complete_water(sim.difficulty, sim.chosen, {"kills": sim.kills, "deaths": sim.deaths, "time": sim.elapsed}) == OK:
 		campaign_notice = "DISTRITO DE RESÍDUOS DESBLOQUEADO / ACESSO SALVO"
 		_clear_checkpoint()
 	else:
@@ -691,14 +709,17 @@ func _draw_title() -> void:
 	draw_string(_brand_font,Vector2(x-3,y+128),"PROTOCOLO",HORIZONTAL_ALIGNMENT_LEFT,-1,53,FieldHUD.WHITE)
 	draw_line(Vector2(x+2,y+143),Vector2(x+100,y+143),GOLD,3)
 	draw_string(_brand_font,Vector2(x-7,y+232),"17",HORIZONTAL_ALIGNMENT_LEFT,-1,115,CYAN)
+	if "ai" in campaign.endings_seen:
+		draw_string(_brand_font, Vector2(x-7, y+232), "17", HORIZONTAL_ALIGNMENT_LEFT, -1, 115, Color(MAGENTA, 0.25 + 0.1 * sin(clock * 2.0)))
 	draw_string(_brand_font,Vector2(x+130,y+192),"A U R O R A",HORIZONTAL_ALIGNMENT_LEFT,-1,20,FieldHUD.WHITE)
 	draw_line(Vector2(x+132,y+207),Vector2(x+292,y+207),GOLD,1)
 	FieldHUD.text(self,"A rede caiu. A esperança, ainda não.",Vector2(x+132,y+225),10,MUTED)
 	FieldHUD.text(self,"AÇÃO / EXPLORAÇÃO / RECUPERAÇÃO",Vector2(x,y+257),9,MUTED)
-	FieldHUD.menu_button(self,Rect2(x-1,y+282,276,40),"CONTINUAR OPERAÇÃO" if has_save else "INICIAR OPERAÇÃO","continue" if has_save else "new",true,menu_focus==("continue" if has_save else "new"))
-	FieldHUD.text(self,"CHECKPOINT DISPONÍVEL / ÁGUAS" if has_save else "ESCOLHA SEU DISTRITO",Vector2(x+11,y+339),8,CYAN)
+	FieldHUD.menu_button(self,Rect2(x-1,y+282,276,40),"CONTINUAR OPERAÇÃO" if _can_continue() else "INICIAR OPERAÇÃO","continue" if _can_continue() else "new",true,menu_focus==("continue" if _can_continue() else "new"))
+	var checkpoint_label := "NÚCLEO AURORA DISPONÍVEL" if campaign.energy_completed and not campaign.core_completed else ("CHECKPOINT DISPONÍVEL / ÁGUAS" if has_save else "ESCOLHA SEU DISTRITO")
+	FieldHUD.text(self,checkpoint_label,Vector2(x+11,y+339),8,CYAN)
 	var row := y+351
-	if has_save:
+	if _can_continue():
 		FieldHUD.menu_button(self,Rect2(x,row,274,28),"ESCOLHER DISTRITO","new",false,menu_focus=="new")
 		row+=31
 	for entry in [["CONFIGURAÇÕES","settings"],["REVER PRÓLOGO","intro_replay"],["SAIR","exit"]]:
@@ -1195,20 +1216,22 @@ func _draw_difficulty() -> void:
 	var r := Rect2(size.x/2-360,size.y/2-235,720,470)
 	FieldHUD.panel(self,r)
 	FieldHUD.centered(self,"ESCOLHA SUA OPERAÇÃO",r.position+Vector2(360,44),26,WHITE)
-	var subtitle: String = {"residues": "DISTRITO DE RESÍDUOS", "energy": "DISTRITO DE ENERGIA / TRÊS INSTALAÇÕES"}.get(selected_district, "DISTRITO DAS ÁGUAS / QUATRO SETORES")
+	var subtitle: String = {"residues": "DISTRITO DE RESÍDUOS", "energy": "DISTRITO DE ENERGIA / TRÊS INSTALAÇÕES", "core": "NÚCLEO AURORA / CONFRONTO FINAL"}.get(selected_district, "DISTRITO DAS ÁGUAS / QUATRO SETORES")
 	FieldHUD.centered(self,subtitle,r.position+Vector2(360,72),12,MUTED)
 	var descriptions := ["9 de vida / 37 inimigos. Mais tempo para reagir e sincronizar.","6 de vida / 57 inimigos. Tiros rápidos e pressão crescente.","5 de vida / 77 inimigos. Tiros mais rápidos e sincronização precisa."]
 	if selected_district == "residues":
 		descriptions = ["9 de vida base. Triagem, reciclagem e compostagem.","6 de vida base. Triagem, reciclagem e compostagem.","5 de vida base. Triagem, reciclagem e compostagem."]
 	elif selected_district == "energy":
 		descriptions = ["9 de vida base. Janelas largas e descargas lentas.","6 de vida base. Arcos rápidos e drones com escudo.","5 de vida base. Sobrecarga precisa e rede hostil."]
+	elif selected_district == "core":
+		descriptions = ["9 de vida base. Checkpoint em cada fase do confronto.", "6 de vida base. Checkpoint no início da arena.", "5 de vida base. Ataques rápidos e sobrecarga precisa."]
 	for index in 3:
 		var id: String = "difficulty_"+Simulation.DIFFICULTIES[index]
 		var y := 99.0+index*88
 		_menu_control(Rect2(r.position+Vector2(35,y),Vector2(650,43)),Simulation.DIFFICULTY_NAMES[index]+(" / SELECIONADO" if selected_difficulty==Simulation.DIFFICULTIES[index] else ""),id,str(index+1),CYAN if index==1 else GOLD)
 		FieldHUD.centered(self,descriptions[index],r.position+Vector2(360,y+64),11,MUTED)
 	_menu_control(Rect2(r.position+Vector2(270,375),Vector2(180,34)),"VOLTAR","difficulty_back","ESC")
-	var footnote: String = {"residues": "Melhorias da última conclusão de Águas preservadas.", "energy": "Módulos de Águas e Resíduos preservados."}.get(selected_district, "A dificuldade fica vinculada ao checkpoint da operação.")
+	var footnote: String = {"residues": "Melhorias da última conclusão de Águas preservadas.", "energy": "Módulos de Águas e Resíduos preservados.", "core": "Módulos de Águas e Resíduos preservados."}.get(selected_district, "A dificuldade fica vinculada ao checkpoint da operação.")
 	FieldHUD.centered(self,footnote,r.position+Vector2(360,443),10,MUTED)
 
 func _draw_districts() -> void:
@@ -1244,15 +1267,25 @@ func _draw_districts() -> void:
 		else:
 			FieldHUD.inset(self, Rect2(card.position + Vector2(18, 195), Vector2(232, 39)))
 			FieldHUD.centered(self, data.lock, card.position + Vector2(134, 219), 10, MUTED)
-	# The final operation is announced but not playable yet.
 	var core := Rect2(frame.position + Vector2(24, 362), Vector2(832, 40))
+	var core_open := _district_open(3)
 	FieldHUD.inset(self, core)
-	FieldHUD.icon(self, "network", Rect2(core.position + Vector2(14, 8), Vector2(24, 24)), GOLD if campaign.energy_completed else MUTED)
-	FieldHUD.text(self, "04 / NÚCLEO AURORA", core.position + Vector2(48, 25), 13, WHITE if campaign.energy_completed else MUTED)
-	FieldHUD.text(self, "ACESSO PELO ELEVADOR DO NÚCLEO  /  EM PRODUÇÃO" if campaign.energy_completed else "CONCLUA ENERGIA  /  CONFRONTO FINAL", core.position + Vector2(240, 25), 10, GOLD if campaign.energy_completed else MUTED)
+	FieldHUD.icon(self, "network", Rect2(core.position + Vector2(14, 8), Vector2(24, 24)), GOLD if core_open else MUTED)
+	FieldHUD.text(self, "04 / NÚCLEO AURORA", core.position + Vector2(48, 25), 13, WHITE if core_open else MUTED)
+	var core_status := "CONCLUA ENERGIA PARA LIBERAR O ELEVADOR"
+	if campaign.core_completed:
+		core_status = "FINAIS VISTOS %d/2" % campaign.endings_seen.size()
+	elif campaign.energy_completed:
+		core_status = "ACESSO PELO ELEVADOR DO NÚCLEO"
+	elif core_open:
+		core_status = "LIBERADO PARA TESTE"
+	FieldHUD.text(self, core_status, core.position + Vector2(240, 25), 10, GOLD if core_open else MUTED)
+	if core_open:
+		_menu_control(Rect2(core.position + Vector2(620, 3), Vector2(204, 34)), "JOGAR NÚCLEO", "district_core", "4")
 	_menu_control(Rect2(frame.position + Vector2(340, 414), Vector2(200, 36)), "VOLTAR", "district_back", "ESC")
-	# PROVISÓRIO: atalho de teste para jogar qualquer distrito sem a campanha.
-	_menu_control(Rect2(frame.position + Vector2(616, 414), Vector2(240, 36)), "TESTE: TODOS " + ("ON" if free_select else "OFF"), "district_free", "T", GOLD)
+	if DEV_TOOLS:
+		_menu_control(Rect2(frame.position + Vector2(616, 414), Vector2(240, 36)), "TESTE: TODOS " + ("ON" if free_select else "OFF"), "district_free", "T", GOLD)
+
 func _draw_operation_markers() -> void:
 	for index in 2:
 		var point: Vector2 = sim.operation.points[index]
