@@ -15,6 +15,8 @@ const INTENSITY_NAMES := ["MÍNIMA", "NORMAL", "FORTE"]
 const SETTINGS_PATH := "user://settings.cfg"
 
 var intensity := STRONG
+var path_enabled := true
+var route := PackedVector2Array()
 var tip_remaining := 0.0
 var _district := ""
 var _tip_started := true
@@ -112,6 +114,7 @@ func draw_world(canvas: CanvasItem, time: float, strength: int) -> void:
 	if strength == MINIMAL:
 		return
 	if strength == STRONG:
+		if path_enabled and mode != "arrived": _draw_path(canvas, alpha)
 		var vertices := PackedVector2Array([_target + Vector2(-8, 0), _target + Vector2(8, 0),
 			_target + Vector2(8, -140), _target + Vector2(-8, -140)])
 		canvas.draw_polygon(vertices, PackedColorArray([Color(HUD.GOLD, 0.35), Color(HUD.GOLD, 0.35),
@@ -127,6 +130,35 @@ func draw_world(canvas: CanvasItem, time: float, strength: int) -> void:
 	canvas.draw_polyline(ring, Color(HUD.GOLD, 0.8 + 0.2 * sin(time * TAU)), 2, true)
 	var diamond := _target + Vector2(0, -80 + 4 * sin(time * TAU))
 	_draw_diamond(canvas, diamond)
+
+
+func _draw_path(canvas: CanvasItem, alpha: float) -> void:
+	if route.is_empty():
+		return
+	var nearest := 0
+	var distance := INF
+	for i in route.size():
+		var current := _lia.distance_squared_to(route[i])
+		if current < distance:
+			distance = current
+			nearest = i
+	if nearest + 1 < route.size() and (route[nearest + 1] - route[nearest]).dot(_lia - route[nearest]) >= 0.0:
+		nearest += 1
+	var previous := _lia
+	var carried := 0.0
+	var dots := 0
+	for i in range(nearest, mini(nearest + 6, route.size())):
+		var finish := route[i]
+		var step := previous.distance_to(finish)
+		var next_dot := 28.0 - carried
+		while next_dot <= step and dots < 6:
+			var point := previous.move_toward(finish, next_dot)
+			canvas.draw_circle(point, 1.5, Color(HUD.GOLD, alpha * (0.6 - dots * 0.075)), true, -1.0, true)
+			next_dot += 28.0
+			dots += 1
+		previous = finish
+		carried = fposmod(carried + step, 28.0)
+		if dots >= 6: break
 
 
 func draw_screen(canvas: CanvasItem, time: float, strength: int) -> void:
@@ -150,7 +182,7 @@ func draw_screen(canvas: CanvasItem, time: float, strength: int) -> void:
 
 
 func _label_width() -> float:
-	return clampf(ThemeDB.fallback_font.get_string_size(place, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x + 24.0,
+	return clampf(ThemeDB.fallback_font.get_string_size(place, HORIZONTAL_ALIGNMENT_LEFT, -1, HUD.font_size(11)).x + 24.0,
 		80.0, minf(256.0, _safe.size.x))
 
 
@@ -174,7 +206,11 @@ static func _draw_diamond(canvas: CanvasItem, at: Vector2) -> void:
 
 
 func configure(config: ConfigFile, district: String = "") -> void:
-	intensity = clampi(int(config.get_value("interface", "guide", STRONG)), MINIMAL, STRONG)
+	var saved: Variant = config.get_value("interface", "guide", STRONG)
+	var preferred: int = INTENSITY_NAMES.find(saved) if saved is String else int(saved)
+	intensity = STRONG if preferred not in [MINIMAL, NORMAL, STRONG] else preferred
+	path_enabled = bool(config.get_value("interface", "guide_path", true))
+	HUD.text_scale_percent = 125 if config.get_value("interface", "text_scale", 100) == 125 else 100
 	_district = district
 	_tip_started = district.is_empty() or bool(config.get_value("tutorial", "arrow_" + district, false))
 

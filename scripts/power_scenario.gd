@@ -987,6 +987,7 @@ func _update_objective_guide(dt: float) -> void:
 			break
 	var reserve := 206.0 if stage < 2 and overloads[stage].running else FieldHUD.GUIDE_BOTTOM
 	var safest := FieldHUD.guide_safe_rect(size, -1.0, 236.0 if stage == 2 else 194.0, reserve)
+	objective_guide.route = guidance_path
 	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()), safest, active, objective_place(), size)
 	objective_guide.cues(dt, sound)
 

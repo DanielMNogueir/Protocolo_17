@@ -8,12 +8,16 @@ const GOLD := Color("edb94e")
 const RED := Color("ff7864")
 const FACE: Texture2D = preload("res://assets/lia_directional/idle.png")
 static var _icons: Dictionary = {}
+static var text_scale_percent := 100
+
+static func font_size(size: int) -> int:
+	return roundi(size * text_scale_percent / 100.0)
 
 static func text(c: CanvasItem, value: String, p: Vector2, size: int, color: Color = WHITE) -> void:
-	c.draw_string(ThemeDB.fallback_font, p.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+	c.draw_string(ThemeDB.fallback_font, p.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size), color)
 
 static func centered(c: CanvasItem, value: String, p: Vector2, size: int, color: Color = WHITE) -> void:
-	var width := ThemeDB.fallback_font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var width := ThemeDB.fallback_font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size)).x
 	text(c, value, p - Vector2(width * 0.5, 0), size, color)
 
 static func outline(r: Rect2, cut: float = 9.0) -> PackedVector2Array:
@@ -118,18 +122,19 @@ static func vital(c: CanvasItem, hp: int, maximum: int, time: float) -> void:
 		if i < hp:
 			c.draw_line(cell.position + Vector2(1, 1), Vector2(cell.end.x - 1, cell.position.y + 1), color.lightened(0.4), 1)
 			c.draw_rect(cell.grow(1), Color(color, 0.08))
-	text(c, "SINAL CRÍTICO" if low else "P17 / AGENTE DE RECUPERAÇÃO", Vector2(98, 102), 10, color if low else MUTED)
+	var role := "AGENTE DE RECUPERAÇÃO" if text_scale_percent > 100 else "P17 / AGENTE DE RECUPERAÇÃO"
+	text(c, "SINAL CRÍTICO" if low else role, Vector2(98, 102), 10, color if low else MUTED)
 	c.draw_circle(Vector2(37, 103), 2, color)
 	c.draw_rect(Rect2(46, 101, 20, 3), GOLD.darkened(0.2))
 	if low: edge(c, Rect2(18, 18, 284, 96), Color(RED, 0.45 + 0.3 * sin(time * 5)), 2)
 
 static func fit(value: String, width: float, size: int) -> String:
 	var font := ThemeDB.fallback_font
-	if font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= width: return value
+	if font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size)).x <= width: return value
 	var line := value
 	while not line.is_empty():
 		line = line.left(line.length() - 1)
-		if font.get_string_size(line + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= width: return line + "…"
+		if font.get_string_size(line + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size)).x <= width: return line + "…"
 	return ""
 
 static func chevron(canvas: CanvasItem, at: Vector2, direction: Vector2, color: Color, scale: float = 1.0) -> void:
@@ -213,8 +218,9 @@ static func campaign(c: CanvasItem, current: int, time: float) -> void:
 	panel(c, r)
 	var title := "OPERAÇÃO AURORA  •  DISTRITO %d/3" % mini(current + 1, 3)
 	if current >= 3:
-		title = "OPERAÇÃO AURORA  •  " + ("CONFRONTO FINAL" if current == 3 else "CONCLUÍDA")
-	text(c, title, r.position + Vector2(12, 20), 10, MUTED)
+		var milestone := "CONFRONTO FINAL" if current == 3 else "CONCLUÍDA"
+		title = ("OPERAÇÃO AURORA  •  " if text_scale_percent == 100 else "AURORA  •  ") + milestone
+	text(c, fit(title, r.size.x - 23, 10), r.position + Vector2(12, 20), 10, MUTED)
 	var nodes: Array[Vector2] = []
 	for i in CAMPAIGN.size(): nodes.append(r.position + Vector2(33 + i * 56.0, 33))
 	for i in CAMPAIGN.size() - 1:
@@ -344,15 +350,15 @@ static func control(c: Node2D, r: Rect2, label: String, id: String, key: String 
 	plate(c, Rect2(r.position + Vector2(0, 2), r.size), Color("020b10"), 4)
 	plate(c, r, accent if hover else Color("56695f"), 4)
 	plate(c, r.grow(-2), Color("2b4843") if hover else Color("142b32"), 3)
-	var font_size := 12 if r.size.y>=35 else 9
+	var label_size := 12 if r.size.y>=35 else 9
 	var area := r.grow(-5)
 	if not key.is_empty():
-		var cap_width := maxf(20, ThemeDB.fallback_font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, 9).x + 10)
+		var cap_width := maxf(20, ThemeDB.fallback_font.get_string_size(key, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(9)).x + 10)
 		var cap_height := minf(24,r.size.y-6)
 		keycap(c,key,Rect2(r.position+Vector2(4,(r.size.y-cap_height)/2),Vector2(cap_width,cap_height)))
 		area.position.x += cap_width + 5
 		area.size.x -= cap_width + 5
-	centered(c, fit(label, area.size.x - 2, font_size), area.get_center() + Vector2(0, 4), font_size, accent if hover else WHITE)
+	centered(c, fit(label, area.size.x - 2, label_size), area.get_center() + Vector2(0, 4), label_size, accent if hover else WHITE)
 	c.buttons.append({"rect": r, "id": id})
 static func menu_button(c: Node2D, r: Rect2, label: String, id: String, primary: bool = false, focused: bool = false) -> void:
 	var active := focused or r.has_point(c.pointer)
@@ -360,7 +366,7 @@ static func menu_button(c: Node2D, r: Rect2, label: String, id: String, primary:
 		panel(c,r,CYAN)
 		plate(c,r.grow(-9),Color("264c45") if active else Color("173b36"),3)
 		c.draw_rect(Rect2(r.position+Vector2(11,11),Vector2(3,r.size.y-22)),CYAN)
-		text(c,label,r.position+Vector2(23,r.size.y/2+5),14,CYAN)
+		text(c,fit(label,r.size.x-58,14),r.position+Vector2(23,r.size.y/2+5),14,CYAN)
 		var arrow := r.position+Vector2(r.size.x-26,r.size.y/2)
 		c.draw_line(arrow-Vector2(6,0),arrow+Vector2(6,0),CYAN,1)
 		c.draw_polyline(PackedVector2Array([arrow+Vector2(1,-5),arrow+Vector2(6,0),arrow+Vector2(1,5)]),CYAN,1)
@@ -370,5 +376,5 @@ static func menu_button(c: Node2D, r: Rect2, label: String, id: String, primary:
 			plate(c,r,Color("19352f"),3)
 			c.draw_rect(Rect2(r.position+Vector2(2,7),Vector2(2,r.size.y-14)),GOLD)
 		c.draw_line(r.position+Vector2(3,r.size.y-1),r.end-Vector2(3,1),Color("415c54"),1)
-		text(c,label,r.position+Vector2(15,r.size.y/2+4),12,CYAN if active else WHITE)
+		text(c,fit(label,r.size.x-23,12),r.position+Vector2(15,r.size.y/2+4),12,CYAN if active else WHITE)
 	c.buttons.append({"rect":r,"id":id})

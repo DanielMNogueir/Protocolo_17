@@ -1,5 +1,7 @@
 extends RefCounted
 ## Observes combat; owns only animation, transient wrecks and sound cues.
+const FieldHUD = preload("res://scripts/field_hud.gd")
+
 var units: Dictionary = {}
 var wrecks: Array[Dictionary] = []
 var cues: Array[Dictionary] = []
@@ -66,3 +68,21 @@ func _cue(view: Dictionary, event: String) -> void:
 
 func view_for(enemy: Dictionary) -> Dictionary:
 	return units.get(int(enemy.id), enemy)
+
+
+static func draw_awareness(canvas: CanvasItem, enemy: Dictionary, time: float) -> void:
+	var mind: RefCounted = enemy.get("mind")
+	if mind == null:
+		return
+	var at: Vector2 = enemy.pos - Vector2(0, 66.0 if enemy.get("kind", "") == "boss" else 48.0)
+	if mind.stunned > 0.0:
+		for i in 3:
+			var phase := time * 5.0 + i * TAU / 3.0
+			var point := at + Vector2.from_angle(phase) * Vector2(14, 5)
+			var star := PackedVector2Array([point + Vector2(0, -4), point + Vector2(3, 0),
+				point + Vector2(0, 4), point + Vector2(-3, 0)])
+			canvas.draw_colored_polygon(star, FieldHUD.GOLD)
+	elif mind.mode in ["alert", "search"]:
+		canvas.draw_circle(at, 10.0, Color(FieldHUD.INK, 0.9))
+		FieldHUD.centered(canvas, "!" if mind.mode == "alert" else "?", at + Vector2(0, 5), 14,
+			FieldHUD.GOLD if mind.mode == "alert" else FieldHUD.MUTED)

@@ -7,6 +7,8 @@ const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const Occlusion = preload("res://scripts/occlusion.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
 const FieldHUD = preload("res://scripts/field_hud.gd")
+const Brain = preload("res://scripts/enemy_brain.gd")
+const EnemyPresentation = preload("res://scripts/enemy_presentation.gd")
 const Guide = preload("res://scripts/objective_guide.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
@@ -82,6 +84,7 @@ var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
 var objective_guide := Guide.new()
+var squad := Brain.new()
 var _guide_layer: Node2D
 var guidance_path := PackedVector2Array()
 var _guide_timer := 0.0
@@ -194,6 +197,7 @@ func _setup_lighting() -> void:
 
 func _spawn_enemies() -> void:
 	enemies.clear()
+	squad.clear()
 	for i in M.ENEMY_POSITIONS.size():
 		var boss := i == M.ENEMY_POSITIONS.size() - 1
 		var kind := "boss" if boss else ("scout" if i % 2 == 0 else "sentry")
@@ -417,7 +421,7 @@ func _fire(target: Vector2, secondary: bool = false) -> void:
 	var direction := (target - start).normalized() if target.is_finite() and target.distance_squared_to(start) > 1.0 else aim
 	if secondary:
 		for index in 5:
-			bullets.append({"pos": start, "source": start, "vel": direction.rotated(float(index - 2) * 0.12) * pulse_speed * 0.85, "hostile": false, "life": 1.2, "damage": pulse_damage + 1})
+			bullets.append({"pos": start, "source": start, "vel": direction.rotated(float(index - 2) * 0.12) * pulse_speed * 0.85, "hostile": false, "life": 1.2, "damage": pulse_damage + 1, "secondary": true})
 	else:
 		bullets.append({"pos": start, "source": start, "vel": direction * pulse_speed, "hostile": false, "life": 1.7, "damage": pulse_damage})
 
@@ -579,6 +583,7 @@ func _update_objective_guide(dt: float) -> void:
 		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
 			objective_guide.in_combat = true
 			break
+	objective_guide.route = guidance_path
 	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()),
 		FieldHUD.guide_safe_rect(size), state == "play", objective_place(), size)
 	objective_guide.cues(dt, sound)
@@ -611,8 +616,7 @@ func guidance_point() -> Vector2:
 	return objective_point()
 
 func _update_enemies(dt: float) -> void:
-	for i in enemies.size():
-		var enemy: Dictionary = enemies[i]
+	for enemy in enemies:
 		if enemy.hp <= 0:
 			if enemy.get("death_age", -1.0) >= 0.0: enemy.death_age += dt
 			continue
@@ -620,45 +624,109 @@ func _update_enemies(dt: float) -> void:
 		enemy.hit_cd = maxf(0.0, enemy.hit_cd - dt)
 		enemy.shot_cd -= dt
 		enemy.phase += dt
-		var distance: float = enemy.pos.distance_to(pos)
-		var visible := M.line_clear(enemy.pos, pos, 3.0, stage, cleared)
-		if distance < 520: enemy["engaged"] = true
+		var origin: Vector2 = enemy.pos
+		var kind: String = enemy.get("kind", "boss" if enemy.boss else "scout")
+		var mind := Brain.for_enemy(enemy)
 		var radius := 25.0 if enemy.boss else 18.0
-		if enemy.get("engaged", false) and (distance > (145.0 if enemy.boss else 125.0) or not visible):
-			enemy["route_timer"] = float(enemy.get("route_timer", 0.0)) - dt
-			var changed := int(enemy.get("route_geometry", -1)) != M._geometry_key(stage, cleared)
-			if changed or enemy.route_timer <= 0.0 or Vector2(enemy.get("route_target", Vector2.INF)).distance_to(pos) > 64.0:
-				enemy["route"] = M.path_between(enemy.pos, pos, stage, cleared, 85.0, radius, true)
-				if enemy.route.is_empty(): enemy.route = M.path_between(enemy.pos, pos, stage, cleared, 410.0, radius, true)
-				enemy["route_cursor"] = 0
-				enemy["route_timer"] = 1.0 + i * 0.07
-				enemy["route_target"] = pos
-				enemy["route_geometry"] = M._geometry_key(stage, cleared)
-			var route: PackedVector2Array = enemy.get("route", PackedVector2Array())
-			var cursor: int = enemy.get("route_cursor", 0)
-			while cursor < route.size() and enemy.pos.distance_to(route[cursor]) < 8.0: cursor += 1
-			enemy["route_cursor"] = cursor
-			if cursor < route.size():
-				var travel: Vector2 = (route[cursor] - Vector2(enemy.pos)).normalized() * (43.0 if enemy.boss else 68.0)
-				# Gentle separation prevents drones stacking in entrances. Floor and
-				# machine collision still govern the final displacement.
-				for j in enemies.size():
-					if j == i or enemies[j].hp <= 0 or enemies[j].zone > stage: continue
-					var away: Vector2 = enemy.pos - enemies[j].pos
-					var gap := radius + (25.0 if enemies[j].boss else 18.0) + 9.0
-					if away.length() < gap:
-						travel += away.normalized() * (gap - away.length()) * 3.0
-				var before: Vector2 = enemy.pos
-				enemy.pos = M.slide(before, travel.limit_length(80.0) * dt, radius, stage, cleared)
-				if enemy.pos.distance_to(before) < 0.1: enemy.route_timer = minf(enemy.route_timer, 0.15)
-		if distance < 440 and visible and enemy.shot_cd <= 0.0:
-			var direction: Vector2 = (pos - enemy.pos).normalized()
-			var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
-			for spread in spreads:
-				bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * (260.0 if enemy.boss else 235.0) * float(SHOT_SPEED[difficulty]), "hostile": true, "life": 2.2})
-			enemy.shot_cd = (1.35 if enemy.boss else 1.55 + (i % 3) * 0.31) * float(PRESSURE[difficulty])
-			sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
-		enemies[i] = enemy
+		var walkable := func(point: Vector2) -> bool: return M.walkable(point, radius, stage, cleared)
+		var distance := origin.distance_to(pos)
+		var visible := distance < 520.0 and M.line_clear(origin, pos, 3.0, stage, cleared)
+		if mind.sense(dt, pos, visible):
+			_share_alarm(enemy)
+		if kind == "scout":
+			var dodge := mind.dodge_course(dt, difficulty, origin, bullets, walkable)
+			if not dodge.is_zero_approx():
+				_cancel_attack(enemy)
+				enemy.pos = M.slide(origin, dodge * Brain.DODGE_SPEED * dt, radius, stage, cleared)
+				continue
+		if mind.retreat > 0.0:
+			_cancel_attack(enemy)
+			var goal := origin + pos.direction_to(origin) * 130.0
+			_drone_move(enemy, dt, goal, radius, 96.0)
+			continue
+		var warning: float = enemy.get("attack_left", 0.0)
+		if warning > 0.0:
+			enemy.attack_left = maxf(0.0, warning - dt)
+			if enemy.attack_left <= 0.0: _drone_attack(enemy)
+			continue
+		if mind.mode == "alert":
+			enemy.look_dir = origin.direction_to(mind.last_seen)
+			continue
+		if mind.mode == "combat" and visible and distance < 440.0 and enemy.shot_cd <= 0.0 and squad.acquire(enemy.id, difficulty):
+			var speed: float = (260.0 if enemy.boss else 235.0) * SHOT_SPEED[difficulty]
+			enemy.look_dir = Brain.aim(origin, pos, velocity, speed, difficulty)
+			enemy.attack_left = 0.55 * (1.3 if difficulty == "story" else (0.85 if difficulty == "veteran" else 1.0))
+			continue
+		var target := mind.last_seen
+		if mind.mode == "patrol":
+			target = mind.patrol_point(origin, walkable)
+		elif mind.mode == "combat":
+			var preferred := 145.0 if enemy.boss else (205.0 if kind == "sentry" else 125.0)
+			if mind.tactic_time <= 0.0:
+				mind.tactic_time = 0.5
+				var see := func(a: Vector2, b: Vector2) -> bool: return M.line_clear(a, b, 3.0, stage, cleared)
+				var cover := func(point: Vector2) -> bool: return Brain.near_cover(point, walkable)
+				mind.flank = squad.flank(enemy.id, kind, origin, pos, preferred, walkable, see, cover)
+			if mind.flank.is_finite():
+				target = mind.flank
+			elif visible and absf(distance - preferred) < 45.0:
+				continue
+		else:
+			squad.clear_slot(enemy.id)
+		_drone_move(enemy, dt, target, radius, 43.0 if enemy.boss else 68.0)
+
+
+func _drone_move(enemy: Dictionary, dt: float, target: Vector2, radius: float, speed: float) -> void:
+	var origin: Vector2 = enemy.pos
+	var mind := Brain.for_enemy(enemy)
+	var key := M._geometry_key(stage, cleared)
+	if enemy.get("route_geometry", -1) != key:
+		enemy.route_geometry = key
+		mind.route_time = 0.0
+	var planner := func(a: Vector2, b: Vector2) -> PackedVector2Array:
+		var result := M.path_between(a, b, stage, cleared, 18.0, radius, true)
+		if result.is_empty():
+			result = M.path_between(a, b, stage, cleared, 200.0, radius, true)
+		return result
+	var course := mind.course(dt, origin, target, planner)
+	if origin.distance_squared_to(target) <= 81.0:
+		return
+	var travel := course * speed
+	for other in enemies:
+		if other.id == enemy.id or other.hp <= 0 or other.zone > stage:
+			continue
+		var away: Vector2 = origin - Vector2(other.pos)
+		var gap := radius + (25.0 if other.boss else 18.0) + 9.0
+		if away.length() < gap:
+			travel += away.normalized() * (gap - away.length()) * 3.0
+	enemy.look_dir = course
+	enemy.pos = M.slide(origin, travel.limit_length(104.0) * dt, radius, stage, cleared)
+
+
+func _drone_attack(enemy: Dictionary) -> void:
+	var direction: Vector2 = enemy.look_dir
+	var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
+	var speed: float = (260.0 if enemy.boss else 235.0) * SHOT_SPEED[difficulty]
+	for spread in spreads:
+		bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * speed, "hostile": true, "life": 2.2})
+	enemy.shot_cd = (1.35 if enemy.boss else 1.55 + (enemy.id % 3) * 0.31) * float(PRESSURE[difficulty])
+	squad.last_attack_origin = enemy.pos
+	squad.release(enemy.id)
+	sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
+
+
+func _cancel_attack(enemy: Dictionary) -> void:
+	enemy.attack_left = 0.0
+	squad.release(enemy.id)
+
+
+func _share_alarm(source: Dictionary) -> void:
+	for other in enemies:
+		if other.id == source.id or other.hp <= 0 or other.zone > stage or Vector2(other.pos).distance_to(source.pos) > Brain.ALARM_RADIUS:
+			continue
+		if M.line_clear(source.pos, other.pos, 3.0, stage, cleared):
+			Brain.for_enemy(other).notice(pos)
+
 
 func _update_bullets(dt: float) -> void:
 	for i in range(bullets.size() - 1, -1, -1):
@@ -681,13 +749,16 @@ func _update_bullets(dt: float) -> void:
 					if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (28.0 if enemy.boss else 21.0):
 						enemy.hp = maxi(0, enemy.hp - int(bullet.damage))
 						enemy.hit_cd = 0.18
-						enemy["engaged"] = true
 						if enemy.hp <= 0:
+							squad.release(enemy.id)
+							squad.clear_slot(enemy.id)
 							enemy["death_age"] = 0.0
 							kills += 1
 							sound.play_sfx("enemy_dead")
 							_burst(enemy.pos + Vector2(0, -10), PINK, 18 if enemy.boss else 10)
 						else:
+							if Brain.for_enemy(enemy).damaged(float(enemy.hp) / float(enemy.max_hp), pos):
+								_share_alarm(enemy)
 							sound.play_sfx("unit_%s_hit" % _enemy_view(enemy).kind)
 						enemies[j] = enemy
 						gone = true
@@ -840,9 +911,9 @@ func _enemy_view(enemy: Dictionary) -> Dictionary:
 	var view := enemy.duplicate()
 	view["kind"] = enemy.get("kind", "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry"))
 	view["max_hp"] = enemy.get("max_hp", Simulation.enemy_health(view.kind, 3))
-	view["facing"] = (pos - Vector2(enemy.pos)).normalized()
-	view["phase"] = "windup" if enemy.shot_cd < 0.27 else "idle"
-	view["warning"] = 1.0 if enemy.shot_cd < 0.27 else 0.0
+	view["facing"] = enemy.get("look_dir", Vector2.DOWN)
+	view["phase"] = "windup" if enemy.get("attack_left", 0.0) > 0.0 else "idle"
+	view["warning"] = enemy.get("attack_left", 0.0)
 	view["hurt"] = enemy.hit_cd
 	view["moving"] = enemy.pos.distance_to(pos) < 420
 	return view
@@ -854,6 +925,7 @@ func _draw_enemy(enemy: Dictionary) -> void:
 		Actors.ENEMIES.draw_destroyed(self, view)
 		return
 	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
+	EnemyPresentation.draw_awareness(self, enemy, clock)
 	if enemy.boss or enemy.hp < view.max_hp:
 		var width := 70.0 if enemy.boss else 34.0
 		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -54 if enemy.boss else -38), Vector2(width, 4))

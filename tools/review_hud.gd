@@ -2,6 +2,8 @@ extends SceneTree
 var out := OS.get_environment("P17_HUD_OUTPUT")
 var game: Node2D
 var view_filter := OS.get_environment("P17_GUIDE_SCENE")
+var large_text := OS.get_environment("P17_GUIDE_TEXT_125") == "1"
+const FieldHUD = preload("res://scripts/field_hud.gd")
 var captures := 0
 var guide_failures := 0
 func _initialize() -> void: run.call_deferred()
@@ -135,12 +137,14 @@ func _guide_views() -> void:
 		game.set_process(false)
 		game.set_physics_process(false)
 		game.sound.set_muted(true)
+		if large_text: FieldHUD.text_scale_percent = 125
 		for resolution in [Vector2i(960, 540), Vector2i(1440, 810)]:
 			root.size = resolution
 			await process_frame
 			for on_screen in [true, false]:
 				_configure_guide_view(pair[1], on_screen)
 				var label := "%s-%dx%d-%s" % [pair[1], resolution.x, resolution.y, "visivel" if on_screen else "fora-da-tela"]
+				if large_text: label += "-texto-125"
 				await capture(label)
 				var guides: Dictionary = {"agua": "water_guide", "prologo": "prologue_guide", "nucleo": "guide"}
 				var guide: RefCounted = game.get(guides.get(pair[1], "objective_guide"))

@@ -4,6 +4,8 @@ extends RefCounted
 
 const W = preload("res://scripts/world.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const Brain = preload("res://scripts/enemy_brain.gd")
+const WaterRoute = preload("res://scripts/water_route.gd")
 const Operation = preload("res://scripts/sector_operation.gd")
 const DIFFICULTIES := ["story", "operation", "veteran"]
 const DIFFICULTY_NAMES := ["FÁCIL", "MÉDIO", "DIFÍCIL"]
@@ -39,6 +41,7 @@ const UPGRADES: Array = [
 
 var difficulty := "operation"
 var operation = Operation.new()
+var squad := Brain.new()
 var wave := 0
 var secondary_cd := 0.0
 var secondary_recharge := 3.8
@@ -205,6 +208,7 @@ func _begin_encounter(at_checkpoint: bool) -> void:
 	particles.clear()
 	events.clear()
 	enemies.clear()
+	squad.clear()
 	_projectile_rects = W.projectile_solids(stage)
 	var locations: Array = W.SPAWNS[stage]
 	var kinds: Array = WAVE_KINDS[stage].duplicate()
@@ -272,61 +276,145 @@ func _reinforcement_position(locations: Array, radius: float) -> Vector2:
 
 func _update_enemies(dt: float) -> void:
 	for enemy in enemies:
-		var origin: Vector2 = enemy["pos"]
-		var kind: String = str(enemy["kind"])
-		var radius: float = float(enemy["radius"])
-		var offset: Vector2 = pos - origin
-		var distance: float = offset.length()
+		var origin: Vector2 = enemy.pos
+		var kind: String = enemy.kind
+		var radius: float = enemy.radius
+		var distance := origin.distance_to(pos)
+		var visible := distance < 570.0 and _wall_fraction(origin, pos, 1.0) == INF
+		enemy.age += dt
+		enemy.hurt = maxf(0.0, enemy.hurt - dt)
+		enemy.cooldown = maxf(0.0, enemy.cooldown - dt)
 		if kind == "boss":
-			var tier := 2 if float(enemy.hp)/float(enemy.max_hp) <= 0.33 else (1 if float(enemy.hp)/float(enemy.max_hp) <= 0.66 else 0)
-			if tier > int(enemy.tier):
-				enemy.tier = tier
-				events.append("boss_phase")
-		enemy["age"] = float(enemy["age"]) + dt
-		enemy["hurt"] = maxf(0.0, float(enemy["hurt"]) - dt)
-		if distance > (610.0 if kind == "boss" else 570.0) and not bool(enemy["engaged"]):
-			continue
-		if not bool(enemy["engaged"]):
-			enemy["engaged"] = true
-			if kind == "boss":
-				events.append("boss")
-		enemy["cooldown"] = maxf(0.0, float(enemy["cooldown"]) - dt)
-		var phase: String = str(enemy["phase"])
-		if phase == "windup":
-			enemy["warning"] = maxf(0.0, float(enemy["warning"]) - dt)
-			if float(enemy["warning"]) <= 0.0:
-				_enemy_attack(enemy)
-		elif phase == "charge":
-			var charge: Vector2 = Vector2(enemy["aim"]) * 375.0 * dt
-			var moved: Vector2 = _slide(origin, charge, radius)
-			enemy["pos"] = moved
-			enemy["charge_time"] = float(enemy["charge_time"]) - dt
-			if float(enemy["charge_time"]) <= 0.0 or moved.distance_squared_to(origin) < charge.length_squared() * 0.3:
-				enemy["phase"] = "idle"
-				enemy["cooldown"] = 1.2 * _pressure_interval()
+			_update_boss(enemy, dt, distance)
 		else:
-			var desired_range: float = 225.0 if kind == "sentry" else (270.0 if kind == "boss" else 165.0)
-			if kind == "rammer":
-				desired_range = 110.0
-			var travel: Vector2 = Vector2.ZERO
-			var speed: float = 68.0 if kind == "sentry" else (43.0 if kind == "boss" else 90.0)
-			if distance > desired_range:
-				travel = offset.normalized() * speed * dt
-			elif distance < desired_range - 65.0 and kind != "rammer":
-				travel = -offset.normalized() * speed * 0.65 * dt
-			if travel != Vector2.ZERO:
-				enemy["pos"] = _avoid_move(enemy, travel, radius)
-			var reach: float = 285.0 if kind == "rammer" else (535.0 if kind == "boss" else 470.0)
-			if distance < reach and float(enemy["cooldown"]) <= 0.0 and _wall_fraction(origin, pos, 1.0) == INF:
-				enemy["phase"] = "windup"
-				enemy["warning"] = (0.8 if kind == "boss" else (0.75 if kind == "rammer" else 0.65)) * (1.3 if difficulty == "story" else (0.85 if difficulty == "veteran" else 1.0))
-				enemy["aim"] = offset.normalized() if distance > 0.01 else Vector2.DOWN
-		# Contact uses the final position; obstacle separation still protects Lia.
-		var final_pos: Vector2 = enemy["pos"]
+			_update_unit(enemy, dt, visible)
+		var final_pos: Vector2 = enemy.pos
 		if final_pos.distance_to(pos) < radius + PLAYER_RADIUS - 2.0 and _wall_fraction(final_pos, pos, 0.0) == INF:
 			_hurt(1)
 			if state == "defeat":
 				return
+
+
+func _update_boss(enemy: Dictionary, dt: float, distance: float) -> void:
+	var tier := 2 if float(enemy.hp) / float(enemy.max_hp) <= 0.33 else (1 if float(enemy.hp) / float(enemy.max_hp) <= 0.66 else 0)
+	if tier > int(enemy.tier):
+		enemy.tier = tier
+		events.append("boss_phase")
+	if distance > 610.0 and not enemy.engaged:
+		return
+	if not enemy.engaged:
+		enemy.engaged = true
+		events.append("boss")
+	if enemy.phase == "windup":
+		enemy.warning = maxf(0.0, enemy.warning - dt)
+		if enemy.warning <= 0.0:
+			_enemy_attack(enemy)
+		return
+	var origin: Vector2 = enemy.pos
+	var direction := origin.direction_to(pos)
+	if distance > 270.0:
+		enemy.pos = _avoid_move(enemy, direction * 43.0 * dt, enemy.radius)
+	elif distance < 205.0:
+		enemy.pos = _avoid_move(enemy, -direction * 43.0 * 0.65 * dt, enemy.radius)
+	if distance < 535.0 and enemy.cooldown <= 0.0 and _wall_fraction(origin, pos, 1.0) == INF:
+		enemy.phase = "windup"
+		enemy.warning = 0.8 * _windup_scale()
+		enemy.aim = direction if not direction.is_zero_approx() else Vector2.DOWN
+
+
+func _update_unit(enemy: Dictionary, dt: float, visible: bool) -> void:
+	var mind := Brain.for_enemy(enemy)
+	var origin: Vector2 = enemy.pos
+	var kind: String = enemy.kind
+	var radius: float = enemy.radius
+	if mind.sense(dt, pos, visible):
+		_share_alarm(enemy)
+	if mind.stunned > 0.0:
+		return
+	if enemy.phase == "charge":
+		var charge: Vector2 = Vector2(enemy.aim) * 375.0 * dt
+		var moved := _slide(origin, charge, radius)
+		enemy.pos = moved
+		enemy.charge_time -= dt
+		var crashed := moved.distance_squared_to(origin) < charge.length_squared() * 0.3
+		if crashed or enemy.charge_time <= 0.0:
+			enemy.phase = "idle"
+			enemy.cooldown = 1.2 * _pressure_interval()
+			squad.release(enemy.id)
+			if crashed: mind.stunned = 1.2
+		return
+	var walkable := func(point: Vector2) -> bool: return W.walkable(point, radius, stage)
+	if kind == "scout":
+		var dodge := mind.dodge_course(dt, difficulty, origin, bullets, walkable)
+		if not dodge.is_zero_approx():
+			_cancel_attack(enemy)
+			enemy.pos = _slide(origin, dodge * Brain.DODGE_SPEED * dt, radius)
+			return
+	if mind.retreat > 0.0:
+		_cancel_attack(enemy)
+		enemy.pos = _avoid_move(enemy, pos.direction_to(origin) * 103.0 * dt, radius)
+		return
+	if enemy.phase == "windup":
+		enemy.warning = maxf(0.0, enemy.warning - dt)
+		if enemy.warning <= 0.0:
+			squad.last_attack_origin = origin
+			_enemy_attack(enemy)
+			if enemy.phase != "charge": squad.release(enemy.id)
+		return
+	if mind.mode == "alert":
+		enemy.aim = origin.direction_to(mind.last_seen)
+		return
+
+	var distance := origin.distance_to(pos)
+	var reach := 285.0 if kind == "rammer" else 470.0
+	if mind.mode == "combat" and visible and distance < reach and enemy.cooldown <= 0.0 and squad.acquire(enemy.id, difficulty):
+		var speed: float = (375.0 if kind == "rammer" else (215.0 if kind == "sentry" else 190.0)) * float(HOSTILE_SPEED[difficulty])
+		enemy.aim = Brain.aim(origin, pos, velocity, speed, difficulty)
+		enemy.phase = "windup"
+		enemy.warning = (0.75 if kind == "rammer" else 0.65) * _windup_scale()
+		return
+
+	var goal := mind.last_seen
+	var preferred := 225.0 if kind == "sentry" else (110.0 if kind == "rammer" else 165.0)
+	if mind.mode == "patrol":
+		goal = mind.patrol_point(origin, walkable)
+	elif mind.mode == "combat":
+		if mind.tactic_time <= 0.0:
+			mind.tactic_time = 0.5
+			var see := func(a: Vector2, b: Vector2) -> bool: return _wall_fraction(a, b, 1.0) == INF
+			var cover := func(p: Vector2) -> bool: return Brain.near_cover(p, walkable)
+			mind.flank = squad.flank(enemy.id, kind, origin, pos, preferred, walkable, see, cover)
+		if mind.flank.is_finite():
+			goal = mind.flank
+		elif visible and absf(distance - preferred) < 45.0:
+			return
+	else:
+		squad.clear_slot(enemy.id)
+	var planner := func(a: Vector2, b: Vector2) -> PackedVector2Array: return WaterRoute.route(a, b, stage, 27.0, radius)
+	var course := mind.course(dt, origin, goal, planner)
+	if origin.distance_squared_to(goal) > 81.0:
+		var speed := 68.0 if kind == "sentry" else 90.0
+		enemy.aim = course
+		enemy.pos = _avoid_move(enemy, course * speed * dt, radius)
+
+
+func _cancel_attack(enemy: Dictionary) -> void:
+	if enemy.phase == "windup":
+		enemy.phase = "idle"
+		enemy.warning = 0.0
+		squad.release(enemy.id)
+
+
+func _share_alarm(source: Dictionary) -> void:
+	for other in enemies:
+		if other.id == source.id or other.kind == "boss" or Vector2(other.pos).distance_to(source.pos) > Brain.ALARM_RADIUS:
+			continue
+		if _wall_fraction(source.pos, other.pos, 1.0) == INF:
+			Brain.for_enemy(other).notice(pos)
+
+
+func _windup_scale() -> float:
+	return 1.3 if difficulty == "story" else (0.85 if difficulty == "veteran" else 1.0)
 
 
 func _pressure_interval() -> float:
@@ -379,7 +467,7 @@ func _secondary_attack(target: Vector2, pose_time: float, pose_moving: bool) -> 
 	_fire_cd = maxf(_fire_cd,fire_interval)
 	secondary_shots += 1
 	for index in 5:
-		_spawn_bullet(muzzle,direction.rotated(float(index-2)*0.12),pulse_speed*0.85,false,pulse_damage+1,1.2,3.0)
+		_spawn_bullet(muzzle,direction.rotated(float(index-2)*0.12),pulse_speed*0.85,false,pulse_damage+1,1.2,3.0,true)
 	events.append("secondary")
 	_emit_particles(muzzle,Color("f0c77a"),8,100)
 
@@ -391,9 +479,9 @@ func select_treatment(index: int) -> bool:
 	return result
 
 
-func _spawn_bullet(origin: Vector2, direction: Vector2, speed: float, hostile: bool, damage: int, life: float, radius: float) -> void:
+func _spawn_bullet(origin: Vector2, direction: Vector2, speed: float, hostile: bool, damage: int, life: float, radius: float, secondary: bool = false) -> void:
 	bullets.append({"pos": origin, "source": origin, "vel": direction.normalized() * speed, "hostile": hostile,
-		"damage": damage, "life": life, "radius": radius})
+		"damage": damage, "life": life, "radius": radius, "secondary": secondary})
 
 
 func _update_bullets(dt: float) -> void:
@@ -437,13 +525,19 @@ func _update_bullets(dt: float) -> void:
 
 func _damage_enemy(index: int, amount: int) -> void:
 	var enemy: Dictionary = enemies[index]
-	enemy["hp"] = maxi(0, int(enemy["hp"]) - amount)
+	var mind := Brain.for_enemy(enemy) if enemy.kind != "boss" else null
+	var received := amount * 2 if mind != null and mind.stunned > 0.0 else amount
+	enemy["hp"] = maxi(0, int(enemy["hp"]) - received)
 	enemy["hurt"] = 0.12
 	if int(enemy["hp"]) == 0:
+		squad.release(enemy.id)
+		squad.clear_slot(enemy.id)
 		_emit_particles(enemy["pos"], Color("d2ad69"), 16 if str(enemy["kind"]) == "boss" else 9, 125.0)
 		enemies.remove_at(index)
 		kills += 1
 		events.append("enemy_dead")
+	elif mind != null and mind.damaged(float(enemy.hp) / float(enemy.max_hp), pos):
+		_share_alarm(enemy)
 
 
 func _hurt(amount: int) -> void:

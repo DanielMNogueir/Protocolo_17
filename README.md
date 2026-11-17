@@ -57,7 +57,7 @@ Leia o canal de comando na Galeria e suba à Coroa da Torre. Na arena, derrube o
 
 Depois do confronto, pressione **E** perto de cada console para ouvir os argumentos. Segure **E por 2,5 segundos** junto ao console ciano para isolar o núcleo ou ao magenta para liberar a rede. Após o epílogo e os créditos, use **R** na tela da campanha para voltar à escolha. Os dois finais ficam registrados no perfil.
 
-No modo Fácil, **R** após uma derrota retoma a fase atual do chefe. No Médio e no Difícil, retoma o início da arena. Os módulos conquistados em Águas e Resíduos continuam equipados. O módulo de guia fica em **Configurações** e tem três intensidades. Use **M** para consultar o objetivo no mapa e **Esc** para consultar o objetivo na pausa.
+No modo Fácil, **R** após uma derrota retoma a fase atual do chefe. No Médio e no Difícil, retoma o início da arena. Os módulos conquistados em Águas e Resíduos continuam equipados. O módulo de guia fica em **Configurações** e tem três intensidades. Nessa tela também é possível desligar a trilha pontilhada ou ampliar o texto do HUD para 125%. Use **M** para consultar o objetivo no mapa e **Esc** para consultar o objetivo na pausa.
 
 A arte e as medidas da fase estão em [assets/core](assets/core) e [na direção visual](docs/direcao-visual/nucleo-aurora.md). Para verificar o percurso e gerar as capturas nas duas resoluções:
 
@@ -65,6 +65,10 @@ A arte e as medidas da fase estão em [assets/core](assets/core) e [na direção
 godot --headless --path . --audio-driver Dummy --script tests/test_core.gd
 godot --path . --script tools/review_core.gd
 ```
+
+## Comportamento dos drones
+
+Em Águas e Resíduos, os drones patrulham, alertam aliados próximos e procuram Lia no último ponto em que a viram. Um **!** sinaliza o alerta e um **?** sinaliza a busca. Os avisos de ataque dão tempo para mudar de posição. Em dificuldades maiores, mais drones podem atacar juntos e os disparos antecipam parte do movimento de Lia.
 
 ## Dificuldades
 

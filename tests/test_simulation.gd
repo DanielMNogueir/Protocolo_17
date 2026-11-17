@@ -94,6 +94,9 @@ func _test_damage_and_warnings() -> void:
 	enemy["cooldown"] = 0.0
 	sim.enemies.append(enemy)
 	sim.tick(DT, Vector2.ZERO, enemy["pos"], false, false, false)
+	check(enemy.mind.mode == "alert" and sim.bullets.is_empty(), "Detection pauses for a readable alert")
+	for frame in 25:
+		sim.tick(DT, Vector2.ZERO, enemy["pos"], false, false, false)
 	check(float(enemy["warning"]) >= 0.5 and sim.bullets.is_empty(), "Enemy enters a visible warning before firing")
 	for frame in 28:
 		sim.tick(DT, Vector2.ZERO, enemy["pos"], false, false, false)

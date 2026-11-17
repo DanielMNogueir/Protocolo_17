@@ -44,11 +44,12 @@ static func shell(c: CanvasItem, size: Vector2, title: String, subtitle: String,
 
 static func wrapped(c: CanvasItem, value: String, rect: Rect2, size: int, color: Color, step: int = 16) -> void:
 	var font := ThemeDB.fallback_font
+	step = maxi(step, HUD.font_size(size) + 2)
 	var lines: Array[String] = []
 	var line := ""
 	for word in value.split(" "):
 		var candidate: String = word if line.is_empty() else line+" "+word
-		if not line.is_empty() and font.get_string_size(candidate,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x>rect.size.x:
+		if not line.is_empty() and font.get_string_size(candidate,HORIZONTAL_ALIGNMENT_LEFT,-1,HUD.font_size(size)).x>rect.size.x:
 			lines.append(line)
 			line=word
 		else: line=candidate
@@ -61,7 +62,7 @@ static func wrapped(c: CanvasItem, value: String, rect: Rect2, size: int, color:
 
 static func label_objective(c: CanvasItem, area: Rect2, point: Vector2, place: String) -> void:
 	marker(c, point, "objective")
-	var width := minf(230.0, ThemeDB.fallback_font.get_string_size(place, HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x + 18.0)
+	var width := minf(230.0, ThemeDB.fallback_font.get_string_size(place, HORIZONTAL_ALIGNMENT_LEFT, -1, HUD.font_size(10)).x + 18.0)
 	var size := Vector2(width, 23)
 	var p := (point + Vector2(-width * 0.5, 13)).clamp(area.position, area.end - size)
 	var rect := Rect2(p, size)

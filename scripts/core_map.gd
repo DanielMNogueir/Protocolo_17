@@ -124,7 +124,10 @@ func route(start: Vector2, finish: Vector2, phase: int, radius: float = 14.0) ->
 
 
 func waypoint(start: Vector2, finish: Vector2, phase: int, radius: float = 14.0) -> Vector2:
-	var points := route(start, finish, phase, radius)
+	return visible_waypoint(start, route(start, finish, phase, radius), phase, radius)
+
+
+static func visible_waypoint(start: Vector2, points: PackedVector2Array, phase: int, radius: float = 14.0) -> Vector2:
 	for i in range(points.size() - 1, -1, -1):
 		var point := points[i]
 		if start.distance_squared_to(point) > 16.0 and line_clear(start, point, radius, phase):

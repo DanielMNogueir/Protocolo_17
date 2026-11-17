@@ -214,6 +214,7 @@ func _update_objective_guides(dt: float) -> void:
 			if enemy.hp > 0 and sim.pos.distance_squared_to(enemy.pos) <= 40000.0:
 				water_guide.in_combat = true
 				break
+		water_guide.route = guidance.path
 		water_guide.update(dt, sim.pos, guidance.next_point(sim), WaterGuidance.objective(sim),
 			Transform2D(0.0, _water_offset()), safe, true, _water_place(), size)
 	else:
@@ -426,6 +427,12 @@ func _action(id: String) -> void:
 		"guide":
 			water_guide.intensity = posmod(water_guide.intensity - 1, Guide.INTENSITY_NAMES.size())
 			prologue_guide.intensity = water_guide.intensity
+			_save_settings()
+		"guide_path":
+			water_guide.path_enabled = not water_guide.path_enabled
+			_save_settings()
+		"text_scale":
+			FieldHUD.text_scale_percent = 125 if FieldHUD.text_scale_percent == 100 else 100
 			_save_settings()
 		"fullscreen":
 			_toggle_fullscreen()
@@ -655,7 +662,9 @@ func _clear_checkpoint() -> void:
 func _save_settings() -> void:
 	var config := ConfigFile.new()
 	config.load(Guide.SETTINGS_PATH)
-	config.set_value("interface", "guide", water_guide.intensity)
+	config.set_value("interface", "guide", Guide.INTENSITY_NAMES[water_guide.intensity])
+	config.set_value("interface", "guide_path", water_guide.path_enabled)
+	config.set_value("interface", "text_scale", FieldHUD.text_scale_percent)
 	config.set_value("gameplay", "difficulty", selected_difficulty)
 	config.set_value("audio", "muted", muted)
 	config.set_value("display", "fullscreen", fullscreen)
@@ -865,6 +874,7 @@ func _draw_game() -> void:
 				_text_center("!",enemy.pos+Vector2(0,-65 if enemy.kind == "boss" else -43),18,GOLD)
 			var view: Dictionary = enemy_presentation.view_for(enemy)
 			Actors.draw_drone(self, view, sim.elapsed)
+			EnemyPresentation.draw_awareness(self, enemy, clock)
 			if Occlusion.is_hidden(Occlusion.drone_rect(enemy.pos, enemy.kind == "boss"), float(entity.y), scenery):
 				ghosts.append({"view": view})
 	energy_station.draw_effects(self, clock)
@@ -1118,16 +1128,18 @@ func _draw_settings() -> void:
 	FieldHUD.centered(self,"Ajuste seu equipamento de campo.",r.position+Vector2(340,69),12,MUTED)
 	_menu_control(Rect2(r.position+Vector2(40,96),Vector2(600,40)),"ÁUDIO / "+("DESLIGADO" if muted else "LIGADO"),"sound","F10")
 	_menu_control(Rect2(r.position+Vector2(40,149),Vector2(600,40)),"TELA / "+("CHEIA" if fullscreen else "JANELA"),"fullscreen","F11")
-	_menu_control(Rect2(r.position+Vector2(40,202),Vector2(600,36)),"GUIA DE OBJETIVO / "+Guide.INTENSITY_NAMES[water_guide.intensity],"guide")
-	var area := Rect2(r.position+Vector2(40,248),Vector2(600,99))
+	_menu_control(Rect2(r.position+Vector2(40,196),Vector2(600,36)),"GUIA DE OBJETIVO / "+Guide.INTENSITY_NAMES[water_guide.intensity],"guide")
+	_menu_control(Rect2(r.position+Vector2(40,241),Vector2(292,32)),"TRILHA NO CHÃO / "+("LIGADA" if water_guide.path_enabled else "DESLIGADA"),"guide_path")
+	_menu_control(Rect2(r.position+Vector2(348,241),Vector2(292,32)),"TEXTO DO HUD / %d%%" % FieldHUD.text_scale_percent,"text_scale")
+	var area := Rect2(r.position+Vector2(40,283),Vector2(600,78))
 	FieldHUD.inset(self,area)
-	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,23),10,GOLD)
-	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,47),10,WHITE)
-	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,68),10,MUTED)
-	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,82),10,MUTED)
+	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,18),10,GOLD)
+	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,37),10,WHITE)
+	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,53),10,MUTED)
+	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,69),10,MUTED)
 	var level_name: String = Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty if settings_return=="pause" else selected_difficulty)]
-	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,356),9,GOLD)
-	_menu_control(Rect2(r.position+Vector2(240,371),Vector2(200,35)),"VOLTAR","back","ESC")
+	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,395),9,GOLD)
+	_menu_control(Rect2(r.position+Vector2(240,374),Vector2(200,35)),"VOLTAR","back","ESC")
 func _draw_upgrades() -> void:
 	var size := _size()
 	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.93))

@@ -769,7 +769,8 @@ func _present(dt: float) -> void:
 	var point: Vector2 = objective.point
 	_route_time -= dt
 	if active and (_route_time <= 0.0 or not point.is_equal_approx(_route_target)):
-		_waypoint = map.waypoint(pos, point, map_phase())
+		guide.route = map.route(pos, point, map_phase())
+		_waypoint = Map.visible_waypoint(pos, guide.route, map_phase())
 		_route_target = point
 		_route_time = 0.25
 	guide.in_combat = false
