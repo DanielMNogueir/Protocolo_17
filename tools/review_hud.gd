@@ -14,6 +14,7 @@ func capture(label: String) -> void:
 	game.queue_redraw()
 	if "_fx" in game: game._fx.queue_redraw()
 	if "_hud" in game: game._hud.queue_redraw()
+	if "_dialogue_layer" in game: game._dialogue_layer.queue_redraw()
 	for frame in 5: await process_frame
 	RenderingServer.force_draw(true)
 	assert(root.get_texture().get_image().save_png(out.path_join(label + ".png")) == OK)
@@ -182,6 +183,7 @@ func _configure_guide_view(scene: String, on_screen: bool) -> void:
 			game.prologue.pos = candidate
 			game.prologue_camera = game.Prologue.Lab.SIZE * 0.5 if on_screen else game.prologue.pos
 		"residuos":
+			if game.state == "dialogue": game._finish_dialogue()
 			game.state = "play"
 			var target: Vector2 = game.objective_point()
 			game.pos = target + Vector2(0, 120 if on_screen else 344)

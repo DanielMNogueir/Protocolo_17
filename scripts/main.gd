@@ -969,10 +969,10 @@ func _draw_hud() -> void:
 	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4, "water", water_guide, clock)
 	water_guide.draw_screen(self, clock, water_guide.intensity)
 	water_guide.draw_tip(self)
-	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO", pointer)
+	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / CAMPO", pointer)
 	FieldHUD.campaign(self, 0, clock)
 	var tasks: Array = P17SectorOperation.LABELS[sim.stage]
-	FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [step, WaterGuidance.STEPS], "water", ["DRONES", _short(tasks[0]), "DEFESA", _short(tasks[1]), "DEFESA", "TERMINAL"], step - 1 if sim.restored <= sim.stage else WaterGuidance.STEPS, clock)
+	FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [step, WaterGuidance.STEPS], "water", ["ROBÔS", _short(tasks[0]), "DEFESA", _short(tasks[1]), "DEFESA", "REDE"], step - 1 if sim.restored <= sim.stage else WaterGuidance.STEPS, clock)
 	buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
 	buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
 	_draw_operation_hud()
@@ -1429,7 +1429,8 @@ func _direction(vector: Vector2) -> String:
 ## Checklist cell name: the last word of the task ("ABRIR A ADMISSÃO" -> "ADMISSÃO", "ABRIR A REDE NORTE" -> "NORTE").
 static func _short(task: String) -> String:
 	var words := task.split(" ")
-	return words[words.size() - 1]
+	var name := words[words.size() - 1]
+	return "ENTRADA" if name == "ADMISSÃO" else name
 
 func _draw_operation_label() -> void:
 	if sim.state != "activation" or sim.operation.ready(): return

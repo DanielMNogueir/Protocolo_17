@@ -20,7 +20,7 @@ func _draw() -> void:
 	if game.state == "dialogue": return
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
 	var beats := _beats()
-	var status := "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3)
+	var status := "SISTEMAS %d/3" % mini(game.stage, 3)
 	if game.stage < 3: status += "  •  ETAPA %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()]
 	if beats.drones > 0: status += "  •  %d DRONE%s" % [beats.drones, "" if beats.drones == 1 else "S"]
 	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], game.objective_label().get_slice("  /  ", 0), status, game.stage, mini(game.stage, 3), 3, "recycle", game.objective_guide, game.clock)
@@ -102,7 +102,7 @@ func _beats() -> Dictionary:
 		_:
 			return {"labels": ["CONCLUÍDO"], "done": 1, "drones": 0}
 	var work := labels.size()
-	labels.append_array(["DRONES", "TERMINAL"])
+	labels.append_array(["ROBÔS", "REDE"])
 	if done == work and drones == 0: done += 1
 	return {"labels": labels, "done": done, "drones": drones}
 

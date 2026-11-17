@@ -216,10 +216,11 @@ static func interaction(c: CanvasItem, at: Vector2, time: float) -> void:
 static func campaign(c: CanvasItem, current: int, time: float) -> void:
 	var r := CAMPAIGN_RECT
 	panel(c, r)
-	var title := "OPERAÇÃO AURORA  •  DISTRITO %d/3" % mini(current + 1, 3)
+	var operation := "OPERAÇÃO AURORA" if text_scale_percent == 100 else "AURORA"
+	var title := "%s  •  DISTRITO %d/3" % [operation, mini(current + 1, 3)]
 	if current >= 3:
 		var milestone := "CONFRONTO FINAL" if current == 3 else "CONCLUÍDA"
-		title = ("OPERAÇÃO AURORA  •  " if text_scale_percent == 100 else "AURORA  •  ") + milestone
+		title = operation + "  •  " + milestone
 	text(c, fit(title, r.size.x - 23, 10), r.position + Vector2(12, 20), 10, MUTED)
 	var nodes: Array[Vector2] = []
 	for i in CAMPAIGN.size(): nodes.append(r.position + Vector2(33 + i * 56.0, 33))
@@ -252,7 +253,8 @@ static func checklist(c: CanvasItem, title: String, kind: String, labels: Array,
 		var current := i == done
 		bar(c, cell, 1.0 if i < done else (0.35 + 0.15 * sin(time * 4.0) if current else 0.0), CYAN if i < done else GOLD)
 		if current: edge(c, cell.grow(2), Color(GOLD, 0.7), 1, 2)
-		centered(c, fit(str(labels[i]), step - 3, 9), Vector2(cell.get_center().x, r.position.y + 58), 9, GOLD if current else (CYAN if i < done else MUTED))
+		var label := str(labels[i]).capitalize()
+		centered(c, fit(label, step - 1, 9), Vector2(cell.get_center().x, r.position.y + 58), 9, GOLD if current else (CYAN if i < done else MUTED))
 
 static func ability(c: CanvasItem, p: Vector2, key: String, label: String, kind: String, remaining: float, duration: float, color: Color) -> void:
 	panel(c, Rect2(p, Vector2(108, 116)))

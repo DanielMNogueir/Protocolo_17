@@ -33,7 +33,7 @@ func _draw() -> void:
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
 	FieldHUD.mission(self, size.x, STAGE_TITLES[game.stage], game.objective_label().get_slice("  /  ", 0), "ENERGIA  •  SISTEMAS %d/3  •  %s" % [mini(game.stage, 3), _status_line()], game.stage, mini(game.stage, 3), 3, "coil", game.objective_guide, game.clock)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, game.loadout.secondary_recharge, game.dash_cd, game.dash_recharge)
-	FieldHUD.navigation(self, "ENERGIA / AURORA", "OPERAÇÃO CORRENTE  •  APAGÃO", game.pointer)
+	FieldHUD.navigation(self, "ENERGIA / AURORA", "OPERAÇÃO CORRENTE", game.pointer)
 	FieldHUD.campaign(self, 2, game.clock)
 	if game.state == "play":
 		game.objective_guide.draw_screen(self, game.clock, game.objective_guide.intensity)
