@@ -48,6 +48,7 @@ func run() -> void:
 	game = current_scene
 	assert(game.scene_file_path == "res://scenes/residues.tscn")
 	game.set_physics_process(false)
+	game._finish_dialogue()
 	game.sound.set_muted(true)
 	game.stage = 2
 	game.toast_time = 0

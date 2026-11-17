@@ -146,6 +146,47 @@ static func mission(c: CanvasItem, width: float, title: String, detail: String, 
 		bar(c, node, 1 if i < restored else (0.4 if i == stage else 0), CYAN if i < restored else GOLD)
 	text(c, fit(status, 292, 9), p + Vector2(18, 100), 9, MUTED)
 
+## Where this district sits in the whole operation, under the M / ESC panel.
+const CAMPAIGN := ["ÁGUAS", "RESÍDUOS", "ENERGIA", "NÚCLEO"]
+const CAMPAIGN_RECT := Rect2(320, 88, 220, 56)
+
+static func campaign(c: CanvasItem, current: int, time: float) -> void:
+	var r := CAMPAIGN_RECT
+	panel(c, r)
+	text(c, "OPERAÇÃO AURORA  •  DISTRITO %d/3" % mini(current + 1, 3), r.position + Vector2(18, 22), 8, MUTED)
+	var nodes: Array[Vector2] = []
+	for i in CAMPAIGN.size(): nodes.append(r.position + Vector2(31 + i * 52.0, 31))
+	for i in CAMPAIGN.size() - 1:
+		c.draw_line(nodes[i] + Vector2(6, 0), nodes[i + 1] - Vector2(6, 0), CYAN.darkened(0.25) if i < current else Color("38504d"), 2)
+	for i in CAMPAIGN.size():
+		var p := nodes[i]
+		if i < current:
+			c.draw_circle(p, 5, CYAN)
+			c.draw_polyline(PackedVector2Array([p + Vector2(-2.5, 0), p + Vector2(-0.5, 2), p + Vector2(2.5, -2)]), INK, 1.5)
+		elif i == current:
+			c.draw_circle(p, 7 + sin(time * 4.0), Color(GOLD, 0.18))
+			c.draw_circle(p, 5, GOLD)
+			c.draw_circle(p, 2, INK)
+		else:
+			c.draw_arc(p, 4.5, 0, TAU, 16, Color("587069"), 1.5)
+		centered(c, CAMPAIGN[i], p + Vector2(0, 15), 7, GOLD if i == current else (CYAN if i < current else MUTED))
+
+## Ordered beats of the current sector, in the slot under the vital panel
+## that Energy uses for its system readouts.
+static func checklist(c: CanvasItem, title: String, kind: String, labels: Array, done: int, time: float) -> void:
+	var r := Rect2(16, 124, 288, 70)
+	panel(c, r)
+	icon(c, kind, Rect2(r.position + Vector2(14, 11), Vector2(18, 20)), GOLD)
+	text(c, fit(title, 236, 10), r.position + Vector2(42, 26), 10, GOLD)
+	var count := labels.size()
+	var step := 256.0 / count
+	for i in count:
+		var cell := Rect2(r.position + Vector2(16 + i * step, 36), Vector2(step - 5, 9))
+		var current := i == done
+		bar(c, cell, 1.0 if i < done else (0.35 + 0.15 * sin(time * 4.0) if current else 0.0), CYAN if i < done else GOLD)
+		if current: edge(c, cell.grow(2), Color(GOLD, 0.7), 1, 2)
+		centered(c, fit(str(labels[i]), step - 3, 7), Vector2(cell.get_center().x, r.position.y + 58), 7, GOLD if current else (CYAN if i < done else MUTED))
+
 static func ability(c: CanvasItem, p: Vector2, key: String, label: String, kind: String, remaining: float, duration: float, color: Color) -> void:
 	panel(c, Rect2(p, Vector2(108, 116)))
 	inset(c, Rect2(p + Vector2(14, 27), Vector2(80, 64)))

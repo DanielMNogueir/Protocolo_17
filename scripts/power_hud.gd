@@ -35,6 +35,7 @@ func _draw() -> void:
 	FieldHUD.mission(self, size.x, STAGE_TITLES[game.stage], _direction(direction) + "  " + game.objective_label(), "ENERGIA  •  SISTEMAS %d/3  •  %s" % [mini(game.stage, 3), _status_line()], game.stage, mini(game.stage, 3), 3, "coil")
 	FieldHUD.abilities(self, size.y, game.secondary_cd, game.loadout.secondary_recharge, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "ENERGIA / AURORA", "OPERAÇÃO CORRENTE  •  APAGÃO", game.pointer)
+	FieldHUD.campaign(self, 2, game.clock)
 	if game.state == "play":
 		game.buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
 		game.buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})

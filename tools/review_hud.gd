@@ -85,6 +85,7 @@ func run() -> void:
 	root.add_child(game)
 	await process_frame
 	game.set_physics_process(false)
+	game._finish_dialogue()
 	game.toast_time = 0
 	for stage in 4:
 		game.stage = stage

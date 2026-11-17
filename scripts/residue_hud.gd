@@ -9,17 +9,27 @@ const CYAN := Color("7be4ce")
 const GOLD := Color("e8bd74")
 const INK := Color("091922")
 const MUTED := FieldHUD.MUTED
+const PINK := Color("e36b92")
 var game: Node2D
 
 func _draw() -> void:
 	if game == null: return
 	game.buttons.clear()
 	var size := get_viewport_rect().size
+	# Like Energy, a conversation owns the screen; the scenario draws the frame.
+	if game.state == "dialogue": return
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
 	var direction: Vector2 = game.guidance_point() - game.pos
-	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], _direction(direction) + "  " + game.objective_label(), "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3), game.stage, mini(game.stage, 3), 3)
+	var beats := _beats()
+	var status := "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3)
+	if game.stage < 3: status += "  •  ETAPA %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()]
+	if beats.drones > 0: status += "  •  %d DRONE%s" % [beats.drones, "" if beats.drones == 1 else "S"]
+	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], _direction(direction) + "  " + game.objective_label(), status, game.stage, mini(game.stage, 3), 3)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL", game.pointer)
+	FieldHUD.campaign(self, 1, game.clock)
+	if game.stage < 3:
+		FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()], "recycle", beats.labels, beats.done, game.clock)
 	if game.state == "play":
 		game.buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
 		game.buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
@@ -34,18 +44,20 @@ func _draw() -> void:
 			"bin": message = "E  •  ENTREGAR " + M.MATERIALS[game.carried]
 			"block": message = "SEGURE E  •  " + ("DESOBSTRUIR ESTEIRA" if candidate.index < 2 else "REABRIR VENTILAÇÃO")
 			"terminal": message = "SEGURE E  •  RESTAURAR SISTEMA"
-		var box := Rect2(size.x * 0.5 - 200, size.y - 110, 400, 44)
-		_panel(box)
-		_text_center(message, box.get_center() + Vector2(0, 3), 11, CYAN)
-		if game.hold_progress > 0: draw_rect(Rect2(box.position + Vector2(0, 41), Vector2(400 * game.hold_progress, 3)), CYAN)
+		_prompt(size, message, CYAN)
+		if game.hold_progress > 0: draw_rect(Rect2(Vector2(size.x * 0.5 - 200, size.y - 69), Vector2(400 * game.hold_progress, 3)), CYAN)
+	elif game.state == "play" and game.stage < 3 and not game._terminal_ready(game.stage) and game.pos.distance_to(M.TERMINALS[game.stage]) < 110.0:
+		_prompt(size, "TERMINAL BLOQUEADO  •  " + _terminal_reason(), GOLD)
 	elif game.carried >= 0:
 		_text_center("EM MÃOS: " + M.MATERIALS[game.carried] + "  /  PROCURE A BAIA", Vector2(size.x * 0.5, size.y - 38), 11, GOLD)
 	if game.bin_lock > 0:
 		_text_center("TRIAGEM REINICIANDO  /  %.1f s" % game.bin_lock, Vector2(size.x * 0.5, size.y - 128), 11, GOLD)
 	if game.toast_time > 0:
-		var toast := Rect2(size.x * 0.5 - 265, 146, 530, 34)
-		_panel(toast)
-		_text_center(game.toast, toast.get_center() + Vector2(0, 4), 10, WHITE)
+		# Right of the sector checklist, clear of Lia at screen centre.
+		var toast := Rect2(maxf(size.x * 0.5 - 265, 316), 150, minf(530, size.x - 332), 34)
+		FieldHUD.panel(self, toast, PINK if game.toast_ai else GOLD)
+		if game.toast_ai: draw_rect(Rect2(toast.position + Vector2(10, 9), Vector2(3, 16)), PINK)
+		_text_center(FieldHUD.fit(game.toast, toast.size.x - 30, 10), toast.get_center() + Vector2(0, 4), 10, PINK.lightened(0.35) if game.toast_ai else WHITE)
 	match game.state:
 		"defeat":
 			game.buttons.clear()
@@ -67,6 +79,48 @@ func _draw() -> void:
 	if game.state == "play":
 		var aim: Vector2 = game.pointer
 		for axis in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]: draw_line(aim + axis * 3, aim + axis * 7, CYAN, 1)
+
+## Ordered beats of the current Residues sector and how many are done:
+## the work (sort the four materials / clear two blockages), the drones, the terminal.
+func _beats() -> Dictionary:
+	var drones := 0
+	for enemy in game.enemies:
+		if enemy.zone == game.stage and enemy.hp > 0: drones += 1
+	var labels: Array = []
+	var done := 0
+	match game.stage:
+		0:
+			labels = M.MATERIALS.duplicate()
+			for value in game.sorted:
+				if value: done += 1
+		1:
+			labels = ["SUCATA 1", "SUCATA 2"]
+			done = int(game.cleared[0]) + int(game.cleared[1])
+		2:
+			labels = ["DUTO 1", "DUTO 2"]
+			done = int(game.cleared[2]) + int(game.cleared[3])
+		_:
+			return {"labels": ["CONCLUÍDO"], "done": 1, "drones": 0}
+	var work := labels.size()
+	labels.append_array(["DRONES", "TERMINAL"])
+	if done == work and drones == 0: done += 1
+	return {"labels": labels, "done": done, "drones": drones}
+
+## Same bottom prompt as Energy: accent frame in the prompt colour.
+func _prompt(size: Vector2, message: String, color: Color) -> void:
+	var box := Rect2(size.x * 0.5 - 220, size.y - 110, 440, 44)
+	FieldHUD.panel(self, box, color)
+	_text_center(FieldHUD.fit(message, 410, 11), box.get_center() + Vector2(0, 3), 11, color)
+
+func _terminal_reason() -> String:
+	match game.stage:
+		0:
+			if game.sorted.has(false): return "CLASSIFIQUE OS QUATRO MATERIAIS"
+		1:
+			if not (game.cleared[0] and game.cleared[1]): return "DESOBSTRUA A ROTA DA PRENSA"
+		2:
+			if not (game.cleared[2] and game.cleared[3]): return "REABRA OS DUTOS ORGÂNICOS"
+	return "NEUTRALIZE OS DRONES DA ÁREA"
 
 func _panel(rect: Rect2) -> void:
 	FieldHUD.panel(self, rect)

@@ -307,11 +307,23 @@ func _complete_field_task(sim: P17Simulation) -> bool:
 		for frame in 80: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
 		check(sim.select_treatment(1), "Sample-driven filtration choice unlocks filter washing")
 	for frame in 600:
-		var interact: bool = sim.stage != 1 or sim.operation.in_window(sim.difficulty)
+		var interact := _task_input(sim, frame)
 		sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,interact)
 		bot_frames += 1
 		if sim.operation.completed > previous: return sim.state == "combat"
 	return false
+
+
+## The input a player gives each task gesture: tap, hold, timed press, or
+## charge then release inside the safe band.
+func _task_input(sim: P17Simulation, frame: int) -> bool:
+	match sim.operation.mode():
+		"timing": return sim.operation.in_window(sim.difficulty)
+		"mash": return frame % 6 < 3
+		"charge":
+			var safe_band: Vector2 = P17SectorOperation.band(sim.difficulty)
+			return sim.operation.progress < (safe_band.x + safe_band.y) * 0.5
+	return true
 
 
 func _test_campaign() -> void:

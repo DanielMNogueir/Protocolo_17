@@ -53,6 +53,29 @@ func _run() -> void:
 	check(menu.mode == "districts", "Energy locked on a fresh profile (key 3)")
 	menu._action("district_energy")
 	check(menu.mode == "districts" and menu.opened_power.is_empty(), "Energy locked on a fresh profile (direct action)")
+	# Provisional test toggle: every district opens without touching the save.
+	key(menu, KEY_T)
+	check(menu.free_select and menu._district_open(1) and menu._district_open(2), "Test toggle opens every district")
+	menu.queue_redraw()
+	await process_frame
+	var toggle_drawn := false
+	for button in menu.buttons:
+		if button.id == "district_free": toggle_drawn = true
+	check(toggle_drawn, "Test toggle is a clickable button")
+	menu._action("district_energy")
+	key(menu, KEY_2)
+	check(menu.opened_power.get("difficulty") == "operation" and not menu.campaign.residues_completed, "Test toggle opens Energy on a fresh profile")
+	check(not FileAccess.file_exists(TEST_PATH), "Test toggle writes nothing to the campaign save")
+	menu.mode = "districts"
+	menu._action("district_residues")
+	key(menu, KEY_1)
+	check(menu.opened_residues.get("difficulty") == "story", "Test toggle opens Residues on a fresh profile")
+	menu.mode = "districts"
+	menu._action("district_free")
+	check(not menu.free_select and not menu._district_open(2), "Toggle off locks Energy again")
+	menu.opened_power = {}
+	menu.opened_residues = {}
+	if has_meta("p17_free_select"): remove_meta("p17_free_select")
 	# Water victory.
 	menu.sim.load_data({"version": 2, "stage": 3, "chosen": WATER.duplicate(), "difficulty": "veteran"})
 	menu.sim.state = "victory"

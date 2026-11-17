@@ -4,6 +4,7 @@ extends Node2D
 const M = preload("res://scripts/residue_map.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
+const Occlusion = preload("res://scripts/occlusion.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
@@ -12,6 +13,11 @@ const Sound = preload("res://scripts/audio.gd")
 const Simulation = preload("res://scripts/simulation.gd")
 const CampaignProgress = preload("res://scripts/campaign_progress.gd")
 const Loadout = preload("res://scripts/campaign_loadout.gd")
+const Story = preload("res://scripts/residue_story.gd")
+const DialogueLayer = preload("res://scripts/residue_dialogue_layer.gd")
+## Hostile pulse speed and cadence by difficulty; "operation" keeps the original values.
+const SHOT_SPEED := {"story": 0.85, "operation": 1.0, "veteran": 1.15}
+const PRESSURE := {"story": 1.25, "operation": 1.0, "veteran": 0.8}
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
 const PINK := Color("e36b92")
@@ -49,6 +55,15 @@ var bin_lock := 0.0
 var interact_down := false
 var toast := ""
 var toast_time := 0.0
+var toast_ai := false
+var after_dialogue := "play"
+var dialogue: Array = []
+var dialogue_chars := 0.0
+var dialogue_fast := false
+var effects: Array[Dictionary] = []
+var kills := 0
+var _taunts := {}
+var _dialogue_layer: Node2D
 var _animation := LiaAnimation.new()
 var _light: Sprite2D
 var _backgrounds: Array[Sprite2D] = []
@@ -75,7 +90,9 @@ func _ready() -> void:
 	sound = Sound.new()
 	add_child(sound)
 	var settings := ConfigFile.new()
-	if settings.load("user://settings.cfg") == OK: _muted = settings.get_value("audio", "muted", false)
+	if settings.load("user://settings.cfg") == OK:
+		_muted = settings.get_value("audio", "muted", false)
+		dialogue_fast = settings.get_value("narrative", "instant_prologue_text", false)
 	sound.set_muted(_muted)
 	sound.set_mood("calm")
 	Actors.ENEMIES.prepare()
@@ -103,11 +120,15 @@ func _ready() -> void:
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_hud)
+	# The shared RPG dialogue frame draws on a Node2D, above the field HUD.
+	_dialogue_layer = DialogueLayer.new()
+	_dialogue_layer.game = self
+	layer.add_child(_dialogue_layer)
 	_spawn_enemies()
 	M.prepare_navigation()
 	camera = pos.clamp(get_viewport_rect().size * 0.5, M.SIZE - get_viewport_rect().size * 0.5)
 	_light.position = M.SIZE * 0.5 + _offset()
-	_set_toast("LIA: os materiais estão misturados. Vou reabrir a triagem.")
+	_start_dialogue(Story.INTRO, "play")
 
 func _apply_handoff() -> void:
 	campaign.load_progress()
@@ -163,9 +184,13 @@ func _physics_process(delta: float) -> void:
 	if Input.is_physical_key_pressed(KEY_R) and state == "defeat":
 		get_tree().reload_current_scene()
 		return
+	if state == "dialogue":
+		dialogue_chars += dt * (400.0 if dialogue_fast else 46.0)
+	_update_effects(dt)
 	if state != "play":
 		queue_redraw()
 		_hud.queue_redraw()
+		_dialogue_layer.queue_redraw()
 		return
 	var movement := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
 		float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP))).normalized()
@@ -217,6 +242,22 @@ func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == "dialogue":
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			for button in buttons:
+				if button.id == "intro_fast" and button.rect.has_point(event.position):
+					dialogue_fast = not dialogue_fast
+					get_viewport().set_input_as_handled()
+					return
+			_advance_dialogue()
+			get_viewport().set_input_as_handled()
+		elif event is InputEventKey and event.pressed and not event.echo:
+			match event.physical_keycode:
+				KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E: _advance_dialogue()
+				KEY_TAB: dialogue_fast = not dialogue_fast
+				KEY_ESCAPE: _finish_dialogue()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		for button in buttons:
 			if button.rect.has_point(event.position):
@@ -369,6 +410,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 			sorted[index] = true
 			carried = -1
 			sound.play_sfx("repair")
+			_burst(M.BINS[index] + Vector2(0, -20), CYAN, 12)
 			_set_toast("CLASSIFICAÇÃO CORRETA  /  " + M.MATERIALS[index])
 		else:
 			carried = -1
@@ -392,15 +434,14 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 	if kind == "block":
 		cleared[index] = true
 		sound.play_sfx("repair")
+		_burst(M.BLOCKS[index] + Vector2(0, -20), GOLD, 14)
 		_set_toast("ROTA DE CARGA LIBERADA")
 	else:
 		terminal_on[index] = true
 		stage += 1
 		sound.play_sfx("complete")
-		if stage == 3:
-			state = "victory"
-		else:
-			_set_toast("SISTEMA RESTAURADO  /  PRÓXIMA ÁREA LIBERADA")
+		_burst(M.TERMINALS[index] + Vector2(0, -40), CYAN, 26)
+		_start_dialogue([Story.SORTING, Story.RECYCLING, Story.FINAL][index], "victory" if stage == 3 else "play")
 
 func _spawn_alarm_drone() -> void:
 	var active := 0
@@ -509,7 +550,10 @@ func guidance_point() -> Vector2:
 func _update_enemies(dt: float) -> void:
 	for i in enemies.size():
 		var enemy: Dictionary = enemies[i]
-		if enemy.hp <= 0 or enemy.zone > stage: continue
+		if enemy.hp <= 0:
+			if enemy.get("death_age", -1.0) >= 0.0: enemy.death_age += dt
+			continue
+		if enemy.zone > stage: continue
 		enemy.hit_cd = maxf(0.0, enemy.hit_cd - dt)
 		enemy.shot_cd -= dt
 		enemy.phase += dt
@@ -548,8 +592,8 @@ func _update_enemies(dt: float) -> void:
 			var direction: Vector2 = (pos - enemy.pos).normalized()
 			var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
 			for spread in spreads:
-				bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * (260.0 if enemy.boss else 235.0), "hostile": true, "life": 2.2})
-			enemy.shot_cd = 1.35 if enemy.boss else 1.55 + (i % 3) * 0.31
+				bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * (260.0 if enemy.boss else 235.0) * float(SHOT_SPEED[difficulty]), "hostile": true, "life": 2.2})
+			enemy.shot_cd = (1.35 if enemy.boss else 1.55 + (i % 3) * 0.31) * float(PRESSURE[difficulty])
 			sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
 		enemies[i] = enemy
 
@@ -574,7 +618,14 @@ func _update_bullets(dt: float) -> void:
 					if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (28.0 if enemy.boss else 21.0):
 						enemy.hp = maxi(0, enemy.hp - int(bullet.damage))
 						enemy.hit_cd = 0.18
-						if enemy.hp <= 0: sound.play_sfx("enemy_dead")
+						enemy["engaged"] = true
+						if enemy.hp <= 0:
+							enemy["death_age"] = 0.0
+							kills += 1
+							sound.play_sfx("enemy_dead")
+							_burst(enemy.pos + Vector2(0, -10), PINK, 18 if enemy.boss else 10)
+						else:
+							sound.play_sfx("unit_%s_hit" % _enemy_view(enemy).kind)
 						enemies[j] = enemy
 						gone = true
 						break
@@ -586,6 +637,9 @@ func _check_toxic() -> void:
 	for pool in M.TOXIC:
 		if pool.has_point(pos):
 			_damage()
+			if not _taunts.has("toxic") and state == "play":
+				_taunts["toxic"] = true
+				_set_toast(Story.AI_TAUNTS.toxic, true)
 			toxic_cd = 1.15
 			break
 
@@ -598,9 +652,61 @@ func _damage() -> void:
 		state = "defeat"
 		_set_toast("O distrito será reiniciado; Águas permanece recuperado.")
 
-func _set_toast(message: String) -> void:
+func _set_toast(message: String, from_ai: bool = false) -> void:
 	toast = message
 	toast_time = 3.6
+	toast_ai = from_ai
+
+# ---------------------------------------------------------------- dialogue
+
+func _start_dialogue(lines: Array, next_state: String) -> void:
+	dialogue = lines.duplicate()
+	dialogue_chars = 0.0
+	after_dialogue = next_state
+	state = "dialogue"
+	toast_time = 0.0
+	_clear_pending_actions()
+	if _dialogue_layer != null: _dialogue_layer.queue_redraw()
+
+func dialogue_line() -> Dictionary:
+	return dialogue[0] if not dialogue.is_empty() else {}
+
+func dialogue_complete() -> bool:
+	return not dialogue.is_empty() and dialogue_chars >= float(str(dialogue[0].text).length())
+
+func _advance_dialogue() -> void:
+	if state != "dialogue": return
+	if not dialogue_complete():
+		dialogue_chars = 9999.0
+		return
+	dialogue.pop_front()
+	dialogue_chars = 0.0
+	sound.play_sfx("ui")
+	if dialogue.is_empty(): _finish_dialogue()
+
+func _finish_dialogue() -> void:
+	dialogue.clear()
+	state = after_dialogue
+	_clear_pending_actions()
+	if _dialogue_layer != null: _dialogue_layer.queue_redraw()
+	if state == "play": _set_toast(["OBJETIVO  /  CLASSIFICAR OS QUATRO MATERIAIS", "PRÓXIMA ÁREA  /  USINA DE RECICLAGEM", "PRÓXIMA ÁREA  /  UNIDADE DE COMPOSTAGEM"][mini(stage, 2)])
+
+# ---------------------------------------------------------------- effects
+
+func _burst(at: Vector2, color: Color, count: int) -> void:
+	effects.append({"kind": "burst", "pos": at, "color": color, "count": count, "life": 0.45, "max": 0.45, "seed": randf() * TAU})
+
+func _update_effects(dt: float) -> void:
+	for i in range(effects.size() - 1, -1, -1):
+		effects[i].life -= dt
+		if effects[i].life <= 0.0: effects.remove_at(i)
+
+func _draw_effect(effect: Dictionary) -> void:
+	var t: float = 1.0 - effect.life / effect.max
+	for k in int(effect.count):
+		var direction := Vector2.from_angle(float(k) / effect.count * TAU + effect.seed)
+		var p: Vector2 = effect.pos + direction * t * 34.0 + Vector2(0, t * t * 18.0)
+		draw_line(p, p - direction * 5.0 * (1.0 - t), Color(effect.color, 1.0 - t), 2)
 
 func _draw() -> void:
 	var offset := _offset()
@@ -613,22 +719,42 @@ func _draw() -> void:
 	for prop in M.occluders():
 		depth_entries.append({"kind": "occluder", "depth": prop.depth, "data": prop})
 	for enemy in enemies:
-		if enemy.hp <= 0 or enemy.zone > stage: continue
-		depth_entries.append({"kind": "enemy", "depth": enemy.pos.y + 18.0, "data": enemy})
+		if enemy.zone > stage: continue
+		if enemy.hp > 0 or (enemy.get("death_age", -1.0) >= 0.0 and enemy.death_age < 1.05):
+			depth_entries.append({"kind": "enemy", "depth": enemy.pos.y + 18.0, "data": enemy})
 	depth_entries.append({"kind": "lia", "depth": pos.y + 18.0})
 	depth_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.depth < b.depth)
+	var scenery: Array[Dictionary] = []
+	for entry in depth_entries:
+		var bounds := _scenery_bounds(entry)
+		if bounds.has_area(): scenery.append({"y": float(entry.depth), "bounds": bounds})
+	var ghosts: Array[Dictionary] = []
 	for entry in depth_entries:
 		match entry.kind:
 			"prop": M.draw_prop(self, entry.data, clock)
 			"occluder": M.draw_occluder(self, entry.data)
-			"enemy": _draw_enemy(entry.data)
-			"lia": _draw_lia()
+			"enemy":
+				_draw_enemy(entry.data)
+				var enemy: Dictionary = entry.data
+				if enemy.hp > 0 and Occlusion.is_hidden(Occlusion.drone_rect(enemy.pos, enemy.boss), float(entry.depth), scenery):
+					ghosts.append(enemy)
+			"lia":
+				_draw_lia()
+				if Occlusion.is_hidden(Occlusion.lia_rect(pos), float(entry.depth), scenery):
+					ghosts.append({"lia": true})
+	# Actors behind the biodigesters, the truck or lamp posts stay readable.
+	for ghost in ghosts:
+		if ghost.has("lia"):
+			Occlusion.draw_lia_ghost(self, pos, aim, _animation.elapsed, _animation.moving, "repair" if hold_progress > 0 else "idle")
+		else:
+			Occlusion.draw_drone_ghost(self, _enemy_view(ghost), clock + int(ghost.id) * 0.137)
 	for bullet in bullets:
 		if not bullet.hostile:
 			Actors.WEAPON.draw_pulse(self, bullet, clock)
 		else:
 			draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.45), 6)
 			draw_circle(bullet.pos, 4, PINK)
+	for effect in effects: _draw_effect(effect)
 	if state == "play":
 		var next := guidance_point()
 		if next.distance_to(pos) > 95.0:
@@ -653,7 +779,11 @@ func _draw_lia() -> void:
 	if carried >= 0:
 		M.draw_sprite(self, carried, pos + Vector2(-14, -25), 24)
 
-func _draw_enemy(enemy: Dictionary) -> void:
+func _scenery_bounds(entry: Dictionary) -> Rect2:
+	if entry.kind in ["prop", "occluder"]: return M.scenery_bounds(entry.kind, entry.data)
+	return Rect2()
+
+func _enemy_view(enemy: Dictionary) -> Dictionary:
 	var view := enemy.duplicate()
 	view["kind"] = enemy.get("kind", "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry"))
 	view["max_hp"] = enemy.get("max_hp", Simulation.enemy_health(view.kind, 3))
@@ -662,6 +792,14 @@ func _draw_enemy(enemy: Dictionary) -> void:
 	view["warning"] = 1.0 if enemy.shot_cd < 0.27 else 0.0
 	view["hurt"] = enemy.hit_cd
 	view["moving"] = enemy.pos.distance_to(pos) < 420
+	return view
+
+func _draw_enemy(enemy: Dictionary) -> void:
+	var view := _enemy_view(enemy)
+	if enemy.hp <= 0:
+		view["anim_time"] = clock + enemy.id * 0.137
+		Actors.ENEMIES.draw_destroyed(self, view)
+		return
 	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
 	if enemy.boss or enemy.hp < view.max_hp:
 		var width := 70.0 if enemy.boss else 34.0

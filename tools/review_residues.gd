@@ -15,6 +15,7 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	game.set_physics_process(false)
+	game._finish_dialogue()
 	game.toast_time = 0.0
 	var views := [
 		["01-triagem", Vector2(740, 540), 0, Vector2(740, 515)],

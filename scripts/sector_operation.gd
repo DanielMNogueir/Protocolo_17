@@ -11,9 +11,17 @@ const LABELS := [
 const POINTS := [
 	[Vector2(660,1490), Vector2(800,1110)],
 	[Vector2(670,660), Vector2(940,480)],
-	[Vector2(1740,560), Vector2(2240,480)],
+	[Vector2(1700,520), Vector2(2240,480)],
 	[Vector2(1960,1170), Vector2(2190,1530)],
 ]
+## Each sector asks for a different gesture on E, matching its machine:
+## "mash" pries the grate loose, "hold" turns a valve or washes a filter,
+## "timing" synchronises the generator, "charge" builds network pressure
+## that must be released inside the safe band.
+const MODES := [["mash", "hold"], ["timing", "timing"], ["hold", "hold"], ["charge", "charge"]]
+const MASH_STEP := 0.2
+const MASH_DECAY := 0.35
+const CHARGE_RATE := 0.75
 var stage := 0
 var completed := 0
 var progress := 0.0
@@ -58,6 +66,15 @@ func target() -> Vector2:
 func label() -> String:
 	return str(LABELS[stage][mini(completed, 1)])
 
+func mode() -> String:
+	return str(MODES[stage][mini(completed, 1)])
+
+## Safe pressure band for "charge" tasks, as [low, high] fractions of the gauge.
+static func band(difficulty: String) -> Vector2:
+	if difficulty == "story": return Vector2(0.58, 0.92)
+	if difficulty == "veteran": return Vector2(0.72, 0.86)
+	return Vector2(0.66, 0.88)
+
 func charge() -> float:
 	return pingpong(clock * 0.55, 1.0)
 
@@ -87,16 +104,37 @@ func tick(dt: float, pos: Vector2, interacting: bool, safe: bool, difficulty: St
 		progress = 0.0
 		return ""
 	if wants_treatment(pos): return ""
-	if stage == 1:
-		if not pressed: return ""
-		if not in_window(difficulty):
-			cooldown = 0.75
-			return "timing_miss"
-		progress = 1.0
-	elif interacting:
-		progress = minf(1.0, progress + dt / (1.6 if stage == 0 else 1.2))
-	else:
-		progress = 0.0
+	match mode():
+		"timing":
+			if not pressed: return ""
+			if not in_window(difficulty):
+				cooldown = 0.75
+				return "timing_miss"
+			progress = 1.0
+		"mash":
+			progress = maxf(0.0, progress - dt * MASH_DECAY)
+			if not pressed: return ""
+			progress = minf(1.0, progress + MASH_STEP)
+			if progress < 1.0: return "mash"
+		"charge":
+			if interacting:
+				progress += dt * CHARGE_RATE
+				if progress < 1.0: return ""
+				progress = 0.0
+				cooldown = 0.9
+				return "pressure_miss"
+			if progress <= 0.0: return ""
+			var safe_band := band(difficulty)
+			if progress < safe_band.x or progress > safe_band.y:
+				progress = 0.0
+				cooldown = 0.6
+				return "pressure_miss"
+			progress = 1.0
+		_:
+			if interacting:
+				progress = minf(1.0, progress + dt / (1.6 if stage == 0 else 1.2))
+			else:
+				progress = 0.0
 	if progress < 1.0: return ""
 	completed += 1
 	progress = 0.0

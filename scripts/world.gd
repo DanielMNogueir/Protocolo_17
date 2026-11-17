@@ -12,9 +12,12 @@ const BridgeLayout = preload("res://scripts/bridge_layout.gd")
 const Wetlands = preload("res://scripts/wetlands.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
 const SIZE := Vector2(2560, 1800)
+## Two continuous banks of the Aurora river. Captação (SW) and the Pátio Solar
+## (NW) share the west bank and a walled boundary; Filtragem (NE) and
+## Distribuição (SE) share the east bank. The river bends west downstream.
 const REGIONS: Array[Rect2] = [
-	Rect2(100, 1020, 1010, 660), Rect2(100, 100, 1010, 740),
-	Rect2(1450, 100, 1010, 740), Rect2(1450, 1020, 1010, 660),
+	Rect2(100, 930, 1010, 750), Rect2(100, 100, 1050, 830),
+	Rect2(1450, 100, 1010, 790), Rect2(1400, 890, 1060, 790),
 ]
 const NAMES := ["CAIS DAS BOMBAS", "PÁTIO SOLAR", "GALERIA DOS FILTROS", "DISTRIBUIÇÃO AURORA"]
 const START := Vector2(440, 1570)
@@ -27,8 +30,11 @@ const SPAWNS := [
 	[Vector2(1620,590),Vector2(1910,460),Vector2(2200,720),Vector2(2310,540),Vector2(2050,540)],
 	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1900,1540),Vector2(2110,1370)],
 ]
-const BRIDGES: Array[Rect2] = [Rect2(690,840,160,180),Rect2(1110,530,340,160),Rect2(1960,840,160,180)]
-const GATES: Array[Rect2] = [Rect2(682,919,176,22),Rect2(1269,522,22,176),Rect2(1952,919,176,22)]
+## The only bridge crosses the river; the other two gates stand in openings
+## of the walls that divide each bank.
+const BRIDGES: Array[Rect2] = [Rect2(1150,530,300,160)]
+const GATEWAYS: Array[Rect2] = [Rect2(682,900,176,60),Rect2(1952,860,176,60)]
+const GATES: Array[Rect2] = [Rect2(682,919,176,22),Rect2(1289,522,22,176),Rect2(1952,879,176,22)]
 const PIER := Rect2(370,1680,140,90)
 const ROUTES := [
 	[START,Vector2(690,1570),Vector2(690,1190),GOALS[0]],
@@ -262,6 +268,23 @@ static func sortable_objects(view: Rect2) -> Array[Dictionary]:
 		if _visible(GATES[index],view): result.append({"type":"gate","index":index,"rect":GATES[index],"y":GATES[index].end.y})
 	return result
 
+## Drawn footprint of a sortable object; used to find actors hidden behind it.
+static func sortable_bounds(object: Dictionary) -> Rect2:
+	match str(object.type):
+		"machine", "prop": return object.prop.get("visual_bounds", Rect2())
+		"terminal": return terminal(int(object.index)).visual_bounds
+		"bridge_part": return object.rect
+		"district_wall": return object.visual_bounds
+	# Reeds and ferns are see-through foliage; they never hide a body.
+	return Rect2()
+
+## Drawn footprint of the energy station's three sorted parts.
+static func station_part_bounds(index: int) -> Rect2:
+	match index:
+		0: return EnergyStation.CONTROL_VISUAL
+		1: return EnergyStation.GENERATOR_VISUAL
+	return terminal(1).visual_bounds
+
 static func draw_sortable(canvas: Node2D, object: Dictionary, restored: int, time: float, stage: int = 0, available: bool = false, repair: float = 0.0) -> void:
 	match object.type:
 		"wetland_plant": Wetlands.draw_plant(canvas,object,time)
@@ -293,7 +316,7 @@ static func prepare_wetlands() -> void:
 	for group in SPAWNS:
 		for spawn in group: reservations.append(Rect2(spawn-Vector2(32,32),Vector2(64,64)))
 	Wetlands.prepare(REGIONS,ROUTES,reservations,BASINS)
-	Architecture.prepare(REGIONS,Wetlands.CHANNELS,BRIDGES,Wetlands.CROSSINGS,PIER,BASINS)
+	Architecture.prepare(REGIONS,Wetlands.CHANNELS,BRIDGES+GATEWAYS,Wetlands.CROSSINGS,PIER,BASINS)
 	_wetlands_ready = true
 
 static func _draw_region(canvas: Node2D, rect: Rect2, index: int, view: Rect2, restored: int) -> void:
@@ -512,7 +535,11 @@ static func _draw_goal_pad(canvas: Node2D, p: Vector2, index: int, active: bool,
 static func _draw_gate(canvas: Node2D, rect: Rect2, opened: bool, time: float) -> void:
 	var crosses_vertical_bridge := rect.size.x>rect.size.y
 	var center := rect.get_center()
-	var span := 92.0
+	# A bridge deck is narrower than its gate plane; a wall opening is not.
+	var on_bridge := false
+	for bridge in BRIDGES:
+		if bridge.intersects(rect): on_bridge = true
+	var span := 92.0 if on_bridge else maxf(rect.size.x,rect.size.y)-12.0
 	var start := center-Vector2(span*0.5,0) if crosses_vertical_bridge else center-Vector2(0,span*0.5)
 	var color := Color("76dec1") if opened else Color("d29c63")
 	# Actuator sits outside the clear deck; the beam follows the collision plane.

@@ -368,6 +368,17 @@ static func occluders() -> Array[Dictionary]:
 	entries.append({"polygon": PackedVector2Array([Vector2(300, 747), Vector2(315, 728), Vector2(358, 715), Vector2(450, 715), Vector2(455, 725), Vector2(481, 725), Vector2(494, 742), Vector2(495, 792), Vector2(483, 810), Vector2(310, 810), Vector2(300, 795)]), "depth": 808.0 * SCALE})
 	return entries
 
+## Drawn footprint of a depth-sorted prop ("prop") or occluder ("occluder").
+static func scenery_bounds(kind: String, data: Dictionary) -> Rect2:
+	if kind == "prop":
+		var foot: Vector2 = data.foot
+		var width: float = data.width
+		return Rect2(foot - Vector2(width * 0.5, width), Vector2(width, width))
+	var polygon: PackedVector2Array = data.polygon
+	var box := Rect2(polygon[0] * SCALE, Vector2.ZERO)
+	for point in polygon: box = box.expand(point * SCALE)
+	return box
+
 static func draw_occluder(canvas: Node2D, entry: Dictionary) -> void:
 	var polygon: PackedVector2Array = entry.polygon
 	var points := PackedVector2Array()
