@@ -30,6 +30,11 @@ static func draw(canvas: Node2D, story: P17Prologue, camera: Vector2) -> void:
 		var offset := (size*0.5-camera).round()
 		canvas.draw_set_transform(offset)
 		Lab.draw(canvas,story,Rect2(camera-size/2,size).grow(100),canvas.laboratory_effects)
+		if story.phase == "lab" and story.conversation.is_empty():
+			canvas.prologue_guide.draw_world(canvas, story.elapsed, canvas.prologue_guide.intensity)
+			var target: Vector2 = story.TARGETS[story.step]
+			if story.step in [1, 2, 3, 4, 6] and story.pos.distance_to(target) <= 65.0:
+				FieldHUD.interaction(canvas, target, story.elapsed)
 		canvas.draw_set_transform(Vector2.ZERO)
 		_draw_hud(canvas,story,size)
 		if not story.conversation.is_empty(): _draw_dialogue(canvas,story,size)
@@ -66,7 +71,7 @@ static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void
 	for n in 3:
 		var cell := Rect2(102+n*61,77,57,7)
 		FieldHUD.plate(canvas,cell,color if n<story.hp else Color("20383b"),1)
-	FieldHUD.text(canvas,"SINAL CRÍTICO" if low else "LABORATÓRIO / ANTES DA QUEDA",Vector2(98,102),8,color if low else FieldHUD.MUTED)
+	FieldHUD.text(canvas,"SINAL CRÍTICO" if low else "LABORATÓRIO / ANTES DA QUEDA",Vector2(98,102),10,color if low else FieldHUD.MUTED)
 	canvas.draw_circle(Vector2(37,103),2,color)
 	if low: FieldHUD.edge(canvas,Rect2(18,18,284,96),Color(RED,0.45+0.3*sin(story.elapsed*5)),2)
 	var r := Rect2(size.x-346,60,330,100)
@@ -77,36 +82,17 @@ static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void
 	canvas._wrapped(story.OBJECTIVES[story.step],Rect2(r.position+Vector2(18,39),Vector2(294,34)),12,TEXT,16)
 	for n in 7:
 		FieldHUD.bar(canvas,Rect2(r.position+Vector2(18+n*42,80),Vector2(36,8)),1.0 if n<story.step else (0.4 if n==story.step else 0.0),CYAN if n<story.step else accent)
-	if (story.conversation.is_empty() or not story.dialogue_blocks) and story.phase == "lab" and story.step<7:
-		var hint: String = story.HINTS[story.step]
-		if story.interaction_active: hint = "AÇÃO EM ANDAMENTO / PERMANEÇA PERTO DA ESTAÇÃO"
-		var bottom: float = size.y-67 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-24
-		var width := minf(560,size.x-64)
-		var box := Rect2((size.x-width)/2,bottom-48,width,44)
-		FieldHUD.panel(canvas,box,CYAN)
-		FieldHUD.centered(canvas,hint,box.position+Vector2(width/2,21),9,CYAN)
-		if story.repair>0: FieldHUD.bar(canvas,Rect2(box.position+Vector2(17,28),Vector2(width-34,7)),story.repair,CYAN)
-		_draw_navigation(canvas,story,size)
-static func _draw_navigation(canvas: Node2D, story: P17Prologue, size: Vector2) -> void:
-	if story.step>=7: return
-	var target: Vector2 = story.TARGETS[story.step]
-	var offset: Vector2 = (size*0.5-canvas.prologue_camera).round()
-	var player: Vector2 = story.pos+offset
-	var screen: Vector2 = target+offset
-	var delta: Vector2 = screen-player
-	var hint_top: float = (size.y-67 if story.conversation.is_empty() else Dialogue.layout(size).frame.position.y-24)-48
-	# Keep the marker and its label entirely above the instruction panel.
-	var bottom := hint_top-37
-	var safe := Rect2(40,179,size.x-80,maxf(1,bottom-179))
-	if delta.length()<75 and safe.has_point(screen): return
-	var p: Vector2 = (player+delta.normalized()*52) if safe.has_point(screen) else screen
-	p = p.clamp(safe.position,safe.end)
-	var direction := delta.normalized()
-	var side := direction.orthogonal()
-	FieldHUD.panel(canvas,Rect2(p-Vector2(20,20),Vector2(40,40)))
-	canvas.draw_arc(p,13,0,TAU,24,Color(FieldHUD.GOLD,0.4),1)
-	canvas.draw_colored_polygon(PackedVector2Array([p+direction*11,p-direction*6+side*7,p-direction*6-side*7]),Color("f3cc80"))
-	canvas._text_center("OBJETIVO",p+Vector2(0,31),8,Color("f3cc80"))
+	if story.conversation.is_empty() and story.phase == "lab" and story.step < 7:
+		var actions := ["VÁ À BANCADA", "CALIBRE O CIRCUITO", "CONSULTE A ANÁLISE", "DESENERGIZE O ATUADOR",
+			"ISOLE A CONEXÃO", "ALCANCE O ARQUIVO E EVITE OS AVISOS", "PRESERVE O REGISTRO"]
+		var near: bool = story.pos.distance_to(story.TARGETS[story.step]) < 65.0
+		var interaction := near and story.step in [1, 2, 3, 4, 6]
+		if story.interaction_active:
+			FieldHUD.prompt(canvas, size, "", "PERMANEÇA PERTO DA ESTAÇÃO", CYAN)
+			FieldHUD.bar(canvas, Rect2(size.x * 0.5 - 223.0, size.y - 79.0, 446, 5), story.repair, CYAN)
+		else:
+			FieldHUD.prompt(canvas, size, "E" if interaction else "", actions[story.step], CYAN)
+		canvas.prologue_guide.draw_screen(canvas, story.elapsed, canvas.prologue_guide.intensity)
 
 static func _draw_dialogue(canvas: Node2D, story: P17Prologue, size: Vector2) -> void:
 	var human: bool = story.conversation[0][0] == "beatrix"

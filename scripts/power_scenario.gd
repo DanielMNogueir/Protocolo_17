@@ -14,6 +14,8 @@ const Story = preload("res://scripts/power_story.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const FieldHUD = preload("res://scripts/field_hud.gd")
+const Guide = preload("res://scripts/objective_guide.gd")
 const HUD = preload("res://scripts/power_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/power_lighting.gdshader")
 const Sound = preload("res://scripts/audio.gd")
@@ -94,6 +96,7 @@ var fire_interval := 0.145
 var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
+var objective_guide := Guide.new()
 var guidance_path := PackedVector2Array()
 var _guide_timer := 0.0
 var _guide_target := Vector2.INF
@@ -123,6 +126,7 @@ func _ready() -> void:
 		_muted = settings.get_value("audio", "muted", false)
 		dialogue_fast = settings.get_value("narrative", "instant_prologue_text", false)
 	sound.set_muted(_muted)
+	objective_guide.configure(settings, "energy")
 	sound.set_mood("blackout")
 	Actors.ENEMIES.prepare()
 	overloads = [Mechanics.Overload.new(difficulty, loadout.timing_scale, "steady"), Mechanics.Overload.new(difficulty, loadout.timing_scale, "surge")]
@@ -286,6 +290,7 @@ func _present(dt: float) -> void:
 	var lights := _dynamic_lights()
 	_light_material.set_shader_parameter("lights", lights)
 	_light_material.set_shader_parameter("light_count", lights.size())
+	_update_objective_guide(dt)
 	queue_redraw()
 	_fx.queue_redraw()
 	_hud.queue_redraw()
@@ -954,6 +959,38 @@ func objective_point() -> Vector2:
 			return M.w(M.RING_CENTER)
 	return M.w(M.ELEVATOR)
 
+func objective_place() -> String:
+	match stage:
+		0:
+			if not mirrors.solved: return "ESPELHO %d" % mini(mirrors.lit_count(), 3)
+			return "CENTRAL SOLAR" if zone_alive(0) > 0 else "TERMINAL SOLAR"
+		1:
+			if pos.x < 900 * M.SCALE: return "CORREDOR DE CABOS"
+			if _alive_kind(1, "transformer"): return "TRANSFORMADOR"
+			if not relays.solved: return "RELÉS DA TORRE NORTE"
+			return "TORRE NORTE" if zone_alive(1) > 0 else "TERMINAL DA TORRE"
+		2:
+			if battery.started:
+				for i in 3:
+					if battery.danger(i): return "CONSOLE DA CÉLULA %d" % (i + 1)
+			return "ANEL DE RECARGA"
+	return "ELEVADOR DO NÚCLEO"
+
+
+func _update_objective_guide(dt: float) -> void:
+	var size := get_viewport_rect().size
+	var active := state == "play"
+	objective_guide.in_combat = false
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
+			objective_guide.in_combat = true
+			break
+	var reserve := 206.0 if stage < 2 and overloads[stage].running else FieldHUD.GUIDE_BOTTOM
+	var safest := FieldHUD.guide_safe_rect(size, -1.0, 236.0 if stage == 2 else 194.0, reserve)
+	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()), safest, active, objective_place(), size)
+	objective_guide.cues(dt, sound)
+
+
 func _objective_body(target: Vector2) -> String:
 	for i in 2:
 		if target == M.w(M.TERMINALS[i]): return "terminal %d" % i
@@ -1233,16 +1270,10 @@ func _draw_fx(layer: Node2D) -> void:
 			layer.draw_circle(bullet.pos, 4, PINK)
 	for effect in effects: _draw_effect(layer, effect)
 	if state == "play":
-		var next := guidance_point()
-		if next.distance_to(pos) > 95.0:
-			var direction := (next - pos).normalized()
-			var p := pos + direction * 62 + Vector2(0, 18)
-			layer.draw_polyline(PackedVector2Array([p - direction.rotated(-0.65) * 9, p, p - direction.rotated(0.65) * 9]), Color(GOLD, 0.65 + 0.15 * sin(clock * 3)), 2)
+		objective_guide.draw_world(layer, clock, objective_guide.intensity)
 		var candidate := interaction_candidate()
 		if not candidate.is_empty():
-			var p: Vector2 = candidate.pos
-			layer.draw_arc(p, 46, 0, TAU, 30, Color(CYAN, 0.64), 2)
-			layer.draw_string(ThemeDB.fallback_font, p + Vector2(-6, -52), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, WHITE)
+			FieldHUD.interaction(layer, candidate.pos, clock)
 	layer.draw_set_transform(Vector2.ZERO)
 
 func _draw_beams(layer: Node2D) -> void:

@@ -45,6 +45,11 @@ static func label(sim: P17Simulation) -> String:
 		return "%s  /  %s" % [sim.operation.label(), hint]
 	return "RESTAURAR %s  /  SEGURE E" % Objectives.SYSTEMS[sim.stage]
 
+static func task_place(sim: P17Simulation) -> String:
+	var name: String = sim.operation.label()
+	return name.substr(name.find(" ") + 1).trim_prefix("A ").trim_prefix("O ").trim_prefix("AS ").trim_prefix("OS ")
+
+
 static func objective(sim: P17Simulation) -> Vector2:
 	if sim.state == "combat":
 		var best := Vector2.INF

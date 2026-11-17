@@ -42,7 +42,7 @@ func _run() -> void:
 
 func _views() -> void:
 	game.clock = 2.0
-	game.guide_tip = 0.0
+	game.guide.tip_remaining = 0.0
 	game.choice.reopen()
 	game.choice.heard_ai = 0
 	game.choice.heard_human = 0

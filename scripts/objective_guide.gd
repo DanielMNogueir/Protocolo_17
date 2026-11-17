@@ -11,6 +11,14 @@ const EDGE_RADIUS := 22.0
 const MINIMAL := 0
 const NORMAL := 1
 const STRONG := 2
+const INTENSITY_NAMES := ["MÍNIMA", "NORMAL", "FORTE"]
+const SETTINGS_PATH := "user://settings.cfg"
+
+var intensity := STRONG
+var tip_remaining := 0.0
+var _district := ""
+var _tip_started := true
+var _tip_origin := Vector2.ZERO
 
 var mode := "hidden"
 var place := ""
@@ -30,7 +38,8 @@ var _has_goal := false
 
 
 func update(delta: float, lia: Vector2, next_point: Vector2, target: Vector2,
-		world_to_screen: Transform2D, safe: Rect2, active: bool, place_name: String) -> void:
+		world_to_screen: Transform2D, safe: Rect2, active: bool, place_name: String,
+		screen_size: Vector2 = Vector2.ZERO) -> void:
 	ping = false
 	if not active:
 		mode = "hidden"
@@ -44,7 +53,10 @@ func update(delta: float, lia: Vector2, next_point: Vector2, target: Vector2,
 	_safe = safe
 	place = place_name
 	_distance = lia.distance_to(target)
-	var viewport := Rect2(Vector2.ZERO, Vector2(safe.end.x + safe.position.x, safe.end.y + HUD.GUIDE_BOTTOM))
+	var extent := screen_size
+	if extent == Vector2.ZERO:
+		extent = Vector2(safe.end.x + safe.position.x, safe.end.y + HUD.GUIDE_BOTTOM)
+	var viewport := Rect2(Vector2.ZERO, extent)
 	var target_on_screen := viewport.has_point(world_to_screen * target)
 	mode = "arrived" if _distance < NEAR else ("arrow" if target_on_screen else "edge")
 
@@ -89,27 +101,17 @@ func edge_position() -> Vector2:
 	return start + direction * minf(tx, ty)
 
 
-static func draw_arrow(canvas: CanvasItem, at: Vector2, direction: Vector2, color: Color, scale: float = 1.0) -> void:
-	for offset in [0.0, -10.0]:
-		var tip: Vector2 = at + direction * offset * scale
-		var left := tip + direction.rotated(2.52) * 16.0 * scale
-		var right := tip + direction.rotated(-2.52) * 16.0 * scale
-		var chevron := PackedVector2Array([left, tip, right])
-		canvas.draw_polyline(chevron, Color(HUD.INK, color.a), 8.0 * scale, true)
-		canvas.draw_polyline(chevron, color, 4.0 * scale, true)
-
-
-func draw_world(canvas: CanvasItem, time: float, intensity: int) -> void:
+func draw_world(canvas: CanvasItem, time: float, strength: int) -> void:
 	if mode == "hidden":
 		return
 	var alpha := 0.65 if in_combat else 0.95
 	var direction := arrow_direction()
 	if mode != "arrived" and not direction.is_zero_approx():
 		var tip := _lia + direction * (ARROW_OFFSET + 5.0 * sin(time * TAU * 1.2)) + Vector2(0, 18)
-		draw_arrow(canvas, tip, direction, Color(HUD.GOLD, alpha))
-	if intensity == MINIMAL:
+		HUD.chevron(canvas, tip, direction, Color(HUD.GOLD, alpha))
+	if strength == MINIMAL:
 		return
-	if intensity == STRONG:
+	if strength == STRONG:
 		var vertices := PackedVector2Array([_target + Vector2(-8, 0), _target + Vector2(8, 0),
 			_target + Vector2(8, -140), _target + Vector2(-8, -140)])
 		canvas.draw_polygon(vertices, PackedColorArray([Color(HUD.GOLD, 0.35), Color(HUD.GOLD, 0.35),
@@ -127,8 +129,8 @@ func draw_world(canvas: CanvasItem, time: float, intensity: int) -> void:
 	_draw_diamond(canvas, diamond)
 
 
-func draw_screen(canvas: CanvasItem, time: float, intensity: int) -> void:
-	if intensity == MINIMAL or mode == "hidden" or mode == "arrived":
+func draw_screen(canvas: CanvasItem, time: float, strength: int) -> void:
+	if strength == MINIMAL or mode == "hidden" or mode == "arrived":
 		return
 	if mode == "arrow":
 		var anchor := _transform * (_target + Vector2(0, -111 + 4 * sin(time * TAU)))
@@ -169,3 +171,35 @@ static func _draw_diamond(canvas: CanvasItem, at: Vector2) -> void:
 		at + Vector2(0, 9), at + Vector2(-7, 0), at + Vector2(0, -9)])
 	canvas.draw_colored_polygon(shape.slice(0, 4), HUD.GOLD)
 	canvas.draw_polyline(shape, HUD.INK, 2)
+
+
+func configure(config: ConfigFile, district: String = "") -> void:
+	intensity = clampi(int(config.get_value("interface", "guide", STRONG)), MINIMAL, STRONG)
+	_district = district
+	_tip_started = district.is_empty() or bool(config.get_value("tutorial", "arrow_" + district, false))
+
+
+func cues(delta: float, audio: Node) -> void:
+	if mode == "hidden":
+		return
+	if ping and intensity == STRONG:
+		audio.play_sfx("guide_ping")
+	if not _tip_started and intensity > MINIMAL and mode != "arrived":
+		_tip_started = true
+		var config := ConfigFile.new()
+		config.load(SETTINGS_PATH)
+		config.set_value("tutorial", "arrow_" + _district, true)
+		config.save(SETTINGS_PATH)
+		tip_remaining = 6.0
+		_tip_origin = _lia
+	tip_remaining = 0.0 if _lia.distance_to(_tip_origin) >= 120.0 else maxf(0.0, tip_remaining - delta)
+
+
+func draw_tip(canvas: CanvasItem) -> void:
+	if tip_remaining <= 0.0 or intensity == MINIMAL or mode == "hidden" or mode == "arrived":
+		return
+	var at := _transform * _lia + Vector2(0, 56)
+	var rect := _label_rect(at, Vector2(178, 25))
+	HUD.plate(canvas, rect, HUD.INK, 5)
+	HUD.edge(canvas, rect, HUD.GOLD, 1.0, 5)
+	HUD.centered(canvas, "SIGA A SETA DOURADA", rect.get_center() + Vector2(0, 4), 10, HUD.GOLD)

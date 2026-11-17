@@ -384,24 +384,17 @@ static func _ghosts(canvas: Node2D, game: Node2D) -> void:
 static func _interactables(canvas: Node2D, game: Node2D) -> void:
 	match game.state:
 		"gallery":
-			if not game.channel_read and game.near(Map.TERMINAL, 78.0): _interaction(canvas, Map.TERMINAL, game.clock)
+			if not game.channel_read and game.near(Map.TERMINAL, 78.0): HUD.interaction(canvas, Map.TERMINAL, game.clock)
 		"arena":
 			var index: int = game.pillar_in_reach() if game.boss.phase == 1 else -1
-			if index >= 0: _interaction(canvas, Map.pillars()[index], game.clock)
+			if index >= 0: HUD.interaction(canvas, Map.pillars()[index], game.clock)
 		"choice":
 			var side: String = game.side_at_console()
 			if not side.is_empty():
 				var at: Vector2 = Map.CONSOLES[0 if side == "human" else 1]
-				_interaction(canvas, at, game.clock)
+				HUD.interaction(canvas, at, game.clock)
 				if game.choice.hold > 0.0:
 					canvas.draw_arc(at, 42, -PI / 2.0, -PI / 2.0 + TAU * game.choice.hold, 32, CYAN if side == "human" else PINK, 4, true)
-
-
-static func _interaction(canvas: Node2D, at: Vector2, time: float) -> void:
-	var ring := PowerArt._ellipse(at, 23, 11.5)
-	ring.append(ring[0])
-	canvas.draw_polyline(ring, Color(CYAN, 0.77 + 0.13 * sin(time * TAU * 1.2)), 2, true)
-	HUD.keycap(canvas, "E", Rect2(at + Vector2(-11, -61), Vector2(22, 18)))
 
 
 static func _evidence(canvas: Node2D, data: Dictionary, time: float) -> void:

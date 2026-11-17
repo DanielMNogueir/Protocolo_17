@@ -21,7 +21,7 @@ class Effects extends Node2D:
 
 	func _draw() -> void:
 		Art.effects(self, game)
-		game.guide.draw_world(self, game.clock, game.guide_intensity)
+		game.guide.draw_world(self, game.clock, game.guide.intensity)
 
 var map := Map.new()
 var campaign := Progress.new()
@@ -70,12 +70,8 @@ var overlay_return := ""
 var after_dialogue := ""
 var test_endings: Array[String] = []
 var save_error := false
-var guide_intensity := Guide.STRONG
-var guide_tip := 0.0
 var objective: Dictionary = {}
-var _tip_origin := Vector2.INF
 var _settings := ConfigFile.new()
-var _guide_started := false
 var _route_time := 0.0
 var _route_target := Vector2.INF
 var _waypoint := Vector2.ZERO
@@ -106,7 +102,7 @@ func _ready() -> void:
 	hp = loadout.max_hp
 	_settings.load("user://settings.cfg")
 	dialogue_fast = _settings.get_value("narrative", "instant_prologue_text", false)
-	guide_intensity = clampi(_settings.get_value("interface", "guide", Guide.STRONG), 0, 2)
+	guide.configure(_settings, "core")
 	sound = Audio.new()
 	add_child(sound)
 	sound.set_muted(_settings.get_value("audio", "muted", false))
@@ -778,24 +774,12 @@ func _present(dt: float) -> void:
 		if near(enemy.pos, 200.0):
 			guide.in_combat = true
 			break
-	guide.update(dt, pos, _waypoint, point, Transform2D(0.0, world_offset()), HUD.Field.guide_safe_rect(size, -1.0, 201.0), active, objective.place)
-	_update_tip(dt, active)
+	guide.update(dt, pos, _waypoint, point, Transform2D(0.0, world_offset()), HUD.Field.guide_safe_rect(size, -1.0, 201.0, 195.0 if active_pillar >= 0 else HUD.Field.GUIDE_BOTTOM),
+		active, objective.place, size)
+	guide.cues(dt, sound)
 	queue_redraw()
 	_fx.queue_redraw()
 	_hud.queue_redraw()
-
-
-func _update_tip(dt: float, active: bool) -> void:
-	if not active:
-		return
-	if not _guide_started:
-		_guide_started = true
-		if not _settings.get_value("tutorial", "arrow_core", false):
-			_settings.set_value("tutorial", "arrow_core", true)
-			_settings.save("user://settings.cfg")
-			_tip_origin = pos
-			guide_tip = 6.0
-	guide_tip = 0.0 if pos.distance_to(_tip_origin) >= 120.0 else maxf(0.0, guide_tip - dt)
 
 
 func objective_data() -> Dictionary:

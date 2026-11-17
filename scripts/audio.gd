@@ -50,7 +50,7 @@ func warm_up() -> void:
 	for mood in MOODS:
 		if not _tracks.has(mood):
 			_tracks[mood] = _compose(mood)
-	for id in ["shoot", "hurt", "dash", "enemy_dead", "repair", "boss", "complete", "ui"] + POWER_EFFECTS:
+	for id in ["shoot", "hurt", "dash", "enemy_dead", "repair", "boss", "complete", "ui", "guide_ping"] + POWER_EFFECTS:
 		_effects[id] = _make_effect(id)
 	for kind in EnemyAudio.KINDS:
 		for event in EnemyAudio.EVENTS:
@@ -151,6 +151,7 @@ func play_sfx(id: String) -> void:
 	voice.stop()
 	voice.stream = _effects[id]
 	voice.volume_db = EFFECT_DB - (4.0 if id == "shoot" else 0.0)
+	if id == "guide_ping": voice.volume_db -= 14.0
 	if id.begins_with("unit_"):
 		voice.volume_db -= 9.0 if id.ends_with("hit") else 5.0
 	voice.play()
@@ -318,6 +319,7 @@ func _make_effect(id: String) -> AudioStreamWAV:
 		"boss": duration = 0.8
 		"complete": duration = 1.15
 		"ui": duration = 0.08
+		"guide_ping": duration = 0.22
 	var samples := PackedFloat32Array()
 	samples.resize(int(duration * RATE))
 	var rng := RandomNumberGenerator.new()
@@ -346,11 +348,12 @@ func _make_effect(id: String) -> AudioStreamWAV:
 				noise_amount = 0.10
 			"complete": hz = 440.0 * pow(2.0, float([2, 5, 9, 14, 17][mini(4, int(p * 5.0))]) / 12.0)
 			"ui": hz = 880.0 + p * 220.0
+			"guide_ping": hz = 523.25 if p < 0.5 else 659.25
 		phase += TAU * hz / RATE
 		var wave := sin(phase) * 0.76 + sin(phase * 2.0) * 0.16 + sin(phase * 3.0) * 0.08
 		var envelope := minf(t / 0.006, 1.0) * pow(1.0 - p, 1.5)
-		if id in ["repair", "complete"]:
-			var note_phase := fmod(p * (4.0 if id == "repair" else 5.0), 1.0)
+		if id in ["repair", "complete", "guide_ping"]:
+			var note_phase := fmod(p * (2.0 if id == "guide_ping" else (4.0 if id == "repair" else 5.0)), 1.0)
 			envelope *= minf(note_phase * 15.0, 1.0) * minf((1.0 - note_phase) * 8.0, 1.0)
 		samples[index] = lerpf(wave, noise, noise_amount) * envelope * 0.68
 	return _wav(samples, false)

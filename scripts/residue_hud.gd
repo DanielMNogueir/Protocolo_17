@@ -19,20 +19,21 @@ func _draw() -> void:
 	# Like Energy, a conversation owns the screen; the scenario draws the frame.
 	if game.state == "dialogue": return
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
-	var direction: Vector2 = game.guidance_point() - game.pos
 	var beats := _beats()
 	var status := "RESÍDUOS  •  SISTEMAS %d/3" % mini(game.stage, 3)
 	if game.stage < 3: status += "  •  ETAPA %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()]
 	if beats.drones > 0: status += "  •  %d DRONE%s" % [beats.drones, "" if beats.drones == 1 else "S"]
-	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], _direction(direction) + "  " + game.objective_label(), status, game.stage, mini(game.stage, 3), 3)
+	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], game.objective_label().get_slice("  /  ", 0), status, game.stage, mini(game.stage, 3), 3, "recycle", game.objective_guide, game.clock)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL", game.pointer)
 	FieldHUD.campaign(self, 1, game.clock)
 	if game.stage < 3:
 		FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()], "recycle", beats.labels, beats.done, game.clock)
 	if game.state == "play":
-		game.buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
-		game.buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
+		game.objective_guide.draw_screen(self, game.clock, game.objective_guide.intensity)
+		game.objective_guide.draw_tip(self)
+		game.buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
+		game.buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
 	var mini_map := FieldHUD.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
 
 	_draw_plan(mini_map, false)
@@ -40,14 +41,13 @@ func _draw() -> void:
 	if not candidate.is_empty():
 		var message := ""
 		match candidate.kind:
-			"item": message = "E  •  RECOLHER " + M.MATERIALS[candidate.index]
-			"bin": message = "E  •  ENTREGAR " + M.MATERIALS[game.carried]
-			"block": message = "SEGURE E  •  " + ("DESOBSTRUIR ESTEIRA" if candidate.index < 2 else "REABRIR VENTILAÇÃO")
-			"terminal": message = "SEGURE E  •  RESTAURAR SISTEMA"
-		_prompt(size, message, CYAN)
-		if game.hold_progress > 0: draw_rect(Rect2(Vector2(size.x * 0.5 - 200, size.y - 69), Vector2(400 * game.hold_progress, 3)), CYAN)
+			"item": message = "RECOLHER " + M.MATERIALS[candidate.index]
+			"bin": message = "ENTREGAR " + M.MATERIALS[game.carried]
+			"block": message = "" + ("DESOBSTRUIR ESTEIRA" if candidate.index < 2 else "REABRIR VENTILAÇÃO")
+			"terminal": message = "RESTAURAR SISTEMA"
+		FieldHUD.prompt(self, size, "E", message, CYAN, game.hold_progress if candidate.kind in ["block", "terminal"] else -1.0)
 	elif game.state == "play" and game.stage < 3 and not game._terminal_ready(game.stage) and game.pos.distance_to(M.TERMINALS[game.stage]) < 110.0:
-		_prompt(size, "TERMINAL BLOQUEADO  •  " + _terminal_reason(), GOLD)
+		FieldHUD.prompt(self, size, "", "TERMINAL BLOQUEADO  •  " + _terminal_reason(), GOLD)
 	elif game.carried >= 0:
 		_text_center("EM MÃOS: " + M.MATERIALS[game.carried] + "  /  PROCURE A BAIA", Vector2(size.x * 0.5, size.y - 38), 11, GOLD)
 	if game.bin_lock > 0:
@@ -105,12 +105,6 @@ func _beats() -> Dictionary:
 	labels.append_array(["DRONES", "TERMINAL"])
 	if done == work and drones == 0: done += 1
 	return {"labels": labels, "done": done, "drones": drones}
-
-## Same bottom prompt as Energy: accent frame in the prompt colour.
-func _prompt(size: Vector2, message: String, color: Color) -> void:
-	var box := Rect2(size.x * 0.5 - 220, size.y - 110, 440, 44)
-	FieldHUD.panel(self, box, color)
-	_text_center(FieldHUD.fit(message, 410, 11), box.get_center() + Vector2(0, 3), 11, color)
 
 func _terminal_reason() -> String:
 	match game.stage:
@@ -196,7 +190,12 @@ func _overlay(title: String, subtitle: String) -> void:
 	var size := get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.9))
 	_text_center(title, Vector2(size.x * 0.5, size.y * 0.5 - 30), 30, WHITE)
-	_text_center(subtitle, Vector2(size.x * 0.5, size.y * 0.5 + 20), 14, GOLD)
+	if game.state == "pause":
+		_text_center("OBJETIVO ATUAL", size * 0.5 + Vector2(0, 3), 10, GOLD)
+		_text_center(FieldHUD.fit(game.objective_label(), size.x - 64, 13), size * 0.5 + Vector2(0, 21), 13, WHITE)
+		_text_center(game.objective_place(), size * 0.5 + Vector2(0, 40), 11, CYAN)
+	else:
+		_text_center(subtitle, Vector2(size.x * 0.5, size.y * 0.5 + 20), 14, GOLD)
 
 func _draw_plan(area: Rect2, detailed: bool) -> void:
 	M.draw_background(self, area, Color(0.6, 0.7, 0.69, 0.95))
@@ -214,11 +213,9 @@ func _draw_plan(area: Rect2, detailed: bool) -> void:
 	for point in game.guidance_path: route.append(area.position + point * scale)
 	if route.size() > 1: draw_polyline(route, Color(GOLD, 0.95), 2 if detailed else 1)
 	var target: Vector2 = area.position + game.objective_point() * scale
-	draw_arc(target, 7 if detailed else 4, 0, TAU, 20, GOLD, 2)
+	if not detailed: MapUI.marker(self, target, "objective")
 	var lia: Vector2 = area.position + game.pos * scale
-	draw_circle(lia, 7 if detailed else 5, INK)
-	draw_circle(lia, 4 if detailed else 3, WHITE)
-	if detailed: _text("LIA", lia + Vector2(9, 3), 9, WHITE)
+	if not detailed: MapUI.marker(self, lia, "player", false, game.aim)
 
 func _draw_map(size: Vector2) -> void:
 	var parts := MapUI.shell(self,size,"DISTRITO DE RESÍDUOS","BAIRRO INDUSTRIAL / 3 INSTALAÇÕES",game.pointer)
@@ -248,7 +245,7 @@ func _draw_map(size: Vector2) -> void:
 		route.append(area.position+game.pos*scale)
 		for point in game.guidance_path: route.append(area.position+point*scale)
 		for i in range(route.size()-1): draw_dashed_line(route[i],route[i+1],GOLD,2,4)
-		MapUI.marker(self,area.position+game.objective_point()*scale,"objective")
+		MapUI.label_objective(self, area, area.position + game.objective_point() * scale, game.objective_place())
 	var alive := 0
 	for enemy in game.enemies:
 		if enemy.hp>0 and enemy.zone<=game.stage:
@@ -264,15 +261,10 @@ func _draw_map(size: Vector2) -> void:
 	for value in game.cleared:
 		if value: cleared_count+=1
 	var stats := [{"label":"MATERIAIS TRIADOS","value":"%d / 4" % sorted_count},{"label":"ROTAS LIBERADAS","value":"%d / 4" % cleared_count},{"label":"AMEAÇAS NO SETOR","value":"%02d" % alive,"color":MapUI.RED if alive>0 else CYAN}]
-	var location: String = ["CENTRO DE TRIAGEM","USINA DE RECICLAGEM","UNIDADE DE COMPOSTAGEM","DISTRITO RECUPERADO"][game.stage]
 	var hint := "Siga a rota âmbar pelas entradas das instalações e use E para interagir."
 	if game.carried>=0: hint="EM MÃOS: "+M.MATERIALS[game.carried]+". Entregue o material na baia indicada."
 	if game.stage==3: hint="Rede industrial recuperada. Os três sistemas estão em operação."
-	MapUI.sidebar(self,parts.sidebar,mini(game.stage,3),3,location,game.objective_label(),stats,hint)
-func _direction(vector: Vector2) -> String:
-	if vector.length() < 45: return "●"
-	return ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][posmod(int(round(vector.angle() / (PI / 4.0))), 8)]
-
+	MapUI.sidebar(self,parts.sidebar,mini(game.stage,3),3,game.objective_place(),game.objective_label(),stats,hint)
 func _text(value: String, point: Vector2, size: int, color: Color) -> void:
 	draw_string(ThemeDB.fallback_font, point.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 

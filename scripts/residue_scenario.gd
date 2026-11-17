@@ -6,6 +6,8 @@ const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const Occlusion = preload("res://scripts/occlusion.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const FieldHUD = preload("res://scripts/field_hud.gd")
+const Guide = preload("res://scripts/objective_guide.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
 const BACKGROUND_SHADER = preload("res://scripts/residue_background.gdshader")
@@ -79,6 +81,8 @@ var fire_interval := 0.145
 var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
+var objective_guide := Guide.new()
+var _guide_layer: Node2D
 var guidance_path := PackedVector2Array()
 var _guide_timer := 0.0
 var _guide_target := Vector2.INF
@@ -86,6 +90,19 @@ var sound: Node
 var _muted := false
 var campaign := CampaignProgress.new()
 var module_notice := ""
+
+class GuidanceLayer extends Node2D:
+	var game: Node2D
+
+	func _draw() -> void:
+		if game.state != "play": return
+		draw_set_transform(game._offset())
+		game.objective_guide.draw_world(self, game.clock, game.objective_guide.intensity)
+		var candidate: Dictionary = game._interaction_candidate()
+		if not candidate.is_empty():
+			FieldHUD.interaction(self, candidate.pos, game.clock)
+		draw_set_transform(Vector2.ZERO)
+
 
 func _ready() -> void:
 	_apply_handoff()
@@ -96,6 +113,7 @@ func _ready() -> void:
 		_muted = settings.get_value("audio", "muted", false)
 		dialogue_fast = settings.get_value("narrative", "instant_prologue_text", false)
 	sound.set_muted(_muted)
+	objective_guide.configure(settings, "residues")
 	sound.set_mood("calm")
 	Actors.ENEMIES.prepare()
 	for i in 4:
@@ -113,6 +131,9 @@ func _ready() -> void:
 		add_child(background)
 		_backgrounds.append(background)
 	_setup_lighting()
+	_guide_layer = GuidanceLayer.new()
+	_guide_layer.game = self
+	add_child(_guide_layer)
 	var layer := CanvasLayer.new()
 	layer.layer = 5
 	add_child(layer)
@@ -194,6 +215,7 @@ func _physics_process(delta: float) -> void:
 		dialogue_chars += dt * (400.0 if dialogue_fast else 46.0)
 	_update_effects(dt)
 	if state != "play":
+		_update_objective_guide(dt)
 		queue_redraw()
 		_hud.queue_redraw()
 		_dialogue_layer.queue_redraw()
@@ -242,6 +264,7 @@ func _physics_process(delta: float) -> void:
 	_light_material.set_shader_parameter("scene_time", clock)
 	_light_material.set_shader_parameter("restored", float(stage))
 	_light_material.set_shader_parameter("ventilation", float(int(cleared[2]) + int(cleared[3])))
+	_update_objective_guide(dt)
 	queue_redraw()
 	_hud.queue_redraw()
 
@@ -533,6 +556,35 @@ func objective_point() -> Vector2:
 		if enemy.zone == stage and enemy.hp > 0: return enemy.pos
 	return M.TERMINALS[stage]
 
+func objective_place() -> String:
+	match stage:
+		0:
+			if carried >= 0: return "BAIA DE " + M.MATERIALS[carried]
+			for i in sorted.size():
+				if not sorted[i]: return "CARGA DE " + M.MATERIALS[i]
+			return "CENTRO DE TRIAGEM"
+		1:
+			if not (cleared[0] and cleared[1]): return "ROTA DA PRENSA"
+			return "USINA DE RECICLAGEM"
+		2:
+			if not (cleared[2] and cleared[3]): return "DUTOS ORGÂNICOS"
+			return "UNIDADE DE COMPOSTAGEM"
+	return "DISTRITO RECUPERADO"
+
+
+func _update_objective_guide(dt: float) -> void:
+	var size := get_viewport_rect().size
+	objective_guide.in_combat = false
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
+			objective_guide.in_combat = true
+			break
+	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()),
+		FieldHUD.guide_safe_rect(size), state == "play", objective_place(), size)
+	objective_guide.cues(dt, sound)
+	_guide_layer.queue_redraw()
+
+
 func _update_guidance() -> void:
 	var target := objective_point()
 	if _guide_timer > 0.0 and target.distance_to(_guide_target) < 25.0: return
@@ -767,17 +819,6 @@ func _draw() -> void:
 			draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.45), 6)
 			draw_circle(bullet.pos, 4, PINK)
 	for effect in effects: _draw_effect(effect)
-	if state == "play":
-		var next := guidance_point()
-		if next.distance_to(pos) > 95.0:
-			var direction := (next - pos).normalized()
-			var p := pos + direction * 62 + Vector2(0, 18)
-			draw_polyline(PackedVector2Array([p - direction.rotated(-0.65) * 9, p, p - direction.rotated(0.65) * 9]), Color(GOLD, 0.65 + 0.15 * sin(clock * 3)), 2)
-	var candidate := _interaction_candidate()
-	if not candidate.is_empty():
-		var p: Vector2 = candidate.pos
-		draw_arc(p, 50, 0, TAU, 30, Color(CYAN, 0.64), 2)
-		draw_string(ThemeDB.fallback_font, p + Vector2(-6, -55), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, WHITE)
 	if collision_audit:
 		M.draw_collision_audit(self, stage, cleared)
 		draw_arc(pos, 14, 0, TAU, 24, Color.WHITE, 1)

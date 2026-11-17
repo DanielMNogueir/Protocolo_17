@@ -54,7 +54,7 @@ func _field(size: Vector2) -> void:
 	Field.campaign(self, 3, game.clock)
 	buttons.append({"rect": Field.MAP_BUTTON, "id": "map"})
 	buttons.append({"rect": Field.PAUSE_BUTTON, "id": "pause"})
-	game.guide.draw_screen(self, game.clock, game.guide_intensity)
+	game.guide.draw_screen(self, game.clock, game.guide.intensity)
 	_mission(size, objective)
 	var radar := Field.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
 	_plan(radar, false)
@@ -65,13 +65,7 @@ func _field(size: Vector2) -> void:
 			_overload(size)
 		_crosshair()
 	_interaction_prompt(size)
-	if game.guide_tip > 0 and game.guide_intensity > Guide.MINIMAL and game.state != "collapse":
-		var anchor: Vector2 = game.pos + game.world_offset()
-		var safe := Field.guide_safe_rect(size, -1.0, 201.0)
-		var p := (anchor + Vector2(-90, 60)).clamp(safe.position, safe.end - Vector2(180, 30))
-		var hint := Rect2(p, Vector2(180, 28))
-		Field.panel(self, hint)
-		Field.centered(self, "SIGA A SETA DOURADA", hint.get_center() + Vector2(0, 4), 10, GOLD)
+	game.guide.draw_tip(self)
 	if game.toast_left > 0 and not game.toast.is_empty():
 		var r := Rect2(318, 163, minf(size.x - 346.0, 490.0), 37)
 		var color := PINK if game.toast.begins_with("IA:") else CYAN
@@ -89,7 +83,7 @@ func _mission(size: Vector2, objective: Dictionary) -> void:
 	if game.guide.mode == "arrived":
 		draw_arc(at - Vector2(0, 4), 7, 0.0, TAU, 20, CYAN, 2, true)
 	else:
-		Guide.draw_arrow(self, at - Vector2(0, 4), game.guide.arrow_direction(), GOLD, 0.48)
+		Field.chevron(self, at - Vector2(0, 4), game.guide.arrow_direction(), GOLD, 0.48)
 	Field.text(self, Field.fit(objective.text, 272, 12), r.position + Vector2(43, 62), 12)
 	Field.text(self, Field.fit(objective.place, 284, 11), r.position + Vector2(19, 88), 11, Field.MUTED)
 	var step := 287.0 / int(objective.total)
@@ -97,7 +91,7 @@ func _mission(size: Vector2, objective: Dictionary) -> void:
 		var p := r.position + Vector2(20 + i * step, 103)
 		var completed: bool = i < objective.done
 		Field.bar(self, Rect2(p, Vector2(step - 6, 9)), 1.0 if completed else (0.35 + 0.12 * sin(game.clock * TAU) if i == objective.done else 0), CYAN if completed else GOLD)
-	if game.guide.highlight > 0.0 and game.guide_intensity == Guide.STRONG:
+	if game.guide.highlight > 0.0 and game.guide.intensity == Guide.STRONG:
 		Field.edge(self, r.grow(1), Color(GOLD, game.guide.highlight), 2)
 
 
@@ -187,11 +181,10 @@ func _plan(r: Rect2, full: bool) -> void:
 		for p: Vector2 in Map.CONSOLES: draw_circle(origin + p * factor, 3, CYAN if p.x < Map.CENTER.x else PINK)
 		draw_circle(origin + Map.CENTER * factor, 5, PINK)
 	var target: Vector2 = origin + Vector2(game.objective.point) * factor
-	MapUI.marker(self, target, "objective")
 	if full:
-		var label := Rect2((target + Vector2(-90, 12)).clamp(r.position, r.end - Vector2(180, 26)), Vector2(180, 26))
-		Field.panel(self, label)
-		Field.centered(self, game.objective.place, label.get_center() + Vector2(0, 4), 10, GOLD)
+		MapUI.label_objective(self, r, target, game.objective.place)
+	else:
+		MapUI.marker(self, target, "objective")
 	MapUI.marker(self, origin + Vector2(game.pos) * factor, "player", false, game.aim)
 
 

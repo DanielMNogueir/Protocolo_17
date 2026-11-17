@@ -70,7 +70,6 @@ static func draw(canvas: Node2D, state: P17Prologue, _view: Rect2, effects: P17L
     canvas.draw_line(p-Vector2(0,16),state.pos-Vector2(0,28),Color("f57c85",0.35+0.25*absf(sin(state.elapsed*14))),2)
  for bolt in state.bolts:
   canvas.draw_line(bolt.pos-bolt.vel.normalized()*9,bolt.pos,Color("ee7b89") if bolt.hostile else Color("a0f1df"),2)
- _draw_beacon(canvas,state)
 static func _draw_objective_pad(canvas: Node2D, state: P17Prologue) -> void:
  if state.step>=7: return
  var p: Vector2 = state.TARGETS[state.step]
@@ -80,23 +79,3 @@ static func _draw_objective_pad(canvas: Node2D, state: P17Prologue) -> void:
  canvas.draw_polyline(shape,Color("f3cc80",0.7),1)
  canvas.draw_arc(p,28,0,TAU,32,Color("f3cc80",0.48+0.18*sin(state.elapsed*3)),2)
  if state.repair>0: canvas.draw_arc(p,22,-PI/2,-PI/2+state.repair*TAU,32,Color("8df2ce"),2)
-static func _draw_beacon(canvas: Node2D, state: P17Prologue) -> void:
- if state.step>=7: return
- var p: Vector2 = state.TARGETS[state.step]
- var source: Vector2 = [Vector2(353,518),Vector2(353,518),Vector2(666,232),Vector2(321,327),Vector2(321,327),Vector2(1043,647),Vector2(1043,647)][state.step]
- var instrument := Set.point(source)
- var amber := Color("f3cc80")
- var top := instrument-Vector2(0,19+sin(state.elapsed*3)*2)
- canvas.draw_colored_polygon(PackedVector2Array([top+Vector2(-5,-5),top+Vector2(5,-5),top+Vector2(0,2)]),amber)
- canvas.draw_arc(instrument,13,0,TAU,24,Color(amber,0.55),1)
- canvas.draw_line(instrument+Vector2(0,14),p,Color(amber,0.3),1)
- var labels := ["DIAGNÓSTICO","E • CALIBRAR","E • CONSULTAR","E • ATUADOR","E • ISOLAR","ARQUIVO","E • PRESERVAR"]
- var text: String = "EM ANDAMENTO" if state.interaction_active else labels[state.step]
- var font := ThemeDB.fallback_font
- var width := font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,10).x+16
- var anchor := p+Vector2(45,7)
- var rect := Rect2(anchor+Vector2(-width/2,0),Vector2(width,21))
- if rect.intersects(Rect2(state.pos-Vector2(17,60),Vector2(34,63))): rect.position.x = p.x-width-25
- canvas.draw_rect(rect,Color("0c2630",0.96))
- canvas.draw_rect(rect,amber,false,1)
- canvas.draw_string(font,rect.position+Vector2(8,14),text,HORIZONTAL_ALIGNMENT_LEFT,-1,10,amber)

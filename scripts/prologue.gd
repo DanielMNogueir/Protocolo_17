@@ -8,6 +8,8 @@ const CONTEXT := [
 const TEXT_SPEED := 64.0
 const OBJECTIVES := ["Vá à bancada de diagnóstico", "Calibre o circuito de manutenção", "Consulte a análise ambiental", "Desenergize o atuador de segurança", "Isole a conexão externa", "Alcance o arquivo de emergência", "Preserve o registro de emergência", "Registro preservado"]
 const HINTS := ["WASD / SETAS  •  MOVER", "APROXIME-SE E PRESSIONE E  •  CALIBRAR", "APROXIME-SE E PRESSIONE E  •  CONSULTAR", "APROXIME-SE E PRESSIONE E  •  DESENERGIZAR", "APROXIME-SE E PRESSIONE E  •  ISOLAR", "ALCANCE O ARQUIVO  •  EVITE OS AVISOS VERMELHOS", "APROXIME-SE E PRESSIONE E  •  PRESERVAR", ""]
+const PLACE_NAMES := ["BANCADA DE DIAGNÓSTICO", "CIRCUITO DE MANUTENÇÃO", "TERMINAL DE ANÁLISE",
+	"ATUADOR DE SEGURANÇA", "CONEXÃO EXTERNA", "ARQUIVO DE EMERGÊNCIA", "TERMINAL DO ARQUIVO", "TERMINAL DO ARQUIVO"]
 const TARGETS: Array[Vector2] = [Lab.DIAGNOSTIC,Lab.CALIBRATION,Lab.ANALYSIS,Lab.RELAY_APPROACH,Lab.ISOLATION,Lab.ESCAPE,Lab.ARCHIVE,Lab.ARCHIVE]
 var phase := "context"
 var page := 0
