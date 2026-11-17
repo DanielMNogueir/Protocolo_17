@@ -4,7 +4,9 @@ const Story = preload("res://scripts/core_story.gd")
 const Field = preload("res://scripts/field_hud.gd")
 const MapUI = preload("res://scripts/field_map.gd")
 const CITY: Texture2D = preload("res://assets/prologue/aurora_before.png")
-const PIER: Texture2D = preload("res://docs/direcao-visual/distrito-das-aguas-conceito.png")
+const WATER: Texture2D = preload("res://docs/direcao-visual/distrito-das-aguas-conceito.png")
+const PIER: Texture2D = preload("res://assets/core/ending_ai_pier.png")
+const AI_CITY: Texture2D = preload("res://assets/core/ending_ai_aurora.png")
 const LAB: Texture2D = preload("res://assets/prologue/laboratory_set_v1.png")
 const RESIDUES: Texture2D = preload("res://assets/residues/district_city_v3.png")
 const WATER_CROP := Rect2(20, 172, 1630, 545)
@@ -90,9 +92,9 @@ func _draw_card(canvas: Node2D, size: Vector2, card: Array) -> void:
 	var r := Rect2(Vector2.ZERO, size)
 	match card[0]:
 		"aurora": _cover(canvas, CITY, r)
-		"ai_aurora": _cover(canvas, CITY, r, Color("8cae96"))
+		"ai_aurora": _cover(canvas, AI_CITY, r)
 		"residues": _cover(canvas, RESIDUES, r)
-		"water": _cover(canvas, PIER, r, Color.WHITE, WATER_CROP)
+		"water": _cover(canvas, WATER, r, Color.WHITE, WATER_CROP)
 		"exodus":
 			_cover(canvas, CITY, r, Color("697f86"))
 			_exodus(canvas, size)
@@ -104,8 +106,8 @@ func _draw_card(canvas: Node2D, size: Vector2, card: Array) -> void:
 
 
 func _draw_signal(canvas: Node2D, size: Vector2) -> void:
-	_cover(canvas, PIER if result == "ai" else LAB, Rect2(Vector2.ZERO, size), Color("526976"),
-		WATER_CROP if result == "ai" else Rect2())
+	_cover(canvas, PIER if result == "ai" else LAB, Rect2(Vector2.ZERO, size),
+		Color.WHITE if result == "ai" else Color("526976"))
 	var panel := Rect2(size.x * 0.5 - 320.0, size.y - 144.0, 640, 112)
 	Field.panel(canvas, panel, accent())
 	var message := Story.PIER_RADIO if result == "ai" else Story.LAB_MESSAGE

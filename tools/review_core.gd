@@ -116,7 +116,7 @@ func _views() -> void:
 func _capture(label: String) -> void:
 	game._present(0.0)
 	await process_frame
-	await RenderingServer.frame_post_draw
+	RenderingServer.force_draw(true)
 	var image := root.get_texture().get_image()
 	if image.is_empty() or image.save_png(out.path_join("%s-%s.png" % [capture_size, label])) != OK:
 		failures += 1

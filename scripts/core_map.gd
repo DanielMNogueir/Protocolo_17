@@ -1,43 +1,49 @@
 extends RefCounted
 
 const GALLERY_SIZE := Vector2(1280, 800)
-const GALLERY_START := Vector2(640, 690)
-const TERMINAL := Vector2(335, 470)
-const STAIRS := Rect2(560, 40, 160, 70)
+# Footprints measured on the painted service hall at 1280×800.
+const GALLERY_FLOOR := Rect2(94, 175, 1110, 495)
+const GALLERY_START := Vector2(640, 565)
+const TERMINAL := Vector2(293, 493)
+const STAIRS := Rect2(503, 112, 275, 97)
 const GALLERY_BLOCKS := [
-	Rect2(1080, 120, 90, 600), Rect2(520, 120, 240, 150),
-	Rect2(60, 140, 120, 480), Rect2(260, 380, 150, 70),
+	Rect2(1010, 161, 193, 507), Rect2(398, 268, 483, 130),
+	Rect2(92, 152, 136, 510), Rect2(143, 369, 133, 190),
+	Rect2(473, 583, 336, 89),
 ]
 const ARENA_SIZE := Vector2(1920, 1440)
 const CENTER := Vector2(960, 760)
-const RADII := Vector2(640, 470)
-const ENTRY := Vector2(960, 1206.5)
-const ARRIVAL := Vector2(960, 1136)
-const OVERLOOK := Vector2(960, 337)
+# Floor, hatches and sockets measured in the 1536×1024 arena artwork.
+const ARENA_ART := Rect2(0, 188, 1920, 1434)
+const FLOOR_CENTER := Vector2(960, 775)
+const RADII := Vector2(715, 436)
+const ENTRY := Vector2(960, 1196)
+const ARRIVAL := Vector2(960, 1148)
+const OVERLOOK := Vector2(960, 381)
+const ARC_SOCKETS := [[Vector2(1203, 584), Vector2(1262, 584)], [Vector2(655, 950), Vector2(720, 950)]]
 const PILLAR_NAMES := ["PILAR NORTE", "PILAR LESTE", "PILAR SUL", "PILAR OESTE"]
 const MIRROR_NAMES := ["ESPELHO OESTE", "ESPELHO NOROESTE", "ESPELHO NORTE"]
 const CONSOLES := [Vector2(750, 800), Vector2(1170, 800)]
 const STEP := 32
-const WALL := 22.0
 
 var _grids: Dictionary = {}
 
 
 static func ring(fraction: float, degrees: float) -> Vector2:
-	return CENTER + RADII * Vector2.from_angle(deg_to_rad(degrees)) * fraction
+	return FLOOR_CENTER + RADII * Vector2.from_angle(deg_to_rad(degrees)) * fraction
 
 
 static func pillars() -> Array[Vector2]:
-	return [ring(0.62, -90), ring(0.62, 0), ring(0.62, 90), ring(0.62, 180)]
+	return [Vector2(960, 446), Vector2(1417, 751), Vector2(960, 1086), Vector2(500, 751)]
 
 
 static func mirrors() -> Array[Vector2]:
-	return [ring(0.9, 200), ring(0.9, 235), ring(0.9, 270)]
+	return [Vector2(304, 746), Vector2(436, 521), Vector2(668, 410)]
 
 
 static func spawns() -> Array[Vector2]:
 	var points: Array[Vector2] = []
-	for angle in [0, 45, 135, 180, 225, 315]:
+	for angle in [0, 45, 135, 170, 225, 315]:
 		points.append(ring(0.93, angle))
 	return points
 
@@ -64,14 +70,14 @@ static func blocks(phase: int) -> Array[Vector3]:
 
 static func walkable(point: Vector2, radius: float, phase: int) -> bool:
 	if phase == 0:
-		if not Rect2(Vector2.ONE * WALL, GALLERY_SIZE - Vector2.ONE * WALL * 2.0).grow(-radius).has_point(point):
+		if not GALLERY_FLOOR.grow(-radius).has_point(point) and not STAIRS.grow(-radius).has_point(point):
 			return false
 		for rect: Rect2 in GALLERY_BLOCKS:
 			var nearest := point.clamp(rect.position, rect.end)
 			if nearest.distance_squared_to(point) <= radius * radius:
 				return false
 		return true
-	if ((point - CENTER) / (RADII - Vector2.ONE * radius)).length_squared() > 1.0:
+	if ((point - FLOOR_CENTER) / (RADII - Vector2.ONE * radius)).length_squared() > 1.0:
 		return false
 	for block in blocks(phase):
 		if point.distance_squared_to(Vector2(block.x, block.y)) < pow(radius + block.z, 2):

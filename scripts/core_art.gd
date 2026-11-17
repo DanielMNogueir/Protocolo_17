@@ -4,8 +4,16 @@ const Map = preload("res://scripts/core_map.gd")
 const Boss = preload("res://scripts/core_boss.gd")
 const HUD = preload("res://scripts/field_hud.gd")
 const PowerArt = preload("res://scripts/power_art.gd")
-const PROPS: Texture2D = preload("res://assets/power/props_atlas.png")
-const TERMINALS: Texture2D = preload("res://assets/power/terminals_atlas.png")
+const GALLERY: Texture2D = preload("res://assets/core/gallery.png")
+const FRAMES = preload("res://assets/core/frames.gd")
+const NIGHT: Texture2D = preload("res://assets/core/arena_night.png")
+const DAWN: Texture2D = preload("res://assets/core/arena_dawn.png")
+const CITY_NIGHT: Texture2D = preload("res://assets/core/city_below_night.png")
+const CITY_DAWN: Texture2D = preload("res://assets/core/city_below_dawn.png")
+const BOSS_SHEET: Texture2D = preload("res://assets/core/core_boss.png")
+const PILLAR_SHEET: Texture2D = preload("res://assets/core/pillars.png")
+const CONSOLE_SHEET: Texture2D = preload("res://assets/core/choice_consoles.png")
+const SPARK_SHEET: Texture2D = preload("res://assets/power/spark.png")
 const Actors = preload("res://scripts/actors_art.gd")
 const Occlusion = preload("res://scripts/occlusion.gd")
 const CITY: Texture2D = preload("res://assets/prologue/aurora_before.png")
@@ -14,11 +22,16 @@ const CYAN := HUD.CYAN
 const GOLD := HUD.GOLD
 const RED := HUD.RED
 const SUN := Color("ffe4a8")
-const STEEL := Color("34464a")
-const JOINT := Color("566b6b")
-const BRASS := Color("b08a4a")
 const INK := HUD.INK
-const ARMOR := Color("6b8383")
+const GALLERY_OUTLINES := [
+	[Vector2(1045, 62), Vector2(1160, 67), Vector2(1208, 664), Vector2(1012, 664), Vector2(1017, 129)],
+	[Vector2(458, 119), Vector2(782, 109), Vector2(838, 162), Vector2(838, 251), Vector2(880, 276),
+		Vector2(875, 368), Vector2(808, 398), Vector2(464, 397), Vector2(402, 366), Vector2(397, 275), Vector2(445, 221)],
+	[Vector2(93, 87), Vector2(204, 83), Vector2(249, 121), Vector2(237, 312), Vector2(157, 408), Vector2(134, 656), Vector2(94, 658)],
+	[Vector2(147, 371), Vector2(259, 332), Vector2(290, 366), Vector2(275, 450), Vector2(190, 554), Vector2(149, 554)],
+	[Vector2(538, 579), Vector2(742, 579), Vector2(812, 670), Vector2(470, 670)],
+]
+
 
 
 static func darkness(game: Node2D) -> float:
@@ -36,8 +49,8 @@ static func lights(game: Node2D) -> PackedVector4Array:
 	var points := PackedVector4Array()
 	if game.in_gallery:
 		points.append(Vector4(Map.TERMINAL.x, Map.TERMINAL.y, 150, 0.82))
-		points.append(Vector4(640, 727, 130, 0.64))
-		points.append(Vector4(640, 85, 105, 0.6 if game.channel_read else 0.28))
+		points.append(Vector4(640, 638, 130, 0.64))
+		points.append(Vector4(640, 168, 105, 0.6 if game.channel_read else 0.28))
 	else:
 		var boss: Boss = game.boss
 		var center := boss.core_position()
@@ -73,34 +86,23 @@ static func world(game: Node2D) -> void:
 				Actors.draw_lia(game, game.pos, game.aim, a.elapsed, a.moving,
 					game.invuln > 0.0 and int(game.clock * 16.0) % 2 == 0, game.dash_time > 0.0, action, shot_age)
 			"spark":
-				if instance.data.warp <= 0.0: PowerArt.draw_enemy(game, instance.data, game.clock)
+				if instance.data.warp <= 0.0: _draw_spark(game, instance.data, game.clock)
 			_:
 				_fixture(game, instance)
 	game.draw_set_transform(Vector2.ZERO)
 
 
 static func _gallery(game: Node2D) -> void:
-	var extent := Rect2(Vector2.ZERO, Map.GALLERY_SIZE)
-	game.draw_rect(extent, Color("101b24"))
-	var tile_rect := extent.grow(-18)
-	game.draw_rect(tile_rect, Color("293b40"))
-	PowerArt._draw_tiles(game, tile_rect, 64.0, JOINT)
-	game.draw_rect(tile_rect, BRASS.darkened(0.35), false, 3)
-	PowerArt._draw_hazard(game, Rect2(558, 104, 164, 10))
-	var gate_color := CYAN if game.channel_read else RED
-	game.draw_rect(Map.STAIRS, INK)
-	for i in 5:
-		var step := Rect2(Map.STAIRS.position + Vector2(6, 6 + i * 12), Vector2(148, 10))
-		game.draw_rect(step, STEEL.lightened((4 - i) * 0.045))
-		game.draw_line(step.position, step.position + Vector2(step.size.x, 0), gate_color.darkened(0.25), 2)
+	game.draw_texture_rect(GALLERY, Rect2(Vector2.ZERO, Map.GALLERY_SIZE), false)
+	for i in 6:
+		var y := 184.0 + fposmod(i * 82.0 - game.clock * 30.0, 467.0)
+		game.draw_rect(Rect2(1098, y, 7, 3), Color(CYAN, 0.36))
+		game.draw_rect(Rect2(1140, y, 7, 3), Color(CYAN, 0.36))
+	var at := Vector2(644, 191)
 	if not game.channel_read:
-		game.draw_line(Vector2(558, 110), Vector2(722, 110), RED, 4)
-	game.draw_texture_rect_region(TERMINALS, Rect2(588, 691, 104, 84),
-		_atlas_region(TERMINALS, Vector2i(3, 0), Vector2i(4, 1)))
-	game.draw_line(Vector2(640, 275), Vector2(640, 665), Color(CYAN, 0.18), 2)
-	for i in 8:
-		var y := 275.0 + 45.0 * i
-		game.draw_rect(Rect2(632, y, 16, 2), Color(CYAN, 0.24))
+		game.draw_dashed_line(at - Vector2(130, 0), at + Vector2(130, 0), Color(RED, 0.83), 3, 8, false, true)
+	var alpha := 0.48 + minf(0.44, game.terminal_hold * 0.44)
+	game.draw_line(Vector2(173, 426), Vector2(211, 394), Color(PINK, alpha), 3, true)
 
 
 static func _arena(game: Node2D) -> void:
@@ -109,44 +111,22 @@ static func _arena(game: Node2D) -> void:
 	var c := Map.CENTER
 	var parallax: Vector2 = (game.camera - c) * 0.65
 	var city := Rect2(c - Vector2(1350, 915) + parallax, Vector2(2700, 1830))
-	var shade := Color("28435e").lerp(Color("b0886b"), dawn)
-	if game.choice.result == "ai": shade = shade.lerp(PINK, 0.35)
-	game.draw_texture_rect(CITY, city, false, shade)
-	for i in 5:
-		var x := fposmod(i * 511.0 + game.clock * 8.0, 2420.0)
-		var p := Vector2(x - 230.0, 300.0 + i * 183.0) + parallax
-		game.draw_colored_polygon(PowerArt._ellipse(p, 170 + 23 * i, 40 + i * 5), Color("c6ced1", 0.08))
-	var radii := Map.RADII
-	game.draw_colored_polygon(PowerArt._ellipse(c + Vector2(0, 30), radii.x + 4.0, radii.y), Color("16252b"))
-	game.draw_colored_polygon(PowerArt._ellipse(c, radii.x, radii.y), STEEL)
-	for fraction in [0.32, 0.51, 0.7, 0.88]:
-		game.draw_polyline(_ring(fraction), JOINT, 2, true)
-	for i in 24:
-		var angle := i * 15.0
-		game.draw_line(Map.ring(0.16, angle), Map.ring(0.98, angle), JOINT.darkened(0.21), 2)
-	for i in 90:
-		game.draw_line(Map.ring(0.94, i * 4.0), Map.ring(0.94, i * 4.0 + 2.4), GOLD.darkened(0.2), 4)
-	for i in 12:
-		var step := Rect2(895, 1198 + i * 5, 130, 5)
-		game.draw_rect(step, STEEL.darkened(0.12 + i * 0.02))
-		game.draw_line(step.position, step.position + Vector2(step.size.x, 0), JOINT, 1)
-	game.draw_polyline(_ring(1.0), INK, 6, true)
-	var rails := _ring(1.0, Vector2(0, -21))
-	game.draw_polyline(rails, BRASS, 3, true)
-	for i in 48:
-		var at := Map.ring(1.0, i * 7.5)
-		if absf(i * 7.5 - 90.0) < 8.0: continue
-		game.draw_line(at, at + Vector2(0, -26), BRASS, 3)
-		if i % 6 == 0 and boss.phase != 2:
-			game.draw_circle(at + Vector2(0, -24), 8, Color(GOLD, 0.26))
-			game.draw_rect(Rect2(at + Vector2(-3, -26), Vector2(6, 4)), SUN)
+	game.draw_texture_rect(CITY_NIGHT, city, false)
+	if dawn > 0.0: game.draw_texture_rect(CITY_DAWN, city, false, Color(1, 1, 1, dawn))
+	game.draw_texture_rect(NIGHT, Map.ARENA_ART, false)
+	if dawn > 0.0:
+		var tint := Color(1.0, 0.78, 0.92, dawn) if game.choice.result == "ai" else Color(1, 1, 1, dawn)
+		game.draw_texture_rect(DAWN, Map.ARENA_ART, false, tint)
 	if boss.phase == 1:
 		var pillars := Map.pillars()
 		for index in pillars.size():
 			var point := pillars[index]
-			game.draw_line(point, c, INK, 10, true)
-			if not boss.pillars[index].done:
-				game.draw_dashed_line(point, c, Color(CYAN, 0.5 + sin(game.clock * 3.0 + index) * 0.16), 3, 11, false, true)
+			var start := point.move_toward(c, 43.0)
+			var end := c.move_toward(point, 141.0)
+			if boss.pillars[index].done:
+				game.draw_line(start, end, Color(INK, 0.82), 10, true)
+			else:
+				game.draw_dashed_line(start, end, Color(CYAN, 0.5 + sin(game.clock * 3.0 + index) * 0.16), 3, 11, false, true)
 	if boss.phase == 2:
 		for arc in boss.arcs:
 			var mode: String = arc.state(boss.phase_time)
@@ -158,25 +138,13 @@ static func _arena(game: Node2D) -> void:
 			HUD.centered(game, orient[1], at, 13, Color(HUD.WHITE, 0.8))
 
 
-static func _ring(fraction: float, offset: Vector2 = Vector2.ZERO) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	for i in 97:
-		var angle := i * 3.75
-		var point := Map.ring(fraction, angle)
-		if offset != Vector2.ZERO and absf(angle - 90.0) < 6.0:
-			points.append(point)
-		else:
-			points.append(point + offset)
-	return points
-
-
 static func _entities(game: Node2D) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = [{"kind": "lia", "pos": game.pos, "y": game.pos.y}]
 	var phase: int = game.map_phase()
 	if phase == 0:
 		for i in Map.GALLERY_BLOCKS.size():
 			var block: Rect2 = Map.GALLERY_BLOCKS[i]
-			entries.append({"kind": "gallery", "rect": block, "index": i, "y": block.end.y, "pos": block.get_center()})
+			entries.append({"kind": "gallery", "index": i, "y": block.end.y, "pos": block.get_center()})
 	else:
 		entries.append(_entity("core", Map.CENTER, 0))
 		match phase:
@@ -204,105 +172,88 @@ static func _fixture(game: Node2D, data: Dictionary) -> void:
 	var index: int = data.index
 	match data.kind:
 		"gallery":
-			_gallery_fixture(game, data.rect, index)
+			_gallery_fixture(game, index)
 		"core":
 			_draw_core(game)
 		"pillar":
-			var down := boss.pillars[index].done
-			_prop(game, at, Vector2i(3 if down else 2, 3), Vector2(107, 54 if down else 106))
-			if not down:
-				game.draw_circle(at + Vector2(0, -67), 6, Color(CYAN, 0.55))
+			var pillar := boss.pillars[index]
+			var frame := 3 if pillar.done else (2 if pillar.cooldown > 0.0 else (1 if pillar.running else 0))
+			_frame(game, PILLAR_SHEET, "pillars", frame, at)
 		"mirror":
 			PowerArt.draw_mirror(game, at, boss.mirrors.orientation[index], boss.mirrors.turning[index],
 				boss.dawn_amount > 0.0, boss.mirrors.aligned(index), game.clock)
 			var normal := Vector2.from_angle(boss.mirrors.orientation[index] * PI / 4.0)
 			game.draw_line(at, at + normal * 27.0, CYAN if boss.mirrors.aligned(index) else GOLD, 3, true)
 		"console":
-			_prop(game, at, Vector2i(1, 2 if index == 0 else 3), Vector2(104, 76))
-			var accent := CYAN if index == 0 else PINK
-			game.draw_rect(Rect2(at + Vector2(-12, -43), Vector2(24, 5)), accent)
+			var active: bool = game.choice.holding == ("human" if index == 0 else "ai")
+			active = active or (not game.evidence.is_empty() and (game.evidence.side == "ai") == (index == 1))
+			_frame(game, CONSOLE_SHEET, "choice_consoles", index * 2 + int(active), at)
 
 
-static func _gallery_fixture(game: Node2D, r: Rect2, index: int) -> void:
-	var top := r
-	top.position.y -= 29.0
-	game.draw_rect(r, INK)
-	game.draw_rect(top, STEEL)
-	game.draw_rect(top, JOINT, false, 2)
-	match index:
-		0:
-			game.draw_rect(top.grow(-8), Color("293034"))
-			for i in 12:
-				var y := fposmod(50.0 * i - game.clock * 30.0, top.size.y - 22.0)
-				var crate := Rect2(top.position + Vector2(21, y + 5), Vector2(48, 16))
-				var shades := [Color("8d9699"), Color("3f9a8e"), Color("a9e3ee")]
-				game.draw_rect(crate.grow(3), INK)
-				game.draw_rect(crate, shades[i % 3])
-		1:
-			game.draw_rect(top.grow(-16), INK)
-			for i in 4:
-				var bend := sin(game.clock * 1.7 + i) * 2.0
-				var p := top.position + Vector2(38 + 53 * i, 47)
-				game.draw_line(p, p + Vector2(17, 60 + bend), BRASS, 8)
-		2:
-			for i in 9:
-				var row := Rect2(top.position + Vector2(8, i * 53 + 7), Vector2(104, 45))
-				game.draw_rect(row, INK)
-				for j in 5:
-					var alpha := 0.45 + 0.4 * sin(game.clock * 4.0 + i * 3.0 + j)
-					game.draw_circle(row.position + Vector2(11 + j * 16, 14), 2, Color(CYAN, alpha))
-		3:
-			_prop(game, Map.TERMINAL - Vector2(0, 21), Vector2i(1, 3), Vector2(112, 86))
-			game.draw_rect(Rect2(318, 388, 34, 10), Color(PINK, 0.5 + game.terminal_hold * 0.4))
+static func _gallery_fixture(game: Node2D, index: int) -> void:
+	var outline := PackedVector2Array(GALLERY_OUTLINES[index])
+	var uv := PackedVector2Array()
+	for point in outline:
+		uv.append(point / Map.GALLERY_SIZE)
+	game.draw_polygon(outline, PackedColorArray([Color.WHITE]), uv, GALLERY)
 
 
-static func _prop(canvas: Node2D, at: Vector2, cell: Vector2i, size: Vector2) -> void:
-	canvas.draw_texture_rect_region(PROPS, Rect2(at - Vector2(size.x * 0.5, size.y * 0.88), size),
-		_atlas_region(PROPS, cell, Vector2i(4, 4)))
-
-
-static func _atlas_region(texture: Texture2D, cell: Vector2i, grid: Vector2i) -> Rect2:
-	var size := texture.get_size() / Vector2(grid)
-	return Rect2(Vector2(cell) * size, size).grow(-2)
-
-
-static func _draw_core(game: Node2D, silhouette: bool = false) -> void:
+static func _draw_core(game: Node2D) -> void:
 	var boss: Boss = game.boss
 	var at := boss.core_position()
-	var at_rest: bool = boss.phase >= 4 and game.choice.result != "ai"
-	var exposed := boss.phase >= 3
+	var age: float = game.clock
+	var frame := floori(age * 5.0) % 4
+	match boss.phase:
+		1: frame += 4 if boss.fallen_count() < 4 else 0
+		2: frame += 8 if boss.burn > 0.0 else 0
+		3: frame += 8
+		4: frame = 15 if game.choice.result == "humanity" else 14
 	if game.state == "collapse":
 		at.y -= 70.0 * maxf(0.0, game.collapse / 1.2)
+		frame = 12 if game.collapse > 0.6 else 13
 	elif boss.phase <= 2:
-		at.y += sin(game.clock * 2.0) * 3.0
+		at.y += sin(age * 2.0) * 3.0
 	elif game.choice.result == "ai" and game.ending.sequence == "resolution":
 		at.y -= game.ending.age * 155.0
 	var tint := CYAN if game.choice.result == "humanity" else PINK
-	if silhouette: tint = HUD.WHITE
 	var charged := boss.warning > 0.0 or boss.burn > 0.0
-	if not silhouette:
-		game.draw_colored_polygon(PowerArt._ellipse(Map.CENTER + Vector2(0, 22), 83, 27), Color(INK, 0.7))
-	for i in range(5, 0, -1):
-		game.draw_circle(at, 46 + 10 * i, Color(tint, (0.035 if charged else 0.018) * (6 - i)))
-	game.draw_circle(at, 47, INK if not silhouette else Color(tint, 0.3))
-	game.draw_circle(at, 42, Color("22363d") if not silhouette else INK)
-	for i in 4:
-		var axis := Vector2.from_angle(i * TAU / 4.0 + 0.78)
-		var mid := at + axis * (46.0 if exposed else 29.0) + Vector2(0, 12.0 if at_rest and i < 2 else 0.0)
-		var edge := axis.orthogonal()
-		var petal := PackedVector2Array([mid + axis * 22, mid + edge * 22, mid - axis * 14,
-			mid - edge * 22])
-		game.draw_colored_polygon(petal, Color(tint, 0.55) if silhouette else ARMOR.darkened(0.14 * (i % 2)))
-		game.draw_line(petal[1], petal[0], BRASS if not silhouette else tint, 3, true)
-	game.draw_circle(at, 25 if exposed else 13, tint)
-	game.draw_circle(at, 10 if exposed else 5, Color("fff0df"))
+	game.draw_colored_polygon(PowerArt._ellipse(Map.CENTER + Vector2(0, 22), 79, 25), Color(INK, 0.37))
+	for i in range(4, 0, -1):
+		game.draw_circle(at, 46 + 10 * i, Color(tint, (0.034 if charged else 0.012) * (5 - i)))
+	_frame(game, BOSS_SHEET, "core_boss", frame, at)
 	if boss.phase == 1:
 		var strength := 1.0 - boss.fallen_count() / 4.0
-		game.draw_arc(at, 67.0, game.clock * 0.7, game.clock * 0.7 + 5.7, 52, Color(CYAN, strength * 0.8), 3, true)
-	elif not at_rest:
-		for i in 2:
-			var spin: float = game.clock * (1.0 if i == 0 else -0.8)
-			game.draw_arc(at, 56.0 + i * 8.0, spin, spin + PI * 1.42, 40, Color(tint, 0.68), 2, true)
+		game.draw_arc(at, 84, age * 0.7, age * 0.7 + 5.7, 52, Color(CYAN, strength * 0.8), 3, true)
+
+
+static func _spark_index(enemy: Dictionary, time: float) -> int:
+	var heading := posmod(roundi(Vector2(enemy.facing).angle() / (PI / 4.0)), 8)
+	return heading + 8 * (floori(time * 7.0) % 2)
+
+
+static func _draw_spark(canvas: Node2D, enemy: Dictionary, time: float, ghost: bool = false) -> void:
+	var at: Vector2 = enemy.pos
+	var frame := _spark_index(enemy, time)
+	if ghost:
+		for n in 4:
+			var halo := at + Vector2.from_angle(n * PI / 2.0) * 2.0
+			_frame(canvas, SPARK_SHEET, "spark", frame, halo, Color(PINK, 0.66))
+		_frame(canvas, SPARK_SHEET, "spark", frame, at, Color(1, 1, 1, 0.84))
+		return
+	_frame(canvas, SPARK_SHEET, "spark", frame, at, Color("ffccc4") if enemy.hurt > 0.0 else Color.WHITE)
+	var hp := Rect2(at + Vector2(-15, -55), Vector2(30, 4))
+	HUD.bar(canvas, hp, float(enemy.hp) / enemy.max_hp, CYAN)
+	if enemy.warning > 0.0:
+		canvas.draw_circle(at + Vector2(0, -60), 9, RED)
+		HUD.centered(canvas, "!", at + Vector2(0, -56), 12, INK)
+
+
+static func _frame(canvas: Node2D, texture: Texture2D, sheet: String, index: int, at: Vector2, tint: Color = Color.WHITE) -> void:
+	var frame: Dictionary = FRAMES.DATA[sheet][index]
+	var region: Array = frame.region
+	var area: Array = frame.rect
+	canvas.draw_texture_rect_region(texture, Rect2(at + Vector2(area[0], area[1]), Vector2(area[2], area[3])),
+		Rect2(region[0], region[1], region[2], region[3]), tint)
 
 
 static func effects(canvas: Node2D, game: Node2D) -> void:
@@ -368,7 +319,11 @@ static func _ghosts(canvas: Node2D, game: Node2D) -> void:
 	for entry in _entities(game):
 		var at: Vector2 = entry.pos
 		match entry.kind:
-			"gallery": covers.append({"bounds": Rect2(entry.rect).grow(9).grow_side(SIDE_TOP, 25), "y": entry.y})
+			"gallery":
+				var outline: Array = GALLERY_OUTLINES[entry.index]
+				var bounds := Rect2(outline[0], Vector2.ZERO)
+				for vertex in outline: bounds = bounds.expand(vertex)
+				covers.append({"bounds": bounds, "y": entry.y})
 			"core": covers.append({"bounds": Rect2(at + Vector2(-63, -120), Vector2(126, 128)), "y": entry.y})
 			"pillar", "mirror", "console":
 				covers.append({"bounds": Rect2(at + Vector2(-45, -76), Vector2(90, 76)), "y": entry.y})
@@ -378,7 +333,7 @@ static func _ghosts(canvas: Node2D, game: Node2D) -> void:
 	for enemy: Dictionary in game.enemies:
 		var point: Vector2 = enemy.pos
 		if enemy.warp <= 0.0 and Occlusion.is_hidden(Occlusion.drone_rect(point, false), point.y, covers):
-			Occlusion.draw_drone_ghost(canvas, enemy, game.clock)
+			_draw_spark(canvas, enemy, game.clock, true)
 
 
 static func _interactables(canvas: Node2D, game: Node2D) -> void:

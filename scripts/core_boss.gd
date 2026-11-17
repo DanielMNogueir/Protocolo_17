@@ -57,8 +57,8 @@ func _init(level: String = "operation", timing_scale: float = 1.0, checkpoint: i
 	mirrors = Mechanics.Mirrors.new(headings, starts)
 	var period: float = ARC_PERIOD[level]
 	var warn: float = 0.6 * WINDUP[level]
-	arcs.assign([Mechanics.ArcPair.new(Map.ring(0.42, -60), Map.ring(0.42, -20), period, 0.0, 0.7, warn),
-		Mechanics.ArcPair.new(Map.ring(0.42, 120), Map.ring(0.42, 160), period, period * 0.5, 0.7, warn)])
+	arcs.assign([Mechanics.ArcPair.new(Map.ARC_SOCKETS[0][0], Map.ARC_SOCKETS[0][1], period, 0.0, 0.7, warn),
+		Mechanics.ArcPair.new(Map.ARC_SOCKETS[1][0], Map.ARC_SOCKETS[1][1], period, period * 0.5, 0.7, warn)])
 	_rng.randomize()
 	_enter(checkpoint)
 
