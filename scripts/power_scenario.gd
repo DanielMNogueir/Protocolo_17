@@ -49,6 +49,9 @@ var after_dialogue := "play"
 var dialogue: Array = []
 var dialogue_chars := 0.0
 var dialogue_fast := false
+const Gamepad = preload("res://scripts/gamepad.gd")
+var gamepad := Gamepad.new()
+var _interact_requested := false
 var buttons: Array[Dictionary] = []
 var pos: Vector2 = M.START
 var velocity := Vector2.ZERO
@@ -228,9 +231,8 @@ func _physics_process(delta: float) -> void:
 		_present(dt)
 		return
 	elapsed += dt
-	var movement := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
-		float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP))).normalized()
-	var target := pointer - get_viewport_rect().size * 0.5 + camera
+	var movement := gamepad.movement(_key)
+	var target := gamepad.aim_target(pos, aim, pointer - _offset())
 	if target.distance_to(pos) > 3: aim = (target - pos).normalized()
 	dash_cd = maxf(0, dash_cd - dt)
 	secondary_cd = maxf(0, secondary_cd - dt)
@@ -252,12 +254,14 @@ func _physics_process(delta: float) -> void:
 	if secondary_requested and secondary_cd <= 0.0:
 		_fire(target, true)
 		secondary_cd = loadout.secondary_recharge
-	elif ((Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _map_mouse_held) or _key(KEY_SPACE)) and fire_cd <= 0.0:
+	elif ((Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _map_mouse_held) or _key(KEY_SPACE) or gamepad.firing()) and fire_cd <= 0.0:
 		_fire(target)
 	secondary_requested = false
-	var e_down := _key(KEY_E)
-	_interact(dt, e_down, e_down and not interact_down)
+	var e_down := _key(KEY_E) or gamepad.interacting()
+	var e_pressed := not interact_down and (e_down or _interact_requested)
+	_interact(dt, e_down, e_pressed)
 	interact_down = e_down
+	_interact_requested = false
 	tick_world(dt)
 	_guide_timer -= dt
 	_update_guidance()
@@ -300,7 +304,12 @@ func _key(code: Key) -> bool:
 
 # ---------------------------------------------------------------- input
 
+func pad_menu() -> String:
+	return state if state in ["pause", "defeat", "victory", "upgrade"] else ""
+
 func _unhandled_input(event: InputEvent) -> void:
+	var confirm := KEY_ENTER if state == "dialogue" else (KEY_M if state == "map" else KEY_E)
+	var key := gamepad.key_for(event, pad_menu(), buttons, _action, confirm)
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		for button in buttons:
 			if button.rect.has_point(event.position):
@@ -318,8 +327,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		secondary_requested = true
 		get_viewport().set_input_as_handled()
 		return
-	if not (event is InputEventKey and event.pressed and not event.echo): return
-	var key: Key = event.physical_keycode
+	if key == KEY_NONE: return
 	if state == "dialogue":
 		if key in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E]: _action("intro_next")
 		elif key == KEY_TAB: _action("intro_fast")
@@ -338,6 +346,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if state in ["pause", "defeat"]: _retry()
 		KEY_B:
 			if state in ["pause", "victory", "defeat"]: _return_to_districts()
+		KEY_E:
+			if state == "play": _interact_requested = true
 		KEY_SHIFT:
 			if state == "play": dash_requested = true
 		KEY_Q:
@@ -351,6 +361,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 func _clear_pending_actions() -> void:
+	_interact_requested = false
 	dash_requested = false
 	secondary_requested = false
 	interact_down = true
@@ -1245,8 +1256,8 @@ func _draw_fx(layer: Node2D) -> void:
 		var pulse := 0.5 + 0.5 * sin(clock * 5.0 + enemy.id)
 		layer.draw_circle(core, 3.0 + pulse, Color(PINK, 0.9))
 		layer.draw_circle(core, 9.0 + pulse * 3.0, Color(PINK, 0.12 + enemy.warning * 0.25))
-		if enemy.phase == "windup" and enemy.kind == "spark":
-			layer.draw_line(enemy.pos, enemy.pos + enemy.aim * 150.0, Color(ELECTRIC, 0.25 + 0.25 * absf(sin(clock * 30))), 2)
+		if enemy.phase == "windup":
+			layer.draw_arc(core, 12.0 + pulse * 3.0, 0.0, TAU, 20, Color(ELECTRIC, 0.55 + 0.35 * pulse), 2)
 		if shielded(enemy):
 			var points := PackedVector2Array()
 			for k in 7: points.append(enemy.pos + Vector2(0, -8) + Vector2.from_angle(k * TAU / 6.0 + clock * 0.6) * (enemy.radius + 9.0))

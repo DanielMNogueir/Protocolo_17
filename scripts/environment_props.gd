@@ -14,22 +14,22 @@ const CROPS: Array[Rect2] = [
 # Footprints are measured fractions of the visible source, not its full box.
 # Explicit category profiles keep upper equipment and transparent corners free.
 const PROFILES := {
-	"service_rack": {"district":true,"width":60.0,"contact":Rect2(0.07,0.85,0.86,0.13)},
-	"crate": {"art":0,"width":52.0,"contact":Rect2(0.12,0.70,0.76,0.25)},
-	"open_crate": {"art":1,"width":54.0,"contact":Rect2(0.10,0.64,0.80,0.31)},
-	"stacked_crates": {"art":2,"width":66.0,"contact":Rect2(0.09,0.72,0.82,0.23)},
-	"barrel": {"art":3,"width":34.0,"contact":Rect2(0.12,0.79,0.76,0.17)},
-	"pallet": {"art":4,"width":66.0,"contact":Rect2(0.06,0.60,0.90,0.34)},
-	"cabinet": {"art":5,"width":55.0,"contact":Rect2(0.04,0.84,0.91,0.13)},
-	"barrier": {"art":6,"width":76.0,"contact":Rect2(0.05,0.78,0.90,0.17)},
-	"spool": {"art":7,"width":62.0,"contact":Rect2(0.05,0.74,0.91,0.22)},
-	"tank": {"station":1,"width":90.0,"contact":Rect2(0.06,0.79,0.88,0.18)},
-	"pump": {"station":2,"width":83.0,"contact":Rect2(0.08,0.68,0.87,0.28)},
+	"service_rack": {"district":true,"width":60.0,"contact":Rect2(0.07,0.75,0.86,0.23)},
+	"crate": {"art":0,"width":52.0,"contact":Rect2(0.12,0.57,0.76,0.39)},
+	"open_crate": {"art":1,"width":54.0,"contact":Rect2(0.10,0.53,0.80,0.43)},
+	"stacked_crates": {"art":2,"width":66.0,"contact":Rect2(0.09,0.61,0.82,0.35)},
+	"barrel": {"art":3,"width":34.0,"contact":Rect2(0.12,0.67,0.76,0.30)},
+	"pallet": {"art":4,"width":66.0,"contact":Rect2(0.06,0.48,0.90,0.48)},
+	"cabinet": {"art":5,"width":55.0,"contact":Rect2(0.04,0.72,0.91,0.25)},
+	"barrier": {"art":6,"width":76.0,"contact":Rect2(0.05,0.67,0.90,0.29)},
+	"spool": {"art":7,"width":62.0,"contact":Rect2(0.05,0.62,0.91,0.35)},
+	"tank": {"station":1,"width":90.0,"contact":Rect2(0.06,0.68,0.88,0.29)},
+	"pump": {"station":2,"width":83.0,"contact":Rect2(0.08,0.57,0.87,0.40)},
 	"battery": {"station":4,"width":126.0,"contact":Rect2(0.07,0.79,0.86,0.18)},
-	"control_room": {"station":3,"width":225.0,"contact":Rect2(0.02,0.61,0.96,0.37)},
-	"purifier": {"station":5,"width":137.0,"contact":Rect2(0.06,0.70,0.88,0.26)},
-	"manifold": {"station":4,"width":126.0,"contact":Rect2(0.06,0.77,0.88,0.19)},
-	"clarifier": {"station":0,"width":256.0,"contact":Rect2(0.04,0.48,0.92,0.46)},
+	"control_room": {"station":3,"width":225.0,"contact":Rect2(0.02,0.43,0.96,0.55)},
+	"purifier": {"station":5,"width":137.0,"contact":Rect2(0.06,0.60,0.88,0.37)},
+	"manifold": {"station":4,"width":126.0,"contact":Rect2(0.06,0.65,0.88,0.32)},
+	"clarifier": {"station":0,"width":256.0,"contact":Rect2(0.04,0.27,0.92,0.70)},
 }
 
 static func supports(kind: String) -> bool:

@@ -27,11 +27,14 @@ var _voice_index := 0
 var _mood := ""
 var _muted := false
 var _warmed := false
+var _audio_enabled := true
 var _fade: Tween
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_audio_enabled = AudioServer.get_driver_name() != "Dummy"
+	if not _audio_enabled: return
 	_prepare_players()
 	warm_up()
 
@@ -86,6 +89,7 @@ func _prepare_players() -> void:
 
 
 func set_mood(mood: String) -> void:
+	if not _audio_enabled: return
 	_prepare_players()
 	if mood not in MOODS:
 		mood = "calm"
@@ -121,6 +125,7 @@ func _music_volume() -> float:
 
 func set_muted(value: bool) -> void:
 	_muted = value
+	if not _audio_enabled: return
 	if is_instance_valid(_fade):
 		_fade.kill()
 	for index in range(_music.size()):
@@ -135,6 +140,7 @@ func set_muted(value: bool) -> void:
 
 
 func set_structure_hum(active: bool, proximity: float, core: bool = false) -> void:
+	if not _audio_enabled: return
 	_prepare_players()
 	if _muted or not active or proximity <= 0.01:
 		if _structure_hum.playing:
@@ -148,7 +154,7 @@ func set_structure_hum(active: bool, proximity: float, core: bool = false) -> vo
 
 
 func play_sfx(id: String) -> void:
-	if _muted:
+	if not _audio_enabled or _muted:
 		return
 	_prepare_players()
 	if not _effects.has(id):

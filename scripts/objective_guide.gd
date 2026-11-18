@@ -27,6 +27,7 @@ var place := ""
 var idle := 0.0
 var highlight := 0.0
 var in_combat := false
+var mark_destination := true
 var ping := false
 var _lia := Vector2.ZERO
 var _next := Vector2.ZERO
@@ -111,10 +112,11 @@ func draw_world(canvas: CanvasItem, time: float, strength: int) -> void:
 	if mode != "arrived" and not direction.is_zero_approx():
 		var tip := _lia + direction * (ARROW_OFFSET + 1.5 * sin(time * TAU)) + Vector2(0, 10)
 		_draw_pointer(canvas, tip, direction, alpha)
-	if strength == MINIMAL:
+	if path_enabled and strength == STRONG and mode != "arrived":
+		_draw_path(canvas, alpha)
+	if strength == MINIMAL or not mark_destination:
 		return
 	if strength == STRONG:
-		if path_enabled and mode != "arrived": _draw_path(canvas, alpha)
 		var vertices := PackedVector2Array([_target + Vector2(-4, 0), _target + Vector2(4, 0),
 			_target + Vector2(4, -52), _target + Vector2(-4, -52)])
 		canvas.draw_polygon(vertices, PackedColorArray([Color(HUD.GOLD, 0.2), Color(HUD.GOLD, 0.2),
@@ -172,7 +174,7 @@ func _draw_path(canvas: CanvasItem, alpha: float) -> void:
 
 
 func draw_screen(canvas: CanvasItem, time: float, strength: int) -> void:
-	if strength == MINIMAL or mode == "hidden" or mode == "arrived":
+	if not mark_destination or strength == MINIMAL or mode == "hidden" or mode == "arrived":
 		return
 	if mode == "arrow":
 		var anchor := _transform * (_target + Vector2(0, -53 + 2 * sin(time * TAU)))

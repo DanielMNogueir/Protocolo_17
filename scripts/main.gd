@@ -20,7 +20,6 @@ const Prologue = preload("res://scripts/prologue.gd")
 const PrologueView = preload("res://scripts/prologue_presentation.gd")
 const LaboratoryEffects = preload("res://scripts/laboratory_effects.gd")
 const DistrictLighting = preload("res://scripts/district_lighting.gd")
-const DEV_TOOLS := true
 const SAVE_PATH := "user://aurora_beta_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -44,6 +43,7 @@ var sim: P17Simulation = Simulation.new()
 var campaign := CampaignProgress.new()
 var selected_district := "water"
 ## PROVISÓRIO (teste): libera todos os distritos só nesta sessão, sem gravar no save.
+var dev_tools := OS.has_feature("editor") or OS.is_debug_build()
 var free_select := false
 var campaign_notice := ""
 var lia_animation := LiaAnimation.new()
@@ -59,6 +59,8 @@ var _brand_font: SystemFont
 var previous_mode := "play"
 var clock := 0.0
 var camera_pos := World.START
+const Gamepad = preload("res://scripts/gamepad.gd")
+var gamepad := Gamepad.new()
 var buttons: Array[Dictionary] = []
 var pointer := Vector2.ZERO
 var dash_requested := false
@@ -126,7 +128,7 @@ func _ready() -> void:
 	has_save = _read_checkpoint().size() > 0
 	_load_settings()
 	campaign.load_progress()
-	free_select = DEV_TOOLS and get_tree().get_meta("p17_free_select", false) == true
+	free_select = dev_tools and get_tree().get_meta("p17_free_select", false) == true
 	if get_tree().has_meta("p17_open_districts"):
 		get_tree().remove_meta("p17_open_districts")
 		mode = "districts"
@@ -146,11 +148,12 @@ func _process(delta: float) -> void:
 	screen_flash = maxf(0, screen_flash - dt * 3)
 	title_fade = maxf(0, title_fade - dt * 0.7)
 	if mode == "prologue":
-		var motion := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT))-float(_key(KEY_A) or _key(KEY_LEFT)),float(_key(KEY_S) or _key(KEY_DOWN))-float(_key(KEY_W) or _key(KEY_UP)))
+		var motion := gamepad.movement(_key)
 		var offset := (_size()/2-prologue_camera).round()
 		var cursor := pointer-offset
 		if _key(KEY_SPACE): cursor = prologue.pos+prologue.aim*100
-		prologue.tick(dt,motion,cursor,(Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE),false,prologue_interact_requested,_key(KEY_ENTER) or _key(KEY_KP_ENTER))
+		cursor = gamepad.aim_target(prologue.pos, prologue.aim, cursor)
+		prologue.tick(dt,motion,cursor,(Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE) or gamepad.firing(),false,prologue_interact_requested,_key(KEY_ENTER) or _key(KEY_KP_ENTER))
 		prologue_interact_requested = false
 		dash_requested = false
 		prologue_camera = Prologue.Lab.camera(prologue_camera.lerp(prologue.pos,1-exp(-dt*6)),_size())
@@ -158,18 +161,15 @@ func _process(delta: float) -> void:
 		sound.set_mood("suspense" if prologue.step>=3 else "calm")
 		if prologue.finished: _finish_prologue()
 	if mode == "play" and dialogue.is_empty():
-		var motion := Vector2(
-			float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
-			float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP)))
-		if motion.length() > 1:
-			motion = motion.normalized()
+		var motion := gamepad.movement(_key)
 		world_mouse = pointer - _size() * 0.5 + camera_pos
 		if _key(KEY_SPACE):
 			world_mouse = sim.pos + sim.aim * 100
+		world_mouse = gamepad.aim_target(sim.pos, sim.aim, world_mouse)
 		var old_state: String = sim.state
 		if enemy_presentation.units.is_empty() and not sim.enemies.is_empty():
 			enemy_presentation.advance(.000001, sim.enemies, sim.stage, sim.elapsed)
-		sim.tick(dt, motion, world_mouse, (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE), dash_requested, _key(KEY_E) or interact_requested, lia_animation.elapsed, lia_animation.moving, secondary_requested)
+		sim.tick(dt, motion, world_mouse, (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not ui_mouse_held) or _key(KEY_SPACE) or gamepad.firing(), dash_requested, _key(KEY_E) or gamepad.interacting() or interact_requested, lia_animation.elapsed, lia_animation.moving, secondary_requested)
 		secondary_requested = false
 		interact_requested = false
 		lia_animation.advance(dt, sim.velocity, sim.dash_time > 0)
@@ -210,6 +210,7 @@ func _update_objective_guides(dt: float) -> void:
 	var safe := FieldHUD.guide_safe_rect(size)
 	water_guide.in_combat = false
 	if active:
+		water_guide.mark_destination = sim.state != "combat"
 		for enemy in sim.enemies:
 			if enemy.hp > 0 and sim.pos.distance_squared_to(enemy.pos) <= 40000.0:
 				water_guide.in_combat = true
@@ -250,7 +251,28 @@ func _clamp_camera() -> void:
 	var half := _size() * 0.5
 	camera_pos = camera_pos.clamp(half, World.SIZE - half)
 
+func _pad_menu() -> String:
+	if mode in ["title", "pause", "settings", "difficulty", "districts", "briefing", "upgrade", "defeat", "victory"]:
+		return mode
+	if mode == "play" and dialogue.is_empty() and sim.operation.wants_treatment(sim.pos):
+		return "treatment"
+	return ""
+
+func _pad_buttons(menu: String) -> Array[Dictionary]:
+	if menu == "treatment":
+		return buttons.filter(func(button: Dictionary) -> bool: return String(button.id).begins_with("treatment_"))
+	return buttons
+
 func _unhandled_input(event: InputEvent) -> void:
+	var pad_menu := _pad_menu()
+	var confirm := KEY_E
+	if (mode == "play" and not dialogue.is_empty()) or (mode == "prologue" and not prologue.conversation.is_empty()):
+		confirm = KEY_ENTER
+	elif mode == "prologue" and prologue.phase != "lab":
+		confirm = KEY_R if prologue.phase == "retry" else KEY_ENTER
+	elif mode == "map":
+		confirm = KEY_M
+	var key := gamepad.key_for(event, pad_menu, _pad_buttons(pad_menu), _action, confirm)
 	if event is InputEventMouseMotion: menu_focus = ""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT and mode == "play" and dialogue.is_empty() and sim.state == "combat":
 		secondary_requested = true
@@ -262,9 +284,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				_action(button.id)
 				return
-	if not event is InputEventKey or not event.pressed or event.echo:
+	if key == KEY_NONE:
 		return
-	var key: int = event.physical_keycode if event.physical_keycode else event.keycode
 	if key == KEY_F11:
 		_toggle_fullscreen()
 		return
@@ -276,7 +297,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			var index := -1
 			for n in buttons.size():
 				if buttons[n].id==menu_focus: index=n
-			var backward: bool = key in [KEY_UP,KEY_LEFT] or (key==KEY_TAB and event.shift_pressed)
+			var backward: bool = key in [KEY_UP,KEY_LEFT] or (key==KEY_TAB and event is InputEventKey and event.shift_pressed)
 			index = posmod((0 if index<0 and backward else index)+(-1 if backward else 1),buttons.size())
 			menu_focus = buttons[index].id
 			sound.play_sfx("ui")
@@ -371,7 +392,7 @@ func _action(id: String) -> void:
 			selected_district = "water"
 			mode = "difficulty"
 		"district_free":
-			if not DEV_TOOLS: return
+			if not dev_tools: return
 			free_select = not free_select
 			get_tree().set_meta("p17_free_select", free_select)
 		"district_residues":
@@ -599,10 +620,10 @@ func _consume_events() -> void:
 			"reinforcements":
 				sound.set_mood("combat")
 				_notify("ATIVIDADE HOSTIL  /  REFORÇOS DETECTADOS",3)
-			"timing_miss": _notify("FORA DE SINCRONIA  /  SOLTE E E TENTE NA FAIXA VERDE",2)
-			"pressure_miss": _notify("PRESSÃO FORA DA FAIXA  /  SOLTE E DENTRO DO VERDE",2)
+			"timing_miss": _notify("FORA DE SINCRONIA  /  SOLTE E TENTE NA FAIXA VERDE",2)
+			"pressure_miss": _notify("PRESSÃO FORA DA FAIXA  /  SOLTE DENTRO DO VERDE",2)
 			"treatment_miss": _notify("A AMOSTRA CONTÉM SÓLIDOS  /  ESCOLHA FILTRAÇÃO",2)
-			"treatment_ok": _notify("FILTRAÇÃO SELECIONADA  /  SEGURE E PARA LAVAR O FILTRO",2)
+			"treatment_ok": _notify("FILTRAÇÃO SELECIONADA  /  SEGURE %s PARA LAVAR O FILTRO" % Gamepad.hint("E"),2)
 			"boss_phase":
 				_notify("GUARDIÃO EM SOBRECARGA  /  PADRÃO DE ATAQUE ALTERADO",3)
 				shake = 3
@@ -718,6 +739,8 @@ func _draw() -> void:
 		"upgrade": _draw_upgrades()
 		"defeat": _draw_defeat()
 		"victory": _draw_victory()
+	var pad_menu := _pad_menu()
+	gamepad.draw_focus(self, pad_menu, _pad_buttons(pad_menu))
 	if toast_time > 0 and mode == "play" and dialogue.is_empty():
 		var alpha := minf(toast_time, 1)
 		var rect := Rect2(_size().x * 0.5 - 220, _size().y - 98, 440, 28)
@@ -782,8 +805,8 @@ func _draw_title() -> void:
 	draw_line(Vector2(38,size.y-32),Vector2(size.x-38,size.y-32),Color("415c54"),1)
 	draw_circle(Vector2(43,size.y-16),2,CYAN)
 	FieldHUD.text(self,"OPERAÇÃO FILTRO / SINAL LOCALIZADO",Vector2(53,size.y-12),8,MUTED)
-	FieldHUD.centered(self,"↑ ↓ SELECIONAR / ENTER CONFIRMAR",Vector2(size.x/2,size.y-12),8,MUTED)
-	_text_right("BETA 0.2.2 RC / F11 TELA CHEIA",Vector2(size.x-24,size.y-12),8,MUTED)
+	FieldHUD.centered(self,"DIRECIONAL: SELECIONAR / A: CONFIRMAR" if Gamepad.active else "↑ ↓ SELECIONAR / ENTER CONFIRMAR",Vector2(size.x/2,size.y-12),8,MUTED)
+	_text_right("V%s" % ProjectSettings.get_setting("application/config/version"),Vector2(size.x-24,size.y-12),8,MUTED)
 
 func _menu_control(r: Rect2,label: String,id: String,key: String="",accent: Color=CYAN) -> void:
 	FieldHUD.control(self,r,label,id,key,accent)
@@ -926,7 +949,7 @@ func _draw_game() -> void:
 	draw_set_transform(Vector2.ZERO)
 	_draw_vignette()
 	if mode == "play" and dialogue.is_empty():
-		_draw_crosshair(pointer)
+		_draw_crosshair(gamepad.reticle(pointer, sim.pos + world_offset, sim.aim))
 
 func _draw_route() -> void:
 	if mode == "map":
@@ -1067,16 +1090,18 @@ func _draw_map() -> void:
 		if enemy.hp>0:
 			alive+=1
 			FieldMap.marker(self,origin+enemy.pos*ratio,"boss" if enemy.kind=="boss" else "enemy")
-	var objective := sim.operation.label() if not sim.operation.ready() else ("RESTAURE O TERMINAL DO SETOR" if sim.state=="activation" else "NEUTRALIZE OS DRONES PARA LIBERAR O TERMINAL")
+	var objective := "NEUTRALIZE OS DRONES PARA LIBERAR O TERMINAL"
+	if sim.state == "activation":
+		objective = "RESTAURE O TERMINAL DO SETOR" if sim.operation.ready() else sim.operation.label()
 	var target := WaterGuidance.objective(sim)
-	if sim.restored<=sim.stage: FieldMap.label_objective(self, area, origin + target * ratio, _water_place())
-	else: objective="SISTEMA RESTAURADO / PASSAGEM LIBERADA"
+	if sim.restored > sim.stage: objective = "SISTEMA RESTAURADO / PASSAGEM LIBERADA"
+	elif sim.state == "activation": FieldMap.label_objective(self, area, origin + target * ratio, _water_place())
 	var player: Vector2 = origin+sim.pos*ratio
 	FieldMap.marker(self,player,"player",false,sim.aim)
 	FieldMap.tag(self,"LIA",player+Vector2(11,13),WHITE)
 	var stats := [{"label":"TAREFAS DE CAMPO","value":"%d / 2" % sim.operation.completed}, {"label":"LEVA ATUAL","value":"%d / 3" % mini(sim.wave+1,3)}, {"label":"AMEAÇAS NO SETOR","value":"%02d" % alive,"color":FieldMap.RED if alive>0 else CYAN}]
 	var hint := "Complete as tarefas e as levas. Depois, restaure o terminal para liberar a passagem."
-	if sim.state=="activation": hint="Área segura. Aproxime-se do marcador e use E para operar o sistema."
+	if sim.state=="activation": hint="Área segura. Aproxime-se do marcador e use %s para operar o sistema." % Gamepad.hint("E")
 	if sim.restored>sim.stage: hint="Rede do setor restaurada. A passagem está liberada."
 	FieldMap.sidebar(self,parts.sidebar,sim.restored,4,_water_place(),objective,stats,hint)
 
@@ -1088,7 +1113,7 @@ func _draw_dialogue() -> void:
 	_radio_portrait(rect.position + Vector2(18, 20), dialogue[0] == "LIA")
 	_text("TRANSMISSÃO  /  " + dialogue[0], rect.position + Vector2(90, 27), 10, CYAN)
 	_wrapped(dialogue[1], Rect2(rect.position + Vector2(90, 39), Vector2(rect.size.x - 115, 63)), 13, WHITE, 20)
-	_button(Rect2(rect.end.x - 157, rect.end.y - 28, 140, 22), "ENTENDIDO  ENTER", "dialogue", false)
+	_button(Rect2(rect.end.x - 157, rect.end.y - 28, 140, 22), "ENTENDIDO  " + Gamepad.hint("ENTER"), "dialogue", false)
 
 func _draw_pause() -> void:
 	var size := _size()
@@ -1123,9 +1148,9 @@ func _draw_settings() -> void:
 	var area := Rect2(r.position+Vector2(40,283),Vector2(600,78))
 	FieldHUD.inset(self,area)
 	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,18),10,GOLD)
-	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,37),10,WHITE)
-	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,53),10,MUTED)
-	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,69),10,MUTED)
+	FieldHUD.centered(self,"ANALÓGICOS: MOVER E MIRAR   •   RT: DISPARAR" if Gamepad.active else "WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,37),10,WHITE)
+	FieldHUD.centered(self,"RB: RAJADA   •   LB: ESQUIVA   •   A: INTERAGIR" if Gamepad.active else "Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,53),10,MUTED)
+	FieldHUD.centered(self,"VIEW: MAPA   •   MENU: PAUSA   •   B: VOLTAR" if Gamepad.active else "E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,69),10,MUTED)
 	var level_name: String = Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty if settings_return=="pause" else selected_difficulty)]
 	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,395),9,GOLD)
 	_menu_control(Rect2(r.position+Vector2(240,374),Vector2(200,35)),"VOLTAR","back","ESC")
@@ -1153,13 +1178,13 @@ func _draw_upgrades() -> void:
 		buttons.append({"rect": rect, "id": "upgrade_%d" % i})
 	var footer := Rect2(size.x * 0.5 - 302, size.y - 56, 604, 34)
 	FieldHUD.panel(self, footer, CYAN)
-	FieldHUD.centered(self, "VIDA CHEIA NO PRÓXIMO SETOR  /  CLIQUE OU PRESSIONE 1, 2 OU 3", footer.get_center() + Vector2(0, 4), 10, CYAN)
+	FieldHUD.centered(self, "VIDA CHEIA NO PRÓXIMO SETOR  /  CONFIRME COM A" if Gamepad.active else "VIDA CHEIA NO PRÓXIMO SETOR  /  CLIQUE OU PRESSIONE 1, 2 OU 3", footer.get_center() + Vector2(0, 4), 10, CYAN)
 
 func _draw_defeat() -> void:
 	_overlay("CONEXÃO INTERROMPIDA", "Lia caiu. A missão ainda pode continuar.", MAGENTA)
 	_text_center("ETAPA %d / 4  •  %s" % [sim.stage + 1, SECTOR_SUBTITLES[sim.stage]], Vector2(_size().x * 0.5, 263), 12, WHITE)
 	_text_center("Os sistemas restaurados e suas melhorias foram preservados.", Vector2(_size().x * 0.5, 296), 12, MUTED)
-	_button(Rect2(_size().x * 0.5 - 160, 338, 320, 44), "TENTAR NOVAMENTE  /  ENTER", "retry", true)
+	_button(Rect2(_size().x * 0.5 - 160, 338, 320, 44), "TENTAR NOVAMENTE  /  " + Gamepad.hint("ENTER"), "retry", true)
 	_button(Rect2(_size().x * 0.5 - 160, 395, 320, 35), "VOLTAR AO INÍCIO", "title", false)
 
 func _draw_victory() -> void:
@@ -1342,7 +1367,7 @@ func _draw_districts() -> void:
 	if core_open:
 		_menu_control(Rect2(core.position + Vector2(620, 3), Vector2(204, 34)), "JOGAR NÚCLEO", "district_core", "4")
 	_menu_control(Rect2(frame.position + Vector2(340, 414), Vector2(200, 36)), "VOLTAR", "district_back", "ESC")
-	if DEV_TOOLS:
+	if dev_tools:
 		_menu_control(Rect2(frame.position + Vector2(616, 414), Vector2(240, 36)), "TESTE: TODOS " + ("ON" if free_select else "OFF"), "district_free", "T", GOLD)
 
 func _draw_operation_markers() -> void:

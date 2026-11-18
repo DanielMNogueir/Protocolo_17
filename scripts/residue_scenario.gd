@@ -28,6 +28,9 @@ const PINK := Color("e36b92")
 const GOLD := Color("e8bd74")
 
 var state := "play"
+const Gamepad = preload("res://scripts/gamepad.gd")
+var gamepad := Gamepad.new()
+var _interact_requested := false
 var buttons: Array[Dictionary] = []
 var pos: Vector2 = M.START
 var velocity := Vector2.ZERO
@@ -225,9 +228,8 @@ func _physics_process(delta: float) -> void:
 		_dialogue_layer.queue_redraw()
 		return
 	elapsed += dt
-	var movement := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
-		float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP))).normalized()
-	var target := pointer - get_viewport_rect().size * 0.5 + camera
+	var movement := gamepad.movement(_key)
+	var target := gamepad.aim_target(pos, aim, pointer - _offset())
 	if target.distance_to(pos) > 3: aim = (target - pos).normalized()
 	dash_cd = maxf(0, dash_cd - dt)
 	secondary_cd = maxf(0, secondary_cd - dt)
@@ -250,12 +252,14 @@ func _physics_process(delta: float) -> void:
 	if secondary_requested and secondary_cd <= 0.0:
 		_fire(target, true)
 		secondary_cd = 3.8
-	elif ((Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _map_mouse_held) or _key(KEY_SPACE)) and fire_cd <= 0.0:
+	elif ((Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _map_mouse_held) or _key(KEY_SPACE) or gamepad.firing()) and fire_cd <= 0.0:
 		_fire(target)
 	secondary_requested = false
-	var e_down := _key(KEY_E)
-	_interact(dt, e_down, e_down and not interact_down)
+	var e_down := _key(KEY_E) or gamepad.interacting()
+	var e_pressed := not interact_down and (e_down or _interact_requested)
+	_interact(dt, e_down, e_pressed)
 	interact_down = e_down
+	_interact_requested = false
 	_guide_timer -= dt
 	_update_guidance()
 	_update_enemies(dt)
@@ -275,7 +279,12 @@ func _physics_process(delta: float) -> void:
 func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
+func pad_menu() -> String:
+	return state if state in ["pause", "defeat", "victory", "upgrade"] else ""
+
 func _unhandled_input(event: InputEvent) -> void:
+	var confirm := KEY_ENTER if state == "dialogue" else (KEY_M if state == "map" else KEY_E)
+	var key := gamepad.key_for(event, pad_menu(), buttons, _action, confirm)
 	if state == "dialogue":
 		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			for button in buttons:
@@ -285,8 +294,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					return
 			_advance_dialogue()
 			get_viewport().set_input_as_handled()
-		elif event is InputEventKey and event.pressed and not event.echo:
-			match event.physical_keycode:
+		elif key != KEY_NONE:
+			match key:
 				KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E: _advance_dialogue()
 				KEY_TAB: dialogue_fast = not dialogue_fast
 				KEY_ESCAPE: _finish_dialogue()
@@ -310,35 +319,38 @@ func _unhandled_input(event: InputEvent) -> void:
 		secondary_requested = true
 		get_viewport().set_input_as_handled()
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_ESCAPE:
+	if key != KEY_NONE:
+		if key == KEY_ESCAPE:
 			_clear_pending_actions()
 			state = "play" if state in ["pause", "map"] else ("pause" if state == "play" else state)
 			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_M and state in ["play", "map"]:
+		elif key == KEY_M and state in ["play", "map"]:
 			_clear_pending_actions()
 			state = "play" if state == "map" else "map"
 			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_R and state == "pause":
+		elif key == KEY_R and state == "pause":
 			_retry()
-		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and state == "victory":
+		elif key in [KEY_ENTER, KEY_KP_ENTER] and state == "victory":
 			_action("modules")
-		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3] and state == "upgrade":
-			_action("module_%d" % (event.physical_keycode - KEY_1))
-		elif event.physical_keycode == KEY_B and state in ["pause", "victory", "defeat"]:
+		elif key in [KEY_1, KEY_2, KEY_3] and state == "upgrade":
+			_action("module_%d" % (key - KEY_1))
+		elif key == KEY_B and state in ["pause", "victory", "defeat"]:
 			_return_to_districts()
-		elif event.physical_keycode == KEY_SHIFT and state == "play":
+		elif key == KEY_E and state == "play":
+			_interact_requested = true
+		elif key == KEY_SHIFT and state == "play":
 			dash_requested = true
-		elif event.physical_keycode == KEY_Q and state == "play":
+		elif key == KEY_Q and state == "play":
 			secondary_requested = true
-		elif event.physical_keycode == KEY_F10:
+		elif key == KEY_F10:
 			_muted = not _muted
 			sound.set_muted(_muted)
-		elif event.physical_keycode == KEY_F11:
+		elif key == KEY_F11:
 			var fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if fullscreen else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func _clear_pending_actions() -> void:
+	_interact_requested = false
 	dash_requested = false
 	secondary_requested = false
 	interact_down = true
