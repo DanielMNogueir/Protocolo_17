@@ -1,6 +1,7 @@
 extends RefCounted
 ## Industrial Aurora: native, resolution-independent field equipment.
 const INK := Color("07171d")
+const Gamepad = preload("res://scripts/gamepad.gd")
 const WHITE := Color("e3eee5")
 const MUTED := Color("9aafa7")
 const CYAN := Color("73efc7")
@@ -108,7 +109,7 @@ static func keycap(c: CanvasItem, label: String, r: Rect2) -> void:
 	plate(c, Rect2(r.position + Vector2(0, 2), r.size), Color("020b0f"), 3)
 	plate(c, r, Color("a18b5c"), 3)
 	plate(c, r.grow(-2), Color("e8d9b0"), 2)
-	centered(c, label, r.get_center() + Vector2(0, 4), 10, INK)
+	centered(c, Gamepad.hint(label), r.get_center() + Vector2(0, 4), 10, INK)
 
 static func vital(c: CanvasItem, hp: int, maximum: int, time: float) -> void:
 	var low := hp <= maxi(2, ceili(maximum * 0.3))
@@ -284,7 +285,7 @@ static func navigation(c: CanvasItem, title: String, subtitle: String, pointer: 
 		var r: Rect2 = item[0]
 		plate(c, r, Color("253e40") if r.has_point(pointer) else Color(INK, 0.9), 4)
 		edge(c, r, GOLD if r.has_point(pointer) else Color("4e655b"), 1, 4)
-		var cap_width := 19 if item[1] == "M" else 29
+		var cap_width := 30 if Gamepad.active else (19 if item[1] == "M" else 29)
 		keycap(c, item[1], Rect2(r.position + Vector2(4, 4), Vector2(cap_width, 16)))
 		text(c, item[2], r.position + Vector2(cap_width + 9, 16), 9)
 

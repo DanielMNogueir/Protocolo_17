@@ -10,6 +10,16 @@ func check(ok: bool, message: String) -> void:
 		push_error(message)
 
 func _initialize() -> void:
+	# The front of the building, tank and clarifier used to allow an actor's feet
+	# well into the visible base. Test those spots independently of the profile.
+	var building_rect: Rect2 = World.building_objects()[0].visual_bounds
+	var tank_rect: Rect2 = World.props()[0].visual_bounds
+	var clarifier_rect: Rect2 = World.clarifier().visual_bounds
+	for entry in [[building_rect, 0.50], [tank_rect, 0.72], [clarifier_rect, 0.36]]:
+		var visual: Rect2 = entry[0]
+		var point := visual.position + visual.size * Vector2(0.5, entry[1])
+		check(not World.walkable(point, 14.0, 3), "The visible ground footprint is solid at %s" % point)
+	check(World.walkable(Vector2(300, 250), 14.0, 3), "Roof overhang leaves room to walk behind the building")
 	for radius in [14.0, 18.0, 25.0]:
 		check(not World.walkable(Vector2(652, 352), radius, 1), "Water control-room side is solid for every actor")
 		var sim := Simulation.new()

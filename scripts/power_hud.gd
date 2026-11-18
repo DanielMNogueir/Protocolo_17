@@ -65,8 +65,9 @@ func _draw() -> void:
 			game.buttons.clear()
 			_draw_victory(size)
 	if game.state == "play":
-		var aim: Vector2 = game.pointer
+		var aim: Vector2 = game.gamepad.reticle(game.pointer, game.pos + game._offset(), game.aim)
 		for axis in [Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN]: draw_line(aim + axis * 3, aim + axis * 7, CYAN, 1)
+	game.gamepad.draw_focus(self, game.pad_menu(), game.buttons)
 
 func _status_line() -> String:
 	match game.stage:

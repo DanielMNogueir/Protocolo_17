@@ -1,10 +1,12 @@
 # Protocolo 17 — Aurora
 
-Beta candidata **0.2.2** em Godot 4.7.2. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. O **Distrito de Resíduos** é desbloqueado permanentemente após concluir Águas.
+**Versão 1.0.0**. Lia restaura os distritos de Águas, Resíduos e Energia e enfrenta o Núcleo Aurora. A operação combina ação em visão superior, tarefas ambientais, melhorias e dois finais.
+
+A edição Windows x64 é distribuída como `Protocolo17.exe`, com os recursos do jogo incorporados.
 
 ## Seleção de distritos — 0.2.2
 
-Iniciar operação abre a seleção de Águas, Resíduos e Energia. Águas está sempre disponível; Resíduos fica bloqueado até a primeira vitória em Águas, e Energia até a vitória em Resíduos. O desbloqueio e as três melhorias da última conclusão ficam em `user://aurora_campaign.json`, separados do checkpoint de Águas. Fechar o jogo ou iniciar Águas novamente não apaga o acesso a Resíduos. Ao escolher Resíduos, selecione a dificuldade; as melhorias da última conclusão de Águas serão aplicadas.
+Iniciar operação abre a seleção de Águas, Resíduos, Energia e Núcleo Aurora. Águas está sempre disponível; Resíduos fica bloqueado até a primeira vitória em Águas, Energia até a vitória em Resíduos e o Núcleo até a conclusão de Energia. O desbloqueio e as três melhorias da última conclusão ficam em `user://aurora_campaign.json`, separados do checkpoint de Águas. Fechar o jogo ou iniciar Águas novamente não apaga o acesso a Resíduos. Ao escolher Resíduos, selecione a dificuldade; as melhorias da última conclusão de Águas serão aplicadas.
 
 Em Resíduos, use a pausa e **Escolher distrito** para voltar à seleção. A derrota e a vitória também oferecem esse retorno. Sair de uma tentativa reinicia as tarefas de Resíduos; o acesso e as melhorias continuam salvos. O progresso dentro de Resíduos ainda não é salvo entre sessões.
 
@@ -18,7 +20,7 @@ Validação adicional: `tests/test_campaign_selection.gd`, `tests/test_residue_h
 2. Aguarde a importação dos recursos e pressione F5.
 3. Escolha uma nova operação, o distrito e o nível de dificuldade. O prólogo de Águas pode ser pulado.
 
-O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações da beta ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
+O projeto usa o renderer Compatibility e não exige dependências externas. Saves e configurações do jogo ficam na pasta de dados `Protocolo17Beta`, separada da alpha.
 
 ## Distrito de Resíduos
 
@@ -82,19 +84,24 @@ A dificuldade altera quantidade de inimigos, velocidade dos projéteis, pressão
 
 ## Controles
 
-| Ação | Controle |
-| --- | --- |
-| Movimento | WASD ou setas |
-| Mira | Mouse |
-| Disparo | Botão esquerdo ou Espaço |
-| Rajada de cinco pulsos | Q ou botão direito |
-| Esquiva | Shift |
-| Operar e reparar | E |
-| Escolher tratamento ou melhoria | 1, 2, 3 ou mouse |
-| Mapa | M |
-| Pausa | Esc |
-| Tela cheia | F11 |
-| Alternar áudio | F10 |
+| Ação | Teclado e mouse | Controle (Xbox) |
+| --- | --- | --- |
+| Movimento | WASD ou setas | Analógico esquerdo |
+| Mira | Mouse | Analógico direito |
+| Disparo | Botão esquerdo ou Espaço | RT |
+| Rajada de cinco pulsos | Q ou botão direito | RB |
+| Esquiva | Shift | LB |
+| Operar e reparar | E | A |
+| Navegar e confirmar opções | Setas e Enter ou mouse | Direcional ou analógico esquerdo, A para confirmar |
+| Escolher tratamento ou melhoria | 1, 2, 3 ou mouse | Direcional ou analógico esquerdo, A para confirmar |
+| Avançar diálogo | Enter | A |
+| Mapa | M | View |
+| Pausa | Esc | Menu |
+| Voltar em menus | Esc ou botão na tela | B ou botão na tela |
+| Tela cheia | F11 | Configurações |
+| Alternar áudio | F10 | Configurações |
+
+As legendas do HUD seguem o último dispositivo usado. Em um controle mapeado pelo Godot com outra disposição, use os botões equivalentes.
 
 Na energia, aperte E quando o indicador estiver na faixa verde. Nas outras tarefas, segure E. Complete duas tarefas e três levas por setor, depois repare o terminal. A derrota reinicia o setor atual, preservando setores anteriores e melhorias; cada novo setor começa com vida cheia.
 
@@ -108,7 +115,11 @@ Na energia, aperte E quando o indicador estiver na faixa verde. Nas outras taref
 
 ![Tarefa da bateria no Pátio de Energia](captures/beta_021/04_bateria_visivel_960.png)
 
-## Validação e pendências
+## Validação da entrega
+
+O teste `tests/test_gamepad.gd` simula um controle inteiro desde o menu e verifica as entradas nos quatro distritos. Use `tests/test_water_layout.gd` para conferir as rotas e os pontos de combate em Águas e `tests/test_structure_footprints.gd` para conferir as barreiras físicas.
+
+## Histórico dos testes de balanceamento da beta
 
 Foram realizadas 21 campanhas automatizadas com dano normal, com 18 vitórias, além de testes de regras, interface, saves, colisões e mais de 215 mil quadros em baterias de esforço. O controlador não usa invulnerabilidade ou teleporte nessas campanhas.
 

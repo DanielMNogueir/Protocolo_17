@@ -1,4 +1,5 @@
 extends RefCounted
+const Gamepad = preload("res://scripts/gamepad.gd")
 const FieldHUD = preload("res://scripts/field_hud.gd")
 const Lab = preload("res://scripts/laboratory_world.gd")
 const Beatrix = preload("res://scripts/beatrix_art.gd")
@@ -55,7 +56,7 @@ static func draw(canvas: Node2D, story: P17Prologue, camera: Vector2) -> void:
 	FieldHUD.control(canvas,Rect2(size.x-244,16,228,32),"PULAR INTRODUÇÃO","intro_skip","P")
 	if story.phase not in ["context","handoff"] and story.conversation.is_empty():
 		FieldHUD.panel(canvas,Rect2(16,size.y-52,size.x-32,36))
-		FieldHUD.text(canvas,"WASD / SETAS: MOVER  •  E: INTERAGIR  •  ESC: PAUSA",Vector2(32,size.y-29),9,FieldHUD.MUTED)
+		FieldHUD.text(canvas,"ANALÓGICO ESQUERDO: MOVER  •  A: INTERAGIR  •  MENU: PAUSA" if Gamepad.active else "WASD / SETAS: MOVER  •  E: INTERAGIR  •  ESC: PAUSA",Vector2(32,size.y-29),9,FieldHUD.MUTED)
 		FieldHUD.control(canvas,Rect2(size.x-278,size.y-45,246,23),"FALAS INSTANTÂNEAS: "+("SIM" if story.fast_text else "NÃO"),"intro_fast","TAB")
 static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void:
 	var low := story.hp <= 1

@@ -7,6 +7,7 @@ extends RefCounted
 ## answered by reinforcements, then the terminal); this script names the beat,
 ## points at it and routes around machines, channels and closed gates with an
 ## A* grid over World.walkable, like the guidance in Residues and Energy.
+const Gamepad = preload("res://scripts/gamepad.gd")
 const World = preload("res://scripts/world.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
 const Route = preload("res://scripts/water_route.gd")
@@ -38,11 +39,11 @@ static func label(sim: P17Simulation) -> String:
 		var count := alive(sim)
 		if sim.operation.completed > 0: return "DEFENDER O SETOR  /  %d DRONE%s" % [count, "" if count == 1 else "S"]
 		return "NEUTRALIZAR OS DRONES  /  %d RESTANTE%s" % [count, "" if count == 1 else "S"]
-	if sim.operation.wants_treatment(sim.pos): return "ANALISAR A AMOSTRA  /  TECLAS 1 A 3"
+	if sim.operation.wants_treatment(sim.pos): return "ANALISAR A AMOSTRA  /  CONFIRME COM A" if Gamepad.active else "ANALISAR A AMOSTRA  /  TECLAS 1 A 3"
 	if not sim.operation.ready():
-		var hint: String = {"timing": "E NO VERDE", "mash": "TOQUE E", "charge": "SOLTE E NO VERDE"}.get(sim.operation.mode(), "SEGURE E")
-		return "%s  /  %s" % [sim.operation.label(), hint]
-	return "RESTAURAR %s  /  SEGURE E" % Objectives.SYSTEMS[sim.stage]
+		var hint: String = {"timing": "%s NO VERDE", "mash": "TOQUE %s", "charge": "SOLTE %s NO VERDE"}.get(sim.operation.mode(), "SEGURE %s")
+		return "%s  /  %s" % [sim.operation.label(), hint % Gamepad.hint("E")]
+	return "RESTAURAR %s  /  SEGURE %s" % [Objectives.SYSTEMS[sim.stage], Gamepad.hint("E")]
 
 static func task_place(sim: P17Simulation) -> String:
 	var name: String = sim.operation.label()

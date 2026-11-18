@@ -44,6 +44,7 @@ func _draw() -> void:
 			_overlay(size)
 		"gallery", "arena", "choice", "overlook", "collapse":
 			_field(size)
+	game.gamepad.draw_focus(self, game.pad_menu(), buttons)
 
 
 func _field(size: Vector2) -> void:
@@ -138,8 +139,9 @@ func _interaction_prompt(size: Vector2) -> void:
 
 
 func _crosshair() -> void:
+	var point: Vector2 = game.gamepad.reticle(pointer, game.pos + game.world_offset(), game.aim)
 	for direction in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN, Vector2.LEFT]:
-		draw_line(pointer + direction * 3, pointer + direction * 8, CYAN, 1)
+		draw_line(point + direction * 3, point + direction * 8, CYAN, 1)
 
 
 func _plan(r: Rect2, full: bool) -> void:

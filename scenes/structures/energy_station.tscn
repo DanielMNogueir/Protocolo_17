@@ -9,10 +9,10 @@ atlas = ExtResource("2_structures")
 region = Rect2(14, 722, 440, 421)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_control"]
-size = Vector2(200, 85)
+size = Vector2(200, 113)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_generator"]
-size = Vector2(157, 64)
+size = Vector2(157, 80)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_terminal"]
 size = Vector2(24,8)
@@ -88,11 +88,11 @@ collision_layer = 4
 collision_mask = 0
 
 [node name="ControlRoomFootprint" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(-91, -39.5)
+position = Vector2(-91, -53.5)
 shape = SubResource("RectangleShape_control")
 
 [node name="GeneratorFootprint" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(82.5, -28)
+position = Vector2(82.5, -36)
 shape = SubResource("RectangleShape_generator")
 
 [node name="TerminalFootprint" type="CollisionShape2D" parent="StaticBody2D"]
@@ -109,7 +109,7 @@ monitorable = false
 shape = SubResource("CircleShape_interaction")
 
 [node name="NavigationObstacle2D" type="NavigationObstacle2D" parent="."]
-vertices = PackedVector2Array(-185, -48, 158, -48, 158, 4, -185, 4)
+vertices = PackedVector2Array(-191, -110, 9, -110, 9, -76, 161, -76, 161, 4, 4, 4, 4, 3, -191, 3)
 avoidance_enabled = true
 radius = 8.0
 

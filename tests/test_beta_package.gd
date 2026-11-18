@@ -14,7 +14,9 @@ func _run() -> void:
 	game.set_process(false)
 	game.sound.set_muted(true)
 	game._action("new")
-	failed = game.mode!="difficulty"
+	failed = game.mode!="districts"
+	game._action("district_water")
+	failed = failed or game.mode!="difficulty"
 	game._action("difficulty_operation")
 	game._action("intro_skip")
 	failed = failed or game.mode!="play" or game.sim.difficulty!="operation"

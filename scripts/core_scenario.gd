@@ -59,6 +59,9 @@ var active_pillar := -1
 var enemies: Array[Dictionary] = []
 var shots: Array[Dictionary] = []
 var effects: Array[Dictionary] = []
+const Gamepad = preload("res://scripts/gamepad.gd")
+var gamepad := Gamepad.new()
+var _interact_requested := false
 var buttons: Array[Dictionary] = []
 var dialogue: Array = []
 var dialogue_chars := 0.0
@@ -155,23 +158,20 @@ func _physics_process(delta: float) -> void:
 			if ending.tick_credits(dt, get_viewport_rect().size.y):
 				state = "complete"
 		"gallery", "arena", "choice", "overlook":
-			var movement := Vector2(
-				float(_key(KEY_D, KEY_RIGHT)) - float(_key(KEY_A, KEY_LEFT)),
-				float(_key(KEY_S, KEY_DOWN)) - float(_key(KEY_W, KEY_UP))).normalized()
-			var firing := Input.is_physical_key_pressed(KEY_SPACE) or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _mouse_captured)
-			play_step(dt, movement, pointer - world_offset(), Input.is_physical_key_pressed(KEY_E), firing, _dash_requested, _burst_requested)
+			var movement := gamepad.movement(Input.is_physical_key_pressed)
+			var firing := Input.is_physical_key_pressed(KEY_SPACE) or (Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and not _mouse_captured) or gamepad.firing()
+			var target := gamepad.aim_target(pos, aim, pointer - world_offset())
+			var held := Input.is_physical_key_pressed(KEY_E) or gamepad.interacting()
+			play_step(dt, movement, target, held, firing, _dash_requested, _burst_requested, _interact_requested)
+	_interact_requested = false
 	_dash_requested = false
 	_burst_requested = false
 	_present(dt)
 
 
-func _key(a: Key, b: Key) -> bool:
-	return Input.is_physical_key_pressed(a) or Input.is_physical_key_pressed(b)
-
-
 # Field input and combat share this path with the playthrough driver.
 func play_step(dt: float, movement: Vector2, target: Vector2, held: bool, firing: bool = false,
-		dash: bool = false, burst: bool = false) -> void:
+		dash: bool = false, burst: bool = false, tap: bool = false) -> void:
 	elapsed += dt
 	toast_left = maxf(0.0, toast_left - dt)
 	invuln = maxf(0.0, invuln - dt)
@@ -191,9 +191,9 @@ func play_step(dt: float, movement: Vector2, target: Vector2, held: bool, firing
 	pos = Map.slide(pos, velocity * dt, 14.0, map_phase())
 	animation.advance(dt, (pos - previous) / dt, dash_time > 0.0)
 
-	if _require_release and not held:
+	if _require_release and not held and not tap:
 		_require_release = false
-	var active_e := held and not _require_release
+	var active_e := (held or tap) and not _require_release
 	var pressed := active_e and not _e_previous
 	match state:
 		"gallery": _interact_gallery(dt, active_e)
@@ -650,6 +650,7 @@ func _end_dialogue() -> void:
 
 
 func _clear_input() -> void:
+	_interact_requested = false
 	_e_previous = false
 	_require_release = true
 	_tap_side = ""
@@ -687,7 +688,14 @@ func _action(id: String) -> void:
 		"next_card": _advance_ending(true)
 
 
+func pad_menu() -> String:
+	return state if state in ["pause", "defeat", "complete"] else ""
+
 func _unhandled_input(event: InputEvent) -> void:
+	var confirm := KEY_E
+	if state in ["dialogue", "ending", "credits"]: confirm = KEY_ENTER
+	elif state == "map": confirm = KEY_M
+	var key := gamepad.key_for(event, pad_menu(), buttons, _action, confirm)
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_RIGHT and state == "arena":
 			_burst_requested = true
@@ -698,9 +706,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					get_viewport().set_input_as_handled()
 					_action(button.id)
 					return
-	if not event is InputEventKey or not event.pressed or event.echo:
+	if key == KEY_NONE:
 		return
-	var key: Key = event.physical_keycode if event.physical_keycode else event.keycode
 	if key == KEY_F11:
 		get_window().mode = Window.MODE_WINDOWED if get_window().mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
 		return
@@ -716,7 +723,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			elif key == KEY_TAB: _action("intro_fast")
 			elif key == KEY_ESCAPE: _end_dialogue()
 		"gallery", "arena", "choice", "overlook":
-			if key == KEY_ESCAPE: _action("pause")
+			if key == KEY_E: _interact_requested = true
+			elif key == KEY_ESCAPE: _action("pause")
 			elif key == KEY_M: _action("map")
 			elif state == "arena" and key == KEY_SHIFT: _dash_requested = true
 			elif state == "arena" and key == KEY_Q: _burst_requested = true

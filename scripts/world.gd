@@ -26,7 +26,7 @@ const ENERGY_STATION_ORIGIN: Vector2 = EnergyStation.WORLD_ORIGIN
 const CHECKPOINTS: Array[Vector2] = [START, Vector2(770,760), Vector2(1530,610), Vector2(2040,1100)]
 const SPAWNS := [
 	[Vector2(740,1330),Vector2(955,1260),Vector2(510,1480)],
-	[Vector2(560,610),Vector2(920,455),Vector2(740,310),Vector2(410,670)],
+	[Vector2(560,610),Vector2(920,455),Vector2(740,490),Vector2(410,670)],
 	[Vector2(1620,590),Vector2(1910,460),Vector2(2200,720),Vector2(2310,540),Vector2(2050,540)],
 	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1900,1540),Vector2(2110,1370)],
 ]
@@ -89,8 +89,8 @@ static func props() -> Array[Dictionary]:
 				width = 0.0
 			_props_cache.append(EnvironmentProps.create(kind,Vector2(rect.get_center().x,rect.end.y),width))
 		else:
-			# Solar arrays stand on two support bars, not the panel's upper surface.
-			var contact := Rect2(rect.position+Vector2(9,rect.size.y-18),Vector2(rect.size.x-18,18))
+			# The sloped panel overhangs the occupied base.
+			var contact := Rect2(rect.position+Vector2(9,rect.size.y-32),Vector2(rect.size.x-18,32))
 			_props_cache.append({"kind":kind,"pos":contact.get_center(),"rect":contact,"solid":true,
 				"visual_bounds":rect,"collision_rect":contact,"depth_anchor":Vector2(rect.get_center().x,contact.end.y),"station":-1})
 	for region_index in range(REGIONS.size()):
