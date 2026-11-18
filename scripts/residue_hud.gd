@@ -26,15 +26,12 @@ func _draw() -> void:
 	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], game.objective_label().get_slice("  /  ", 0), status, game.stage, mini(game.stage, 3), 3, "recycle", game.objective_guide, game.clock)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL", game.pointer)
-	FieldHUD.campaign(self, 1, game.clock)
-	if game.stage < 3:
-		FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()], "recycle", beats.labels, beats.done, game.clock)
 	if game.state == "play":
 		game.objective_guide.draw_screen(self, game.clock, game.objective_guide.intensity)
 		game.objective_guide.draw_tip(self)
 		game.buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
 		game.buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
-	var mini_map := FieldHUD.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
+	var mini_map := FieldHUD.radar(self, FieldHUD.radar_rect(size))
 
 	_draw_plan(mini_map, false)
 	var candidate: Dictionary = game._interaction_candidate()
@@ -53,9 +50,8 @@ func _draw() -> void:
 	if game.bin_lock > 0:
 		_text_center("TRIAGEM REINICIANDO  /  %.1f s" % game.bin_lock, Vector2(size.x * 0.5, size.y - 128), 11, GOLD)
 	if game.toast_time > 0:
-		# Right of the sector checklist, clear of Lia at screen centre.
-		var toast := Rect2(maxf(size.x * 0.5 - 265, 316), 150, minf(530, size.x - 332), 34)
-		FieldHUD.panel(self, toast, PINK if game.toast_ai else GOLD)
+		var toast := Rect2(size.x * 0.5 - 220, size.y - 98, 440, 28)
+		FieldHUD.compact_panel(self, toast, PINK if game.toast_ai else GOLD)
 		if game.toast_ai: draw_rect(Rect2(toast.position + Vector2(10, 9), Vector2(3, 16)), PINK)
 		_text_center(FieldHUD.fit(game.toast, toast.size.x - 30, 10), toast.get_center() + Vector2(0, 4), 10, PINK.lightened(0.35) if game.toast_ai else WHITE)
 	match game.state:

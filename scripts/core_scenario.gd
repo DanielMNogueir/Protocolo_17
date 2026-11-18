@@ -778,7 +778,7 @@ func _present(dt: float) -> void:
 		if near(enemy.pos, 200.0):
 			guide.in_combat = true
 			break
-	guide.update(dt, pos, _waypoint, point, Transform2D(0.0, world_offset()), HUD.Field.guide_safe_rect(size, -1.0, 201.0, 195.0 if active_pillar >= 0 else HUD.Field.GUIDE_BOTTOM),
+	guide.update(dt, pos, _waypoint, point, Transform2D(0.0, world_offset()), HUD.Field.guide_safe_rect(size, -1.0, 90.0, 144.0 if active_pillar >= 0 else HUD.Field.GUIDE_BOTTOM),
 		active, objective.place, size)
 	guide.cues(dt, sound)
 	var hum := clampf(1.0 - pos.distance_to(Map.CENTER) / 650.0, 0.0, 1.0)

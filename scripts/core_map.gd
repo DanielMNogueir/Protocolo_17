@@ -18,7 +18,7 @@ const ARENA_ART := Rect2(0, 188, 1920, 1434)
 const FLOOR_CENTER := Vector2(960, 775)
 const RADII := Vector2(715, 436)
 const ENTRY := Vector2(960, 1196)
-const ARRIVAL := Vector2(960, 1148)
+const ARRIVAL := Vector2(960, 1166)
 const OVERLOOK := Vector2(960, 381)
 const ARC_SOCKETS := [[Vector2(1203, 584), Vector2(1262, 584)], [Vector2(655, 950), Vector2(720, 950)]]
 const PILLAR_NAMES := ["PILAR NORTE", "PILAR LESTE", "PILAR SUL", "PILAR OESTE"]
@@ -68,6 +68,13 @@ static func blocks(phase: int) -> Array[Vector3]:
 	return result
 
 
+static func fixture_bases() -> Array[Rect2]:
+	var result: Array[Rect2] = []
+	for pillar in pillars():
+		result.append(Rect2(pillar - Vector2(48, 44), Vector2(96, 92)))
+	return result
+
+
 static func walkable(point: Vector2, radius: float, phase: int) -> bool:
 	if phase == 0:
 		if not GALLERY_FLOOR.grow(-radius).has_point(point) and not STAIRS.grow(-radius).has_point(point):
@@ -79,6 +86,10 @@ static func walkable(point: Vector2, radius: float, phase: int) -> bool:
 		return true
 	if ((point - FLOOR_CENTER) / (RADII - Vector2.ONE * radius)).length_squared() > 1.0:
 		return false
+	# Painted hatch platforms persist when the powered column falls.
+	for base in fixture_bases():
+		if point.distance_squared_to(point.clamp(base.position, base.end)) < radius * radius or base.has_point(point):
+			return false
 	for block in blocks(phase):
 		if point.distance_squared_to(Vector2(block.x, block.y)) < pow(radius + block.z, 2):
 			return false

@@ -269,12 +269,10 @@ static func effects(canvas: Node2D, game: Node2D) -> void:
 		if not game.evidence.is_empty():
 			_evidence(canvas, game.evidence, game.clock)
 	for shot: Dictionary in game.shots:
-		var at: Vector2 = shot.pos
-		var color := RED if shot.hostile else CYAN
-		var tail: Vector2 = at - Vector2(shot.vel).normalized() * (8 if shot.hostile else 13)
-		canvas.draw_line(tail, at, Color(color, 0.65), 3, true)
-		canvas.draw_circle(at, 4.5 if shot.hostile else 2.8, color)
-		canvas.draw_circle(at, 1.8, HUD.WHITE)
+		if shot.hostile:
+			Actors.ENEMIES.draw_projectile(canvas, shot)
+		else:
+			Actors.WEAPON.draw_pulse(canvas, shot, game.clock)
 	for effect: Dictionary in game.effects:
 		var fade: float = effect.left / effect.duration
 		canvas.draw_arc(effect.pos, 5.0 + 37.0 * (1.0 - fade), 0, TAU, 24, Color(effect.color, fade * 0.8), 2, true)

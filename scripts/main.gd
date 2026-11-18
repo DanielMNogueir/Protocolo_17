@@ -720,13 +720,9 @@ func _draw() -> void:
 		"victory": _draw_victory()
 	if toast_time > 0 and mode == "play" and dialogue.is_empty():
 		var alpha := minf(toast_time, 1)
-		var width := minf(_size().x - 332, _font.get_string_size(toast, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 44)
-		# Right of the sector checklist and clear of Lia's head; below the
-		# sample-analysis panel while it is open.
-		var rect := Rect2(maxf((_size().x - width) * 0.5, 316), 410 if sim.state == "activation" and sim.operation.wants_treatment(sim.pos) else 150, width, 32)
-		draw_rect(rect, Color(INK, alpha * 0.94))
-		draw_rect(Rect2(rect.position.x, rect.position.y, 2, 32), Color(CYAN, alpha))
-		_text_center(toast, rect.get_center() + Vector2(0, 4), 12, Color(WHITE, alpha))
+		var rect := Rect2(_size().x * 0.5 - 220, _size().y - 98, 440, 28)
+		FieldHUD.compact_panel(self, rect, CYAN)
+		FieldHUD.centered(self, FieldHUD.fit(toast, rect.size.x - 24, 10), rect.get_center() + Vector2(0, 4), 10, Color(WHITE, alpha))
 	if screen_flash > 0:
 		draw_rect(Rect2(Vector2.ZERO, _size()), Color(MAGENTA if mode == "play" else CYAN, screen_flash * 0.3))
 
@@ -874,6 +870,7 @@ func _draw_game() -> void:
 				_text_center("!",enemy.pos+Vector2(0,-65 if enemy.kind == "boss" else -43),18,GOLD)
 			var view: Dictionary = enemy_presentation.view_for(enemy)
 			Actors.draw_drone(self, view, sim.elapsed)
+			Actors.ENEMIES.draw_health(self, view)
 			EnemyPresentation.draw_awareness(self, enemy, clock)
 			if Occlusion.is_hidden(Occlusion.drone_rect(enemy.pos, enemy.kind == "boss"), float(entity.y), scenery):
 				ghosts.append({"view": view})
@@ -904,7 +901,6 @@ func _draw_game() -> void:
 			Occlusion.draw_drone_ghost(self, ghost.view, sim.elapsed)
 	if mode == "play":
 		water_guide.draw_world(self, clock, water_guide.intensity)
-		_draw_operation_label()
 		if dialogue.is_empty() and sim.state == "activation":
 			var target := WaterGuidance.objective(sim)
 			if sim.pos.distance_to(target) <= 72.0:
@@ -913,11 +909,7 @@ func _draw_game() -> void:
 		if not bolt.hostile:
 			Actors.WEAPON.draw_pulse(self, bolt, clock)
 			continue
-		var color: Color = MAGENTA if bolt.hostile else CYAN
-		var tail: Vector2 = bolt.pos - bolt.vel.normalized() * 11
-		draw_line(tail, bolt.pos, Color(color, 0.22), 7)
-		draw_line(tail.lerp(bolt.pos, 0.3), bolt.pos, color, 3)
-		draw_rect(Rect2(bolt.pos - Vector2(1, 1), Vector2(3, 3)), WHITE)
+		Actors.ENEMIES.draw_projectile(self, bolt)
 	for particle in sim.particles:
 		var alpha := clampf(float(particle.life) / maxf(float(particle.get("max_life", 1.0)), 0.01), 0, 1)
 		var col: Color = particle.get("color", CYAN)
@@ -962,7 +954,7 @@ func _draw_hud() -> void:
 	FieldHUD.vital(self, sim.hp, sim.max_hp, clock)
 	var detail := WaterGuidance.label(sim).get_slice("  /  ", 0)
 	var step := WaterGuidance.step(sim)
-	var status := "ÁGUAS  •  SETOR %d/4  •  ETAPA %d/%d  •  LEVA %d/3" % [sim.stage + 1, step, WaterGuidance.STEPS, mini(sim.wave + 1, 3)]
+	var status := "SETOR %d/4 · ETAPA %d/%d · LEVA %d/3" % [sim.stage + 1, step, WaterGuidance.STEPS, mini(sim.wave + 1, 3)]
 	if sim.restored > sim.stage:
 		detail = "●  SISTEMA RESTAURADO"
 		status = "ÁGUAS  •  REDE %d/4 EM OPERAÇÃO" % sim.restored
@@ -970,14 +962,11 @@ func _draw_hud() -> void:
 	water_guide.draw_screen(self, clock, water_guide.intensity)
 	water_guide.draw_tip(self)
 	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / CAMPO", pointer)
-	FieldHUD.campaign(self, 0, clock)
-	var tasks: Array = P17SectorOperation.LABELS[sim.stage]
-	FieldHUD.checklist(self, "ETAPAS DO SETOR  •  %d/%d" % [step, WaterGuidance.STEPS], "water", ["ROBÔS", _short(tasks[0]), "DEFESA", _short(tasks[1]), "DEFESA", "REDE"], step - 1 if sim.restored <= sim.stage else WaterGuidance.STEPS, clock)
 	buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
 	buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
 	_draw_operation_hud()
 	FieldHUD.abilities(self, size.y, sim.secondary_cd, sim.secondary_recharge, sim.dash_cd, sim.dash_recharge)
-	_draw_minimap(Rect2(size.x - 202, size.y - 160, 186, 144))
+	_draw_minimap(FieldHUD.radar_rect(size))
 
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84 and sim.operation.ready():
 		if sim.state == "activation":
@@ -1397,24 +1386,24 @@ func _draw_operation_hud() -> void:
 		_:
 			hold = 0.0
 	FieldHUD.prompt(self, size, "E", prompt, GOLD if task_mode in ["timing", "charge"] else CYAN, hold)
-	var bar := Rect2(size.x * 0.5 - 224.0, size.y - 79.0, 448, 5)
+	var bar := Rect2(size.x * 0.5 - 206.0, size.y - 30.0, 412, 5)
 	draw_rect(bar,Color("29424a"))
 	match task_mode:
 		"timing":
 			var width: float = 0.22 if sim.difficulty=="story" else (0.11 if sim.difficulty=="veteran" else 0.16)
-			draw_rect(Rect2(bar.position+Vector2((0.5-width)*bar.size.x,0),Vector2(width*2*bar.size.x,10)),CYAN)
-			draw_rect(Rect2(bar.position+Vector2(sim.operation.charge()*bar.size.x-2,-3),Vector2(4,16)),WHITE)
+			draw_rect(Rect2(bar.position+Vector2((0.5-width)*bar.size.x,0),Vector2(width*2*bar.size.x,bar.size.y)),CYAN)
+			draw_rect(Rect2(bar.position+Vector2(sim.operation.charge()*bar.size.x-1,-2),Vector2(2,9)),WHITE)
 		"charge":
 			# Pressure gauge: green safe band, red overpressure tail, live fill.
 			var safe_band: Vector2 = P17SectorOperation.band(sim.difficulty)
-			draw_rect(Rect2(bar.position+Vector2(safe_band.x*bar.size.x,0),Vector2((safe_band.y-safe_band.x)*bar.size.x,10)),Color(CYAN,0.45))
-			draw_rect(Rect2(bar.position+Vector2(0.94*bar.size.x,0),Vector2(0.06*bar.size.x,10)),Color(MAGENTA,0.6))
+			draw_rect(Rect2(bar.position+Vector2(safe_band.x*bar.size.x,0),Vector2((safe_band.y-safe_band.x)*bar.size.x,bar.size.y)),Color(CYAN,0.45))
+			draw_rect(Rect2(bar.position+Vector2(0.94*bar.size.x,0),Vector2(0.06*bar.size.x,bar.size.y)),Color(MAGENTA,0.6))
 			var fill: float = sim.operation.progress
 			var inside: bool = fill >= safe_band.x and fill <= safe_band.y
-			draw_rect(Rect2(bar.position,Vector2(bar.size.x*fill,10)),CYAN if inside else GOLD)
-			draw_rect(Rect2(bar.position+Vector2(fill*bar.size.x-2,-3),Vector2(4,16)),WHITE)
+			draw_rect(Rect2(bar.position,Vector2(bar.size.x*fill,bar.size.y)),CYAN if inside else GOLD)
+			draw_rect(Rect2(bar.position+Vector2(fill*bar.size.x-1,-2),Vector2(2,9)),WHITE)
 		_:
-			draw_rect(Rect2(bar.position,Vector2(bar.size.x*sim.operation.progress,10)),CYAN)
+			draw_rect(Rect2(bar.position,Vector2(bar.size.x*sim.operation.progress,bar.size.y)),CYAN)
 
 
 func _clear_pending_actions() -> void:
@@ -1425,17 +1414,3 @@ func _clear_pending_actions() -> void:
 func _direction(vector: Vector2) -> String:
 	if vector.length() < 45: return "●"
 	return ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][posmod(int(round(vector.angle() / (PI / 4.0))), 8)]
-
-## Checklist cell name: the last word of the task ("ABRIR A ADMISSÃO" -> "ADMISSÃO", "ABRIR A REDE NORTE" -> "NORTE").
-static func _short(task: String) -> String:
-	var words := task.split(" ")
-	var name := words[words.size() - 1]
-	return "ENTRADA" if name == "ADMISSÃO" else name
-
-func _draw_operation_label() -> void:
-	if sim.state != "activation" or sim.operation.ready(): return
-	var point: Vector2 = sim.operation.target()
-	var rect := Rect2(point+Vector2(-68,-53),Vector2(136,25))
-	draw_rect(rect,Color(INK,0.94))
-	draw_rect(rect,GOLD,false,1)
-	_text_center("%d  /  TAREFA" % (sim.operation.completed + 1),rect.get_center()+Vector2(0,4),10,GOLD)

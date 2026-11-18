@@ -622,6 +622,7 @@ func _update_enemies(dt: float) -> void:
 			continue
 		if enemy.zone > stage: continue
 		enemy.hit_cd = maxf(0.0, enemy.hit_cd - dt)
+		enemy["attack_age"] = float(enemy.get("attack_age", 99.0)) + dt
 		enemy.shot_cd -= dt
 		enemy.phase += dt
 		var origin: Vector2 = enemy.pos
@@ -704,6 +705,7 @@ func _drone_move(enemy: Dictionary, dt: float, target: Vector2, radius: float, s
 
 
 func _drone_attack(enemy: Dictionary) -> void:
+	enemy["attack_age"] = 0.0
 	var direction: Vector2 = enemy.look_dir
 	var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
 	var speed: float = (260.0 if enemy.boss else 235.0) * SHOT_SPEED[difficulty]
@@ -887,8 +889,7 @@ func _draw() -> void:
 		if not bullet.hostile:
 			Actors.WEAPON.draw_pulse(self, bullet, clock)
 		else:
-			draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.45), 6)
-			draw_circle(bullet.pos, 4, PINK)
+			Actors.ENEMIES.draw_projectile(self, bullet)
 	for effect in effects: _draw_effect(effect)
 	if collision_audit:
 		M.draw_collision_audit(self, stage, cleared)
@@ -926,9 +927,4 @@ func _draw_enemy(enemy: Dictionary) -> void:
 		return
 	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
 	EnemyPresentation.draw_awareness(self, enemy, clock)
-	if enemy.boss or enemy.hp < view.max_hp:
-		var width := 70.0 if enemy.boss else 34.0
-		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -54 if enemy.boss else -38), Vector2(width, 4))
-		draw_rect(bar.grow(1), Color("07171d"))
-		draw_rect(bar, Color("263b40"))
-		draw_rect(Rect2(bar.position, Vector2(width * clampf(float(enemy.hp) / view.max_hp, 0, 1), 4)), PINK)
+	Actors.ENEMIES.draw_health(self, view)

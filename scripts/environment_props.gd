@@ -26,7 +26,7 @@ const PROFILES := {
 	"tank": {"station":1,"width":90.0,"contact":Rect2(0.06,0.79,0.88,0.18)},
 	"pump": {"station":2,"width":83.0,"contact":Rect2(0.08,0.68,0.87,0.28)},
 	"battery": {"station":4,"width":126.0,"contact":Rect2(0.07,0.79,0.86,0.18)},
-	"control_room": {"station":3,"width":225.0,"contact":Rect2(0.06,0.73,0.87,0.23)},
+	"control_room": {"station":3,"width":225.0,"contact":Rect2(0.02,0.61,0.96,0.37)},
 	"purifier": {"station":5,"width":137.0,"contact":Rect2(0.06,0.70,0.88,0.26)},
 	"manifold": {"station":4,"width":126.0,"contact":Rect2(0.06,0.77,0.88,0.19)},
 	"clarifier": {"station":0,"width":256.0,"contact":Rect2(0.04,0.48,0.92,0.46)},

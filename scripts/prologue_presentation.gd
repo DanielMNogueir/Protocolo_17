@@ -89,7 +89,7 @@ static func _draw_hud(canvas: Node2D, story: P17Prologue, size: Vector2) -> void
 		var interaction := near and story.step in [1, 2, 3, 4, 6]
 		if story.interaction_active:
 			FieldHUD.prompt(canvas, size, "", "PERMANEÇA PERTO DA ESTAÇÃO", CYAN)
-			FieldHUD.bar(canvas, Rect2(size.x * 0.5 - 223.0, size.y - 79.0, 446, 5), story.repair, CYAN)
+			FieldHUD.bar(canvas, Rect2(size.x * 0.5 - 206.0, size.y - 27.0, 412, 3), story.repair, CYAN)
 		else:
 			FieldHUD.prompt(canvas, size, "E" if interaction else "", actions[story.step], CYAN)
 		canvas.prologue_guide.draw_screen(canvas, story.elapsed, canvas.prologue_guide.intensity)

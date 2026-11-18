@@ -985,8 +985,8 @@ func _update_objective_guide(dt: float) -> void:
 		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
 			objective_guide.in_combat = true
 			break
-	var reserve := 206.0 if stage < 2 and overloads[stage].running else FieldHUD.GUIDE_BOTTOM
-	var safest := FieldHUD.guide_safe_rect(size, -1.0, 236.0 if stage == 2 else 194.0, reserve)
+	var reserve := 212.0 if stage < 2 and overloads[stage].running else FieldHUD.GUIDE_BOTTOM
+	var safest := FieldHUD.guide_safe_rect(size, -1.0, 178.0 if stage == 2 else 136.0, reserve)
 	objective_guide.route = guidance_path
 	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()), safest, active, objective_place(), size)
 	objective_guide.cues(dt, sound)
@@ -1193,12 +1193,6 @@ func _draw_enemy(enemy: Dictionary) -> void:
 			Actors.ENEMIES.draw_destroyed(self, view)
 		return
 	Art.draw_enemy(self, view, clock + enemy.id * 0.137)
-	if enemy.hp < enemy.max_hp or enemy.kind == "transformer":
-		var width := 56.0 if enemy.kind == "transformer" else 34.0
-		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -66 if enemy.kind in ["transformer", "coil"] else -38), Vector2(width, 4))
-		draw_rect(bar.grow(1), Color("07171d"))
-		draw_rect(bar, Color("263b40"))
-		draw_rect(Rect2(bar.position, Vector2(width * clampf(float(enemy.hp) / enemy.max_hp, 0, 1), 4)), PINK)
 
 func _draw_collision_audit() -> void:
 	for edge in M.floor_edges(): draw_line(edge.a, edge.b, Color("75e6da"), 2)
@@ -1246,6 +1240,7 @@ func _draw_fx(layer: Node2D) -> void:
 	# Enemy cores glow through the dark; shields show as hex bubbles.
 	for enemy in enemies:
 		if enemy.hp <= 0 or enemy.zone > stage: continue
+		Actors.ENEMIES.draw_health(layer, enemy)
 		var core: Vector2 = enemy.pos + Vector2(0, -10 if enemy.kind != "coil" else -42)
 		var pulse := 0.5 + 0.5 * sin(clock * 5.0 + enemy.id)
 		layer.draw_circle(core, 3.0 + pulse, Color(PINK, 0.9))
@@ -1262,13 +1257,8 @@ func _draw_fx(layer: Node2D) -> void:
 	for bullet in bullets:
 		if not bullet.hostile:
 			Actors.WEAPON.draw_pulse(layer, bullet, clock)
-		elif bullet.kind == "orb":
-			layer.draw_circle(bullet.pos, 9, Color("f4a6ff", 0.25))
-			layer.draw_circle(bullet.pos, 5, Color("f4a6ff"))
-			layer.draw_circle(bullet.pos, 2, Color.WHITE)
 		else:
-			layer.draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.5), 6)
-			layer.draw_circle(bullet.pos, 4, PINK)
+			Actors.ENEMIES.draw_projectile(layer, bullet)
 	for effect in effects: _draw_effect(layer, effect)
 	if state == "play":
 		objective_guide.draw_world(layer, clock, objective_guide.intensity)

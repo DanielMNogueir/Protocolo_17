@@ -89,3 +89,25 @@ static func draw_destroyed(canvas: Node2D, wreck: Dictionary) -> void:
 		canvas.draw_line(point, point - direction * 4.0 * fade, Color(AMBER if i % 2 == 0 else MAGENTA, fade), 1.5)
 	if age < .2:
 		canvas.draw_arc(origin + Vector2(0, -6), (3.0 + age * 95.0) * size, 0, TAU, 24, Color(MAGENTA, (1 - age / .2) * .65), 2)
+
+
+static func draw_projectile(canvas: CanvasItem, bullet: Dictionary) -> void:
+	var pos: Vector2 = bullet.pos
+	var direction := Vector2(bullet.vel).normalized()
+	var source: Vector2 = bullet.get("source", pos - direction * 11.0)
+	var length := minf(11.0, maxf(0.0, (pos - source).dot(direction)))
+	var tail := pos - direction * length
+	canvas.draw_line(tail, pos, Color(MAGENTA, 0.22), 7)
+	canvas.draw_line(tail.lerp(pos, 0.3), pos, MAGENTA, 3)
+	canvas.draw_rect(Rect2(pos - Vector2.ONE, Vector2(3, 3)), Color("e9ece0"))
+
+
+static func draw_health(canvas: CanvasItem, enemy: Dictionary) -> void:
+	if enemy.hp <= 0: return
+	var kind: String = enemy.get("kind", "scout")
+	var width := 56.0 if kind in ["boss", "transformer"] else 30.0
+	var height := 66.0 if kind in ["boss", "transformer", "coil"] else 40.0
+	var rect := Rect2(Vector2(enemy.pos) + Vector2(-width * 0.5, -height), Vector2(width, 3))
+	canvas.draw_rect(rect.grow(1), Color("07171d"))
+	canvas.draw_rect(rect, Color("263b40"))
+	canvas.draw_rect(Rect2(rect.position, Vector2(width * clampf(float(enemy.hp) / maxf(1.0, float(enemy.max_hp)), 0.0, 1.0), 3)), MAGENTA)

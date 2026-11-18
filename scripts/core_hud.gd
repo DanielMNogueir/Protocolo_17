@@ -4,7 +4,6 @@ const Field = preload("res://scripts/field_hud.gd")
 const MapUI = preload("res://scripts/field_map.gd")
 const Dialogue = preload("res://scripts/dialogue_panel.gd")
 const Map = preload("res://scripts/core_map.gd")
-const Guide = preload("res://scripts/objective_guide.gd")
 const Simulation = preload("res://scripts/simulation.gd")
 const Loadout = preload("res://scripts/campaign_loadout.gd")
 const CYAN := Field.CYAN
@@ -51,15 +50,14 @@ func _field(size: Vector2) -> void:
 	var objective: Dictionary = game.objective
 	Field.vital(self, game.hp, game.loadout.max_hp, game.clock)
 	Field.navigation(self, "NÚCLEO AURORA", "GALERIA" if game.in_gallery else "COROA DA TORRE", pointer)
-	Field.campaign(self, 3, game.clock)
 	buttons.append({"rect": Field.MAP_BUTTON, "id": "map"})
 	buttons.append({"rect": Field.PAUSE_BUTTON, "id": "pause"})
 	game.guide.draw_screen(self, game.clock, game.guide.intensity)
 	_mission(size, objective)
-	var radar := Field.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
+	var radar := Field.radar(self, Field.radar_rect(size))
 	_plan(radar, false)
 	if game.state == "arena" or game.state == "collapse":
-		_boss_bar(Rect2(16, 130, 288, 62))
+		_boss_bar(Rect2(size.x * 0.5 - 132, 50, 264, 36))
 		Field.abilities(self, size.y, game.secondary_cd, game.loadout.secondary_recharge, game.dash_cd, game.loadout.dash_recharge)
 		if game.active_pillar >= 0:
 			_overload(size)
@@ -67,41 +65,25 @@ func _field(size: Vector2) -> void:
 	_interaction_prompt(size)
 	game.guide.draw_tip(self)
 	if game.toast_left > 0 and not game.toast.is_empty():
-		var r := Rect2(318, 163, minf(size.x - 346.0, 490.0), 37)
+		var r := Rect2(size.x * 0.5 - 220, 102 if game.active_pillar >= 0 else size.y - 98, 440, 28)
 		var color := PINK if game.toast.begins_with("IA:") else CYAN
-		Field.panel(self, r, color)
-		Field.text(self, Field.fit(game.toast, r.size.x - 34.0, 11), r.position + Vector2(17, 23), 11, Field.WHITE)
+		Field.compact_panel(self, r, color)
+		Field.text(self, Field.fit(game.toast, r.size.x - 34.0, 11), r.position + Vector2(12, 18), 10, Field.WHITE)
 
 
 func _mission(size: Vector2, objective: Dictionary) -> void:
-	var r := Rect2(size.x - 346.0, 16, 330, 132)
-	Field.panel(self, r, GOLD)
-	Field.icon(self, "network", Rect2(r.position + Vector2(16, 15), Vector2(19, 22)), GOLD)
-	Field.text(self, objective.title, r.position + Vector2(43, 31), 14, GOLD)
-	draw_line(r.position + Vector2(17, 42), r.position + Vector2(313, 42), Color("4c6557"))
-	var at := r.position + Vector2(25, 62)
-	if game.guide.mode == "arrived":
-		draw_arc(at - Vector2(0, 4), 7, 0.0, TAU, 20, CYAN, 2, true)
-	else:
-		Field.chevron(self, at - Vector2(0, 4), game.guide.arrow_direction(), GOLD, 0.48)
-	Field.text(self, Field.fit(objective.text, 272, 12), r.position + Vector2(43, 62), 12)
-	Field.text(self, Field.fit(objective.place, 284, 11), r.position + Vector2(19, 88), 11, Field.MUTED)
-	var step := 287.0 / int(objective.total)
-	for i in int(objective.total):
-		var p := r.position + Vector2(20 + i * step, 103)
-		var completed: bool = i < objective.done
-		Field.bar(self, Rect2(p, Vector2(step - 6, 9)), 1.0 if completed else (0.35 + 0.12 * sin(game.clock * TAU) if i == objective.done else 0), CYAN if completed else GOLD)
-	if game.guide.highlight > 0.0 and game.guide.intensity == Guide.STRONG:
-		Field.edge(self, r.grow(1), Color(GOLD, game.guide.highlight), 2)
+	Field.mission(self, size.x, objective.title, objective.text, "%s  •  %d/%d" % [
+		objective.place, objective.done, objective.total], objective.done, objective.done,
+		objective.total, "network", game.guide, game.clock)
 
 
 func _boss_bar(r: Rect2) -> void:
 	var phase: int = mini(game.boss.phase, 3)
 	var color := ELECTRIC if phase == 1 else PINK
-	Field.panel(self, r, PINK)
-	Field.text(self, "NÚCLEO AURORA", r.position + Vector2(16, 23), 13, PINK)
-	Field.text(self, "FASE %d/3" % phase, r.position + Vector2(r.size.x - 82, 23), 11)
-	var bar := Rect2(r.position + Vector2(16, 34), Vector2(r.size.x - 32, 12))
+	Field.compact_panel(self, r, PINK)
+	Field.text(self, "NÚCLEO AURORA", r.position + Vector2(10, 16), 11, PINK)
+	Field.text(self, "FASE %d/3" % phase, r.position + Vector2(r.size.x - 70, 16), 10)
+	var bar := Rect2(r.position + Vector2(10, 23), Vector2(r.size.x - 20, 5))
 	var value: float = (4 - game.boss.fallen_count()) * 0.25 if phase == 1 else game.boss.integrity
 	Field.bar(self, bar, value, color)
 	for i in range(1, 4 if phase == 1 else 3):
@@ -111,7 +93,7 @@ func _boss_bar(r: Rect2) -> void:
 
 func _overload(size: Vector2) -> void:
 	var overload = game.boss.pillars[game.active_pillar]
-	var r := Rect2(size.x * 0.5 - 174.0, size.y - 184, 348, 62)
+	var r := Rect2(size.x * 0.5 - 174.0, size.y - 132, 348, 62)
 	Field.panel(self, r)
 	Field.text(self, "SINCRONIZE A SOBRECARGA   %d/3" % overload.hits, r.position + Vector2(16, 26), 12, GOLD)
 	var track := Rect2(r.position + Vector2(18, 39), Vector2(311, 13))

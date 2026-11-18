@@ -64,6 +64,13 @@ static func panel(c: CanvasItem, r: Rect2, accent: Color = GOLD) -> void:
 		var x: float = r.end.x - 42 + i * 9
 		c.draw_colored_polygon(PackedVector2Array([Vector2(x, r.end.y - 7), Vector2(x + 5, r.end.y - 7), Vector2(x + 1, r.end.y - 3), Vector2(x - 4, r.end.y - 3)]), accent.darkened(0.15))
 
+static func compact_panel(c: CanvasItem, rect: Rect2, accent: Color = GOLD) -> void:
+	plate(c, Rect2(rect.position + Vector2(0, 2), rect.size), Color(0, 0, 0, 0.4), 5)
+	plate(c, rect, Color(INK, 0.93), 5)
+	edge(c, rect, Color("556c63"), 1, 5)
+	c.draw_line(rect.position + Vector2(8, 1), rect.position + Vector2(34, 1), accent, 2)
+
+
 static func inset(c: CanvasItem, r: Rect2) -> void:
 	plate(c, r.grow(1), Color("547366"), 4)
 	plate(c, r, Color("030f16"), 3)
@@ -104,29 +111,19 @@ static func keycap(c: CanvasItem, label: String, r: Rect2) -> void:
 	centered(c, label, r.get_center() + Vector2(0, 4), 10, INK)
 
 static func vital(c: CanvasItem, hp: int, maximum: int, time: float) -> void:
-	var low := hp <= maxi(2, int(ceil(maximum * 0.3)))
-	var color := RED if low else CYAN
-	panel(c, Rect2(16, 16, 288, 100), color if low else GOLD)
-	inset(c, Rect2(29, 30, 53, 66))
-	# Original Lia sprite: front three-quarter head and shoulders, no new identity.
-	c.draw_texture_rect_region(FACE, Rect2(31, 32, 49, 60), Rect2(318, 270, 116, 142))
-	c.draw_line(Vector2(87, 31), Vector2(87, 95), Color("6b7a60"), 1)
-	text(c, "LIA", Vector2(97, 46), 20)
-	text(c, "%d/%d" % [hp, maximum], Vector2(236, 46), 20, color)
-	text(c, "INTEGRIDADE", Vector2(97, 63), 10, MUTED)
-	inset(c, Rect2(96, 71, 192, 17))
-	var step := 184.0 / maximum
-	for i in maximum:
-		var cell := Rect2(100 + i * step, 75, step - 3, 9)
-		plate(c, cell, color.darkened(0.2) if i < hp else Color("20383b"), 1)
-		if i < hp:
-			c.draw_line(cell.position + Vector2(1, 1), Vector2(cell.end.x - 1, cell.position.y + 1), color.lightened(0.4), 1)
-			c.draw_rect(cell.grow(1), Color(color, 0.08))
-	var role := "AGENTE DE RECUPERAÇÃO" if text_scale_percent > 100 else "P17 / AGENTE DE RECUPERAÇÃO"
-	text(c, "SINAL CRÍTICO" if low else role, Vector2(98, 102), 10, color if low else MUTED)
-	c.draw_circle(Vector2(37, 103), 2, color)
-	c.draw_rect(Rect2(46, 101, 20, 3), GOLD.darkened(0.2))
-	if low: edge(c, Rect2(18, 18, 284, 96), Color(RED, 0.45 + 0.3 * sin(time * 5)), 2)
+	var low := hp <= maxi(2, ceili(maximum * 0.3))
+	var accent := RED if low else CYAN
+	compact_panel(c, VITAL_RECT, accent)
+	c.draw_texture_rect_region(FACE, Rect2(19, 17, 31, 40), Rect2(318, 270, 116, 142))
+	text(c, "LIA", Vector2(59, 30), 13)
+	text(c, "%d/%d" % [hp, maximum], Vector2(169, 30), 13, accent)
+	var track := Rect2(59, 39, 144, 8)
+	c.draw_rect(track, Color("263b40"))
+	c.draw_rect(Rect2(track.position, Vector2(track.size.x * clampf(float(hp) / maximum, 0, 1), 8)), accent)
+	for i in range(1, maximum):
+		var x := track.position.x + track.size.x * i / maximum
+		c.draw_line(Vector2(x, 39), Vector2(x, 47), INK, 2)
+	if low: text(c, "SINAL CRÍTICO", Vector2(59, 61), 9, RED)
 
 static func fit(value: String, width: float, size: int) -> String:
 	var font := ThemeDB.fallback_font
@@ -149,61 +146,57 @@ static func chevron(canvas: CanvasItem, at: Vector2, direction: Vector2, color: 
 
 static func mission(c: CanvasItem, width: float, title: String, detail: String, status: String, stage: int,
 		restored: int, total: int, kind: String, guide: RefCounted, time: float) -> void:
-	var p := Vector2(width - 346, 16)
-	var r := Rect2(p, Vector2(330, 132))
-	panel(c, r)
-	icon(c, kind, Rect2(p + Vector2(16, 17), Vector2(18, 22)), GOLD)
-	text(c, fit(title, 270, 14), p + Vector2(42, 32), 14, GOLD)
-	c.draw_line(p + Vector2(17, 41), p + Vector2(313, 41), Color("4c6557"), 1)
-	var label_x := 18.0
-	if guide.mode != "hidden":
-		var arrow_at := p + Vector2(26, 56)
-		if guide.mode == "arrived":
-			c.draw_arc(arrow_at, 7, 0, TAU, 24, CYAN, 2, true)
-		else:
-			chevron(c, arrow_at, guide.arrow_direction(), GOLD, 0.49)
-		label_x = 43.0
-	text(c, fit(detail, 312.0 - label_x, 12), p + Vector2(label_x, 61), 12, WHITE)
-	icon(c, "network", Rect2(p + Vector2(17, 73), Vector2(15, 15)), GOLD)
-	text(c, "REDE %d/%d" % [restored, total], p + Vector2(39, 85), 11, CYAN)
-	var step := 142.0 / total
+	var rect := mission_rect(width)
+	compact_panel(c, rect)
+	icon(c, kind, Rect2(rect.position + Vector2(12, 10), Vector2(14, 17)), GOLD)
+	text(c, fit(title, 270, 12), rect.position + Vector2(34, 23), 12, GOLD)
+	text(c, fit(detail, 290, 12), rect.position + Vector2(12, 45), 12)
+	var progress := Rect2(rect.position + Vector2(12, 59), Vector2(54, 4))
 	for i in total:
-		var node := Rect2(p + Vector2(165 + i * step, 75), Vector2(step - 5, 13))
-		var done := i < restored
-		bar(c, node, 1.0 if done else (0.4 + 0.13 * sin(time * TAU) if i == stage else 0.0), CYAN if done else GOLD)
-		if done: centered(c, "✓", node.get_center() + Vector2(0, 3), 10, INK)
-	text(c, fit(status, 292, 10), p + Vector2(18, 110), 10, MUTED)
+		var cell := Rect2(progress.position + Vector2(i * 14, 0), Vector2(10, 4))
+		c.draw_rect(cell, CYAN if i < restored else GOLD if i == stage else Color("314a4c"))
+	text(c, fit(status, 224, 9), rect.position + Vector2(83, 65), 9, MUTED)
 	if guide.highlight > 0.0 and guide.intensity == 2:
-		edge(c, r.grow(1), Color(GOLD, guide.highlight * (0.7 + 0.3 * sin(time * TAU * 1.3))), 2)
+		edge(c, rect, Color(GOLD, guide.highlight), 1, 5)
 
-## Where this district sits in the whole operation, under the M / ESC panel.
+
 const CAMPAIGN := ["ÁGUAS", "RESÍDUOS", "ENERGIA", "NÚCLEO"]
 const CAMPAIGN_RECT := Rect2(312, 96, 236, 62)
+const VITAL_RECT := Rect2(12, 12, 204, 56)
+const MAP_BUTTON := Rect2(230, 14, 63, 25)
+const PAUSE_BUTTON := Rect2(299, 14, 82, 25)
+const GUIDE_BOTTOM := 124.0
 
-const MAP_BUTTON := Rect2(333, 28, 78, 23)
-const PAUSE_BUTTON := Rect2(419, 28, 107, 23)
-const GUIDE_BOTTOM := 172.0
 
-static func guide_safe_rect(size: Vector2, dialogue_top: float = -1.0, hud_bottom: float = 194.0, reserve: float = GUIDE_BOTTOM) -> Rect2:
-	var top := maxf(CAMPAIGN_RECT.end.y, hud_bottom) + 12.0
+static func mission_rect(width: float) -> Rect2:
+	return Rect2(width - 328, 12, 316, 78)
+
+
+static func radar_rect(size: Vector2) -> Rect2:
+	return Rect2(size.x - 142, size.y - 118, 130, 106)
+
+
+static func guide_safe_rect(size: Vector2, dialogue_top: float = -1.0, hud_bottom: float = 90.0, reserve: float = GUIDE_BOTTOM) -> Rect2:
+	var top := maxf(90.0, hud_bottom) + 12.0
 	var bottom := size.y - reserve
 	if dialogue_top >= 0.0:
-		bottom = minf(bottom, dialogue_top - 24.0)
-	return Rect2(24.0, top, size.x - 48.0, maxf(52.0, bottom - top))
+		bottom = minf(bottom, dialogue_top - 18.0)
+	return Rect2(20.0, top, size.x - 40.0, maxf(52.0, bottom - top))
+
 
 static func prompt(c: CanvasItem, size: Vector2, key: String, verb: String, color: Color = GOLD, progress: float = -1.0) -> void:
-	var r := Rect2(size.x * 0.5 - 240.0, size.y - 118.0, 480, 52)
-	panel(c, r, color)
-	var x := 18.0
+	var r := Rect2(size.x * 0.5 - 218, size.y - 60, 436, 40)
+	compact_panel(c, r, color)
+	var x := 12.0
 	if progress >= 0.0:
-		text(c, "SEGURE", r.position + Vector2(x, 29), 10, color)
-		x += 52.0
+		text(c, "SEGURE", r.position + Vector2(x, 23), 9, color)
+		x += 48.0
 	if not key.is_empty():
-		keycap(c, key, Rect2(r.position + Vector2(x, 10), Vector2(30, 22)))
-		x += 42.0
-	text(c, fit(verb, r.size.x - x - 16.0, 13), r.position + Vector2(x, 28), 13)
+		keycap(c, key, Rect2(r.position + Vector2(x, 8), Vector2(27, 19)))
+		x += 36.0
+	text(c, fit(verb, r.size.x - x - 12, 12), r.position + Vector2(x, 23), 12)
 	if progress >= 0.0:
-		bar(c, Rect2(r.position + Vector2(16, 39), Vector2(r.size.x - 32, 4)), progress, color)
+		c.draw_rect(Rect2(r.position + Vector2(12, 33), Vector2((r.size.x - 24) * progress, 3)), color)
 
 static func interaction(c: CanvasItem, at: Vector2, time: float) -> void:
 	var ring := PackedVector2Array()
@@ -272,36 +265,36 @@ static func ability(c: CanvasItem, p: Vector2, key: String, label: String, kind:
 	c.draw_circle(p + Vector2(13, 98), 2, color if remaining <= 0 else RED)
 
 static func abilities(c: CanvasItem, height: float, secondary: float, recharge: float, dash: float, dash_max: float) -> void:
-	var p := Vector2(16, height - 132)
-	for offset in [Vector2(107, 37), Vector2(107, 73)]:
-		c.draw_rect(Rect2(p + offset, Vector2(10, 9)), Color("718077"))
-		c.draw_rect(Rect2(p + offset + Vector2(0, 2), Vector2(10, 4)), Color("22373c"))
-	ability(c, p, "Q", "RAJADA", "pulse", secondary, recharge, GOLD)
-	ability(c, p + Vector2(116, 0), "SHIFT", "ESQUIVA", "dash", dash, dash_max, CYAN)
-	text(c, "PULSO: MOUSE / ESPAÇO", p + Vector2(1, -18), 10, WHITE)
-	text(c, "RAJADA: BOTÃO DIREITO", p + Vector2(1, -5), 10, WHITE)
+	for entry in [[0, "Q", "RAJADA", secondary, recharge, GOLD], [110, "SHIFT", "ESQUIVA", dash, dash_max, CYAN]]:
+		var rect := Rect2(12 + entry[0], height - 54, 102, 42)
+		var remaining: float = entry[3]
+		var duration: float = entry[4]
+		var accent: Color = entry[5]
+		compact_panel(c, rect, accent)
+		keycap(c, entry[1], Rect2(rect.position + Vector2(6, 7), Vector2(34 if entry[1] == "SHIFT" else 22, 18)))
+		var x := 44.0 if entry[1] == "SHIFT" else 34.0
+		text(c, entry[2], rect.position + Vector2(x, 19), 9, accent if remaining <= 0 else MUTED)
+		if remaining > 0.0:
+			text(c, "%.1f s" % remaining, rect.position + Vector2(8, 34), 9, MUTED)
+		var amount := 1.0 - clampf(remaining / maxf(duration, 0.01), 0, 1)
+		c.draw_rect(Rect2(rect.position + Vector2(8, 35), Vector2(86 * amount, 3)), accent)
 
 static func navigation(c: CanvasItem, title: String, subtitle: String, pointer: Vector2 = Vector2(-999, -999)) -> void:
-	var p := Vector2(320, 16)
-	panel(c, Rect2(p, Vector2(220, 72)))
 	for item in [[MAP_BUTTON, "M", "MAPA"], [PAUSE_BUTTON, "ESC", "PAUSA"]]:
 		var r: Rect2 = item[0]
-		plate(c, r, Color("253e40") if r.has_point(pointer) else Color("172e33"), 3)
-		edge(c, r, GOLD if r.has_point(pointer) else Color("4e655b"), 1, 3)
-		var cap_width := 20 if item[1] == "M" else 30
-		keycap(c, item[1], Rect2(r.position + Vector2(3, 3), Vector2(cap_width, 16)))
-		text(c, item[2], r.position + Vector2(cap_width + 8, 15), 9, WHITE)
-	text(c, title, p + Vector2(14, 50), 10, MUTED)
-	text(c, fit(subtitle, 194, 10), p + Vector2(14, 63), 10, MUTED)
+		plate(c, r, Color("253e40") if r.has_point(pointer) else Color(INK, 0.9), 4)
+		edge(c, r, GOLD if r.has_point(pointer) else Color("4e655b"), 1, 4)
+		var cap_width := 19 if item[1] == "M" else 29
+		keycap(c, item[1], Rect2(r.position + Vector2(4, 4), Vector2(cap_width, 16)))
+		text(c, item[2], r.position + Vector2(cap_width + 9, 16), 9)
 
 static func radar(c: CanvasItem, r: Rect2) -> Rect2:
-	panel(c, r)
-	keycap(c, "M", Rect2(r.position + Vector2(17, 7), Vector2(21, 17)))
-	text(c, "MAPA / AURORA", r.position + Vector2(46, 19), 9, MUTED)
-	var area := Rect2(r.position + Vector2(16, 30), r.size - Vector2(32, 45))
-	inset(c, area.grow(2))
+	compact_panel(c, r)
+	text(c, "MAPA", r.position + Vector2(10, 17), 9, MUTED)
+	var area := Rect2(r.position + Vector2(8, 23), r.size - Vector2(16, 31))
+	c.draw_rect(area, Color("0b2027"))
 	return area
-## Every card is a real upgrade option; this lookup is presentation only.
+
 static func perk_visual(id: String) -> Dictionary:
 	var data := {
 		"focused_pulse": ["pulse", "+25%", "CADÊNCIA", "OFENSIVA", GOLD],
