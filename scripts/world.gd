@@ -199,21 +199,6 @@ static func body_solids() -> Array[Rect2]:
 			# reaches the terminal's interaction point.
 			body.end.x = minf(body.end.x, EnergyStation.INTERACTION_POINT.x - 14.0)
 		result.append(body)
-	result.append_array(sign_solids())
-	return result
-
-## Each terminal's sign stands on metal legs above the machine and is drawn
-## over everything: it is part of the structure, so nobody stands where the
-## sign would cover them. From 2 px above the sign down to where a sprite's top
-## (50 px above Lia's feet) clears the sign's lower edge, minus the radius.
-const SIGN_CLEARANCE := 36.0
-
-static func sign_solids() -> Array[Rect2]:
-	var result: Array[Rect2] = []
-	for index in range(GOALS.size()):
-		var sign: Rect2 = Objectives.sign_rect(GOALS[index], index)
-		var top := sign.position.y - BODY_TOP
-		result.append(Rect2(sign.position.x - BODY_SIDE, top, sign.size.x + BODY_SIDE * 2.0, sign.end.y + SIGN_CLEARANCE - top))
 	return result
 
 static func solids(stage: int) -> Array[Rect2]:
@@ -244,8 +229,6 @@ static func projectile_solids(stage: int) -> Array[Rect2]:
 	for channel_piece in Wetlands.channel_solids(): result.erase(channel_piece)
 	# Low retaining lips stop feet; pulses pass over them just like open drains.
 	for wall in Architecture.walls: result.erase(wall.collision_rect)
-	# Shots pass under a sign's legs; only the machines themselves stop them.
-	for sign in sign_solids(): result.erase(sign)
 	return result
 
 static func _circle_hits_rect(point: Vector2, radius: float, rect: Rect2) -> bool:

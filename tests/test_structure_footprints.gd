@@ -53,10 +53,15 @@ func _check_no_actor_inside_structures() -> void:
 	for i in 3:
 		structures.append({"bounds": World.station_part_bounds(i), "y": World.EnergyStation.COLLISION_RECTS[i].end.y})
 	check(structures.size() > 40, "Every Water structure is audited")
-	# Terminal signs are drawn over everything, so no feet position may put a
-	# sprite under one, whatever its depth.
+	# Terminal signs are floating labels: actors walk under them freely and the
+	# label fades/ghosts them (main.gd), so a sign never blocks movement.
 	for index in range(World.GOALS.size()):
-		structures.append({"bounds": World.Objectives.sign_rect(World.GOALS[index], index), "y": INF})
+		var sign: Rect2 = World.Objectives.sign_rect(World.GOALS[index], index)
+		var under := Vector2(sign.get_center().x, sign.end.y - 4.0)
+		var sign_blocked := false
+		for rect in World.solids(4):
+			if rect.encloses(Rect2(sign.position + Vector2(20, 4), Vector2(sign.size.x - 40, 8))): sign_blocked = true
+		check(not sign_blocked, "Sign %d is not a solid" % index)
 	for actor in [["Lia", 14.0], ["drone", 17.0], ["drone", 21.0]]:
 		for structure in structures:
 			var bounds: Rect2 = structure.bounds
