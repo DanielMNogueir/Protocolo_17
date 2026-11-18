@@ -11,6 +11,7 @@ const Architecture = preload("res://scripts/district_architecture.gd")
 const BridgeLayout = preload("res://scripts/bridge_layout.gd")
 const Wetlands = preload("res://scripts/wetlands.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
+const ArtSilhouettes = preload("res://scripts/art_silhouettes.gd")
 const SIZE := Vector2(2560, 1800)
 ## Two continuous banks of the Aurora river. Captação (SW) and the Pátio Solar
 ## (NW) share the west bank and a walled boundary; Filtragem (NE) and
@@ -179,6 +180,16 @@ static func body_rect(visual: Rect2, base: Rect2) -> Rect2:
 static func solid_footprint(visual: Rect2, base: Rect2) -> Rect2:
 	return base.merge(body_rect(visual, base))
 
+## Collision follows the drawing, not the image box: art crops keep
+## transparent margins and corners, so two machines side by side looked
+## passable while their boxes touched. For every 4 px row of feet positions the
+## body spans the opaque columns of the art rows Lia's sprite could overlap
+## from there (36 px above to 2 px below the feet; the 14 px radius covers the
+## rest of the 50 px above / 16 px below). Code-drawn pieces keep the box.
+const BODY_STRIP := 4.0
+const SPRITE_ABOVE := 36.0
+const SPRITE_BELOW := 2.0
+
 static func body_solids() -> Array[Rect2]:
 	var result: Array[Rect2] = []
 	var tall: Array[Dictionary] = []
@@ -186,21 +197,171 @@ static func body_solids() -> Array[Rect2]:
 	tall.append(clarifier())
 	for prop in props():
 		if prop["solid"]: tall.append(prop)
-	for index in [0,2,3]: tall.append(terminal(index))
 	for item in tall:
-		var visual: Rect2 = item.visual_bounds
-		var base: Rect2 = item.collision_rect
-		result.append(body_rect(visual, base))
+		result.append_array(silhouette_body(item.visual_bounds, item.collision_rect, art_layers(item)))
+	for index in [0,2,3]:
+		var data := terminal(index)
+		result.append_array(silhouette_body(data.visual_bounds, data.collision_rect, terminal_layers(index)))
 	var station_visuals: Array[Rect2] = [EnergyStation.CONTROL_VISUAL, EnergyStation.GENERATOR_VISUAL, EnergyStation.TERMINAL_VISUAL]
 	for i in station_visuals.size():
-		var body := body_rect(station_visuals[i], EnergyStation.COLLISION_RECTS[i])
-		if i == 1:
-			# The generator's lower right corner is transparent (STRUCTURE_CONTOURS[5])
-			# and the repair terminal stands in it: stop the body where Lia's circle
-			# reaches the terminal's interaction point.
-			body.end.x = minf(body.end.x, EnergyStation.INTERACTION_POINT.x - 14.0)
-		result.append(body)
+		for body in silhouette_body(station_visuals[i], EnergyStation.COLLISION_RECTS[i], station_layers(i)):
+			if i == 1:
+				# The generator's lower right corner is transparent (STRUCTURE_CONTOURS[5])
+				# and the repair terminal stands in it: stop the body where Lia's circle
+				# reaches the terminal's interaction point.
+				body.end.x = minf(body.end.x, EnergyStation.INTERACTION_POINT.x - 14.0)
+			if body.has_area(): result.append(body)
 	return result
+
+## Art drawn for a structure, as [destination, texture path, source crop].
+static func art_layers(item: Dictionary) -> Array:
+	if not item.has("source") or not item.has("station"): return []
+	var texture: Texture2D = EnvironmentProps.District.ATLAS if item.get("district", false) else (EnvironmentProps.ATLAS if int(item.station) < 0 else StationArt.STRUCTURES)
+	return [[item.visual_bounds, texture.resource_path, item.source]]
+
+## Terminals swap between offline and online art of different heights.
+static func terminal_layers(index: int) -> Array:
+	if index == 1: return []
+	var data := terminal(index)
+	var width: float = data.visual_bounds.size.x
+	var result: Array = []
+	for crop: Rect2 in [StationArt.TOTEM_CROPS[index], StationArt.TOTEM_CROPS[index + 4]]:
+		var height := width * crop.size.y / crop.size.x
+		result.append([Rect2(data.foot - Vector2(width * 0.5, height), Vector2(width, height)), StationArt.TOTEMS.resource_path, crop])
+	return result
+
+static func station_layers(part: int) -> Array:
+	match part:
+		0: return [[EnergyStation.CONTROL_VISUAL, StationArt.STRUCTURES.resource_path, EnergyStation.CONTROL_CROP]]
+		1: return [[EnergyStation.GENERATOR_VISUAL, StationArt.STRUCTURES.resource_path, EnergyStation.GENERATOR_CROP]]
+	return []
+
+## Opaque columns of the art, one entry per world row: {"y": first row,
+## "lo": left edges, "hi": right edges} (lo > hi on an empty row).
+static func _row_table(layers: Array) -> Dictionary:
+	var top := INF
+	var bottom := -INF
+	for layer in layers:
+		top = minf(top, Rect2(layer[0]).position.y)
+		bottom = maxf(bottom, Rect2(layer[0]).end.y)
+	var first := int(floor(top))
+	var count := int(ceil(bottom)) - first
+	var lo := PackedFloat32Array()
+	var hi := PackedFloat32Array()
+	lo.resize(count)
+	hi.resize(count)
+	lo.fill(INF)
+	hi.fill(-INF)
+	for layer in layers:
+		var dest: Rect2 = layer[0]
+		var crop: Rect2 = layer[2]
+		var spans: Array = ArtSilhouettes.SPANS.get(ArtSilhouettes.key(layer[1], crop), [])
+		var sx := dest.size.x / crop.size.x
+		var sy := dest.size.y / crop.size.y
+		for i in count:
+			var y0 := float(first + i)
+			if y0 + 1.0 <= dest.position.y or y0 >= dest.end.y: continue
+			if spans.is_empty():
+				lo[i] = minf(lo[i], dest.position.x)
+				hi[i] = maxf(hi[i], dest.end.x)
+				continue
+			var r0 := maxi(0, int(floor((y0 - dest.position.y) / sy)))
+			var r1 := mini(int(crop.size.y) - 1, int(floor((y0 + 0.999 - dest.position.y) / sy)))
+			for row in range(r0, r1 + 1):
+				var left: int = spans[row * 2]
+				if left < 0: continue
+				lo[i] = minf(lo[i], dest.position.x + left * sx)
+				hi[i] = maxf(hi[i], dest.position.x + (int(spans[row * 2 + 1]) + 1) * sx)
+	return {"y": first, "lo": lo, "hi": hi}
+
+## Opaque columns [left, right] of the rows between y0 and y1 (x > y if none).
+static func _table_span(table: Dictionary, y0: float, y1: float) -> Vector2:
+	var lo_rows: PackedFloat32Array = table.lo
+	var hi_rows: PackedFloat32Array = table.hi
+	var first: int = table.y
+	var a := maxi(0, int(floor(y0)) - first)
+	var b := mini(lo_rows.size() - 1, int(floor(y1)) - first)
+	var lo := INF
+	var hi := -INF
+	for i in range(a, b + 1):
+		lo = minf(lo, lo_rows[i])
+		hi = maxf(hi, hi_rows[i])
+	return Vector2(lo, hi)
+
+## Lia may tuck a few pixels of her sprite behind the edge of a machine while
+## squeezing between two of them (6 px a side, never her body's centre): gaps
+## that read as open on screen are open in the game.
+const ART_SIDE := -3.0
+
+static func silhouette_body(visual: Rect2, base: Rect2, layers: Array) -> Array[Rect2]:
+	if layers.is_empty(): return [body_rect(visual, base)]
+	var table := _row_table(layers)
+	var top := float(table.y)
+	var bottom := base.end.y - BODY_FRONT_CLEARANCE
+	var result: Array[Rect2] = []
+	var current := Rect2()
+	var y := top - SPRITE_BELOW - BODY_STRIP
+	while y < bottom:
+		var height := minf(BODY_STRIP, bottom - y)
+		var span := _table_span(table, y - SPRITE_ABOVE, y + height + SPRITE_BELOW)
+		if span.x + 1.0 < span.y:
+			var strip := Rect2(span.x - ART_SIDE, y, span.y - span.x + ART_SIDE * 2.0, height)
+			if current.has_area() and absf(current.position.x - strip.position.x) < 0.01 and absf(current.end.x - strip.end.x) < 0.01 and absf(current.end.y - y) < 0.01:
+				current.size.y += height
+			else:
+				if current.has_area(): result.append(current)
+				current = strip
+		elif current.has_area():
+			result.append(current)
+			current = Rect2()
+		y += height
+	if current.has_area(): result.append(current)
+	return result
+
+## Opaque art of a sortable structure as 4 px row bands, for occlusion: what
+## actually covers an actor, not the transparent box around it.
+static var _cover_cache := {}
+
+static func art_covers(layers: Array) -> Array[Rect2]:
+	var result: Array[Rect2] = []
+	if layers.is_empty(): return result
+	# Each structure has its own destination box: a cheap, unique cache key.
+	var key: Rect2 = layers[0][0]
+	if _cover_cache.has(key): return _cover_cache[key]
+	var table := _row_table(layers)
+	var y := float(table.y)
+	var bottom := y + PackedFloat32Array(table.lo).size()
+	var current := Rect2()
+	while y < bottom:
+		var height := minf(BODY_STRIP, bottom - y)
+		var span := _table_span(table, y, y + height - 0.01)
+		if span.x <= span.y:
+			var band := Rect2(span.x, y, span.y - span.x, height)
+			if current.has_area() and absf(current.position.x - band.position.x) < 2.0 and absf(current.end.x - band.end.x) < 2.0:
+				current = current.merge(band)
+			else:
+				if current.has_area(): result.append(current)
+				current = band
+		elif current.has_area():
+			result.append(current)
+			current = Rect2()
+		y += height
+	if current.has_area(): result.append(current)
+	_cover_cache[key] = result
+	return result
+
+static var _sortable_cover_cache := {}
+
+static func sortable_covers(object: Dictionary) -> Array[Rect2]:
+	var key: Variant = null
+	match object.type:
+		"machine", "prop": key = object.prop.get("visual_bounds", null)
+		"terminal": key = int(object.index)
+	if key == null: return []
+	if _sortable_cover_cache.has(key): return _sortable_cover_cache[key]
+	var covers: Array[Rect2] = art_covers(terminal_layers(int(object.index)) if object.type == "terminal" else art_layers(object.prop))
+	_sortable_cover_cache[key] = covers
+	return covers
 
 ## Collision queries run thousands of times per frame (movement, drone AI and
 ## the guide's A* routes). Each 64 px bucket lists the solids touching it, so a

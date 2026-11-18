@@ -49,9 +49,11 @@ func _check_no_actor_inside_structures() -> void:
 	for object in World.sortable_objects(view):
 		var bounds: Rect2 = World.sortable_bounds(object)
 		if str(object.type) == "bridge_part" or bounds.size.y < Occlusion.MIN_COVER_HEIGHT: continue
-		structures.append({"bounds": bounds, "y": float(object.y)})
+		var covers: Array[Rect2] = World.sortable_covers(object)
+		structures.append({"bounds": bounds, "covers": covers if not covers.is_empty() else [bounds], "y": float(object.y)})
 	for i in 3:
-		structures.append({"bounds": World.station_part_bounds(i), "y": World.EnergyStation.COLLISION_RECTS[i].end.y})
+		var covers: Array[Rect2] = World.art_covers(World.station_layers(i))
+		structures.append({"bounds": World.station_part_bounds(i), "covers": covers if not covers.is_empty() else [World.station_part_bounds(i)], "y": World.EnergyStation.COLLISION_RECTS[i].end.y})
 	check(structures.size() > 40, "Every Water structure is audited")
 	# Terminal signs are floating labels: actors walk under them freely and the
 	# label fades/ghosts them (main.gd), so a sign never blocks movement.
@@ -73,9 +75,12 @@ func _check_no_actor_inside_structures() -> void:
 					var at := Vector2(x, y)
 					if at.y < float(structure.y) and World.walkable(at, actor[1], 3):
 						var sprite := Occlusion.lia_rect(at) if actor[0] == "Lia" else Occlusion.drone_rect(at, false)
-						var covered := Occlusion.hidden_fraction(sprite, [bounds])
-						# Directly behind the art nothing may show through; at the front
-						# corners a few edge pixels may touch, never enough for a silhouette.
+						# The body's centre never goes behind opaque art; squeezing
+						# between two machines may tuck 6 px of each side behind them.
+						var core := sprite.grow_individual(-6.0, 0.0, -6.0, 0.0)
+						var covers: Array[Rect2] = []
+						covers.assign(structure.covers)
+						var covered := Occlusion.hidden_fraction(core, covers)
 						var behind := at.x >= bounds.position.x and at.x <= bounds.end.x
 						var limit := 0.05 if behind else Occlusion.THRESHOLD
 						if covered > limit:

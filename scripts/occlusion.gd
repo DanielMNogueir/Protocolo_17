@@ -46,7 +46,13 @@ static func covers_for(actor: Rect2, actor_y: float, scenery: Array[Dictionary])
 	for item in scenery:
 		var y: float = item.y
 		var bounds: Rect2 = item.bounds
-		if y > actor_y and bounds.size.y >= MIN_COVER_HEIGHT and bounds.intersects(actor): result.append(bounds)
+		if y > actor_y and bounds.size.y >= MIN_COVER_HEIGHT and bounds.intersects(actor):
+			# Structures with measured art cover only with their opaque pixels.
+			var covers: Array = item.get("covers", [])
+			if covers.is_empty(): result.append(bounds)
+			else:
+				for cover: Rect2 in covers:
+					if cover.intersects(actor): result.append(cover)
 	return result
 
 static func is_hidden(actor: Rect2, actor_y: float, scenery: Array[Dictionary]) -> bool:

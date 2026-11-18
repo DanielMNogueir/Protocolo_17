@@ -944,7 +944,11 @@ func _draw_game() -> void:
 	var scenery: Array[Dictionary] = []
 	for entity in entities:
 		var bounds := _scenery_bounds(entity)
-		if bounds.has_area(): scenery.append({"y": float(entity.y), "bounds": bounds})
+		if bounds.has_area():
+			var covers: Array[Rect2] = []
+			if entity.has("world_object"): covers = World.sortable_covers(entity.world_object)
+			elif entity.has("structure"): covers = World.art_covers(World.station_layers(int(entity.part)))
+			scenery.append({"y": float(entity.y), "bounds": bounds, "covers": covers})
 	var ghosts: Array[Dictionary] = []
 	for entity in entities:
 		if entity.has("world_object"):
