@@ -78,6 +78,43 @@ func _test_timing_and_treatment() -> void:
 	check(not sim.select_treatment(2) and not sim.operation.treatment_selected,"Pressure increase does not treat solids")
 	for frame in 80: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
 	check(sim.select_treatment(1),"Filtration matches suspended solids")
+	_test_gestures()
+
+## Captação pries the grate with taps; Distribuição releases pressure in a band.
+func _test_gestures() -> void:
+	var sim: P17Simulation = S.new()
+	sim.start(0)
+	sim.enemies.clear()
+	sim.state = "activation"
+	sim.pos = sim.operation.target()
+	check(sim.operation.mode() == "mash", "Grate task asks for repeated taps")
+	for frame in 240: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,true)
+	check(sim.operation.completed == 0, "Holding E does not pry the grate loose")
+	for frame in 240:
+		sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,frame % 6 < 3)
+		if sim.operation.completed > 0: break
+	check(sim.operation.completed == 1 and sim.state == "combat", "Tapping E clears the grate and calls reinforcements")
+	check(sim.operation.mode() == "hold", "Intake valve is turned by holding E")
+	sim.start(3)
+	sim.enemies.clear()
+	sim.state = "activation"
+	sim.pos = sim.operation.target()
+	check(sim.operation.mode() == "charge", "Network task builds pressure")
+	for frame in 200:
+		sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,true)
+		if sim.operation.cooldown > 0.0: break
+	check(sim.operation.completed == 0 and sim.operation.cooldown > 0.0 and sim.events.has("pressure_miss"), "Overpressure fails and locks the valve briefly")
+	for frame in 90: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
+	for frame in 20: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,true)
+	sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
+	check(sim.operation.completed == 0, "Releasing too early is a pressure miss")
+	for frame in 60: sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
+	var safe_band: Vector2 = P17SectorOperation.band(sim.difficulty)
+	for frame in 200:
+		sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,true)
+		if sim.operation.progress >= (safe_band.x + safe_band.y) * 0.5: break
+	sim.tick(DT,Vector2.ZERO,sim.pos+Vector2.UP,false,false,false)
+	check(sim.operation.completed == 1, "Releasing inside the green band opens the network")
 
 func _test_retry_and_legacy() -> void:
 	var sim: P17Simulation = S.new()

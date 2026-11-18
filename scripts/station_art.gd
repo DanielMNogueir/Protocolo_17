@@ -46,7 +46,12 @@ static func draw_floor(canvas: Node2D, rect: Rect2, sector: int) -> void:
 
 static func draw_floor_tile(canvas: Node2D, tile: Rect2, seed: int, sector: int) -> void:
 	var origins: Array[Vector2]=[Vector2(100,1020),Vector2(100,100),Vector2(1450,100),Vector2(1450,1020)]
-	var source:=Rect2(tile.position-origins[sector],tile.size)
+	# Tiles outside the original yard (the joined bank strips) wrap around the
+	# texture instead of sampling past its edge; tiles inside are unchanged.
+	var texture_size:=FLOOR.get_size()
+	var offset:=tile.position-origins[sector]
+	offset=Vector2(fposmod(offset.x,maxf(1.0,texture_size.x-tile.size.x)),fposmod(offset.y,maxf(1.0,texture_size.y-tile.size.y)))
+	var source:=Rect2(offset,tile.size)
 	var tint: Color = [Color("c2d8de"),Color("d5dbd1"),Color("b8d8d5"),Color("c2d4c9")][sector]
 	canvas.draw_texture_rect_region(FLOOR,tile,source,tint)
 	# A quiet maintenance floor keeps actor silhouettes above its fine aggregate.

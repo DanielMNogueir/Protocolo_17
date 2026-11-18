@@ -13,6 +13,7 @@ func run() -> void:
 	root.add_child(game)
 	game.set_physics_process(false)
 	game.sound.set_muted(true)
+	game._finish_dialogue()
 	game.stage = 2
 	var originals: Array = game.enemies.duplicate(true)
 	for original in originals:
@@ -29,6 +30,7 @@ func run() -> void:
 				check(target.max_hp == expected, "Taking damage never changes maximum HP")
 				if hit < required - 1: check(target.hp > 0, "Enemy survives until its actual HP is exhausted")
 			check(target.hp == 0, "Enemy dies on the expected pulse count with damage " + str(damage))
+			check(float(target.get("death_age", -1.0)) >= 0.0 and not game.effects.is_empty(), "Destroyed drone leaves a wreck and a spark burst")
 	game.enemies.clear()
 	game._spawn_alarm_drone()
 	check(game.enemies[0].hp == 11 and game.enemies[0].max_hp == 11, "Alarm drone uses the same health rule")

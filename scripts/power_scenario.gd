@@ -9,10 +9,13 @@ extends Node2D
 const M = preload("res://scripts/power_map.gd")
 const Art = preload("res://scripts/power_art.gd")
 const Mechanics = preload("res://scripts/power_mechanics.gd")
+const CoreStory = preload("res://scripts/core_story.gd")
 const Story = preload("res://scripts/power_story.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const FieldHUD = preload("res://scripts/field_hud.gd")
+const Guide = preload("res://scripts/objective_guide.gd")
 const HUD = preload("res://scripts/power_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/power_lighting.gdshader")
 const Sound = preload("res://scripts/audio.gd")
@@ -54,6 +57,7 @@ var camera: Vector2 = M.START
 var pointer := Vector2.ZERO
 var clock := 0.0
 var elapsed := 0.0
+var deaths := 0
 var hp := 6
 var max_hp := 6
 var stage := 0
@@ -92,6 +96,7 @@ var fire_interval := 0.145
 var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
+var objective_guide := Guide.new()
 var guidance_path := PackedVector2Array()
 var _guide_timer := 0.0
 var _guide_target := Vector2.INF
@@ -121,6 +126,7 @@ func _ready() -> void:
 		_muted = settings.get_value("audio", "muted", false)
 		dialogue_fast = settings.get_value("narrative", "instant_prologue_text", false)
 	sound.set_muted(_muted)
+	objective_guide.configure(settings, "energy")
 	sound.set_mood("blackout")
 	Actors.ENEMIES.prepare()
 	overloads = [Mechanics.Overload.new(difficulty, loadout.timing_scale, "steady"), Mechanics.Overload.new(difficulty, loadout.timing_scale, "surge")]
@@ -138,6 +144,10 @@ func _ready() -> void:
 
 func _apply_handoff() -> void:
 	campaign.load_progress()
+	var retry: Dictionary = get_tree().get_meta("p17_energy_retry", {})
+	if get_tree().has_meta("p17_energy_retry"): get_tree().remove_meta("p17_energy_retry")
+	deaths = retry.get("deaths", 0)
+	elapsed = retry.get("time", 0.0)
 	if get_tree().has_meta("p17_power_handoff"):
 		var data: Dictionary = get_tree().get_meta("p17_power_handoff")
 		difficulty = data.get("difficulty", "operation")
@@ -280,6 +290,7 @@ func _present(dt: float) -> void:
 	var lights := _dynamic_lights()
 	_light_material.set_shader_parameter("lights", lights)
 	_light_material.set_shader_parameter("light_count", lights.size())
+	_update_objective_guide(dt)
 	queue_redraw()
 	_fx.queue_redraw()
 	_hud.queue_redraw()
@@ -324,7 +335,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_clear_pending_actions()
 				state = "play" if state == "map" else "map"
 		KEY_R:
-			if state in ["pause", "defeat"]: get_tree().reload_current_scene()
+			if state in ["pause", "defeat"]: _retry()
 		KEY_B:
 			if state in ["pause", "victory", "defeat"]: _return_to_districts()
 		KEY_SHIFT:
@@ -352,12 +363,16 @@ func _action(id: String) -> void:
 		"map": state = "map"
 		"pause": state = "pause"
 		"resume": state = "play"
-		"retry": get_tree().reload_current_scene()
+		"retry": _retry()
 		"districts": _return_to_districts()
 		"intro_next": _advance_dialogue()
 		"intro_fast":
 			dialogue_fast = not dialogue_fast
 	queue_redraw()
+
+func _retry() -> void:
+	get_tree().set_meta("p17_energy_retry", {"deaths": deaths, "time": elapsed})
+	get_tree().reload_current_scene()
 
 func _return_to_districts() -> void:
 	get_tree().set_meta("p17_open_districts", true)
@@ -392,7 +407,13 @@ func _advance_dialogue() -> void:
 func _finish_dialogue() -> void:
 	dialogue.clear()
 	state = after_dialogue
-	if state == "victory": _complete_campaign()
+	if state == "to_core":
+		_complete_campaign()
+		if campaign.residues_completed and not campaign.energy_completed:
+			state = "play"
+			_set_toast(victory_notice)
+		else:
+			_open_core()
 	_clear_pending_actions()
 
 # ---------------------------------------------------------------- player
@@ -437,6 +458,7 @@ func _damage(shock: bool = false) -> void:
 	shake = maxf(shake, 4.0)
 	if hp <= 0:
 		hp = 0
+		deaths += 1
 		state = "defeat"
 		_set_toast("A rede desligou Lia. O distrito será reiniciado; os módulos permanecem.")
 
@@ -473,7 +495,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 				hold_progress = 0.0
 				hold_target = ""
 				sound.play_sfx("power_up")
-				_start_dialogue(Story.ELEVATOR, "victory")
+				_start_dialogue(CoreStory.ELEVATOR, "to_core")
 
 func _press_overload(index: int) -> void:
 	var overload = overloads[index]
@@ -587,7 +609,23 @@ func _complete_campaign() -> void:
 	if not campaign.residues_completed:
 		victory_notice = "Sessão de teste: progresso não registrado."
 		return
-	victory_notice = "OPERAÇÃO CORRENTE REGISTRADA  /  PROGRESSO SALVO" if campaign.complete_energy(difficulty) == OK else "Não foi possível salvar o progresso desta operação."
+	victory_notice = "OPERAÇÃO CORRENTE REGISTRADA  /  PROGRESSO SALVO" if campaign.complete_energy(difficulty, {"kills": kills, "deaths": deaths, "time": elapsed}) == OK else "Não foi possível salvar o progresso desta operação."
+
+func _open_core() -> void:
+	var data := {"difficulty": difficulty, "upgrades": upgrades.duplicate(), "stats": {"kills": kills, "time": elapsed}}
+	if campaign.path != CampaignProgress.PATH: data["save_path"] = campaign.path
+	get_tree().set_meta("p17_core_handoff", data)
+	if get_tree().has_meta("p17_power_handoff"): get_tree().remove_meta("p17_power_handoff")
+	var overlay := CanvasLayer.new()
+	overlay.layer = 10
+	add_child(overlay)
+	var shade := ColorRect.new()
+	shade.color = Color(0, 0, 0, 0)
+	overlay.add_child(shade)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var transition := create_tween()
+	transition.tween_property(shade, "color:a", 1.0, 0.6)
+	transition.tween_callback(get_tree().change_scene_to_file.bind("res://scenes/core.tscn"))
 
 # ---------------------------------------------------------------- hazards
 
@@ -921,6 +959,39 @@ func objective_point() -> Vector2:
 			return M.w(M.RING_CENTER)
 	return M.w(M.ELEVATOR)
 
+func objective_place() -> String:
+	match stage:
+		0:
+			if not mirrors.solved: return "ESPELHO %d" % mini(mirrors.lit_count(), 3)
+			return "CENTRAL SOLAR" if zone_alive(0) > 0 else "TERMINAL SOLAR"
+		1:
+			if pos.x < 900 * M.SCALE: return "CORREDOR DE CABOS"
+			if _alive_kind(1, "transformer"): return "TRANSFORMADOR"
+			if not relays.solved: return "RELÉS DA TORRE NORTE"
+			return "TORRE NORTE" if zone_alive(1) > 0 else "TERMINAL DA TORRE"
+		2:
+			if battery.started:
+				for i in 3:
+					if battery.danger(i): return "CONSOLE DA CÉLULA %d" % (i + 1)
+			return "ANEL DE RECARGA"
+	return "ELEVADOR DO NÚCLEO"
+
+
+func _update_objective_guide(dt: float) -> void:
+	var size := get_viewport_rect().size
+	var active := state == "play"
+	objective_guide.in_combat = false
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
+			objective_guide.in_combat = true
+			break
+	var reserve := 212.0 if stage < 2 and overloads[stage].running else FieldHUD.GUIDE_BOTTOM
+	var safest := FieldHUD.guide_safe_rect(size, -1.0, 178.0 if stage == 2 else 136.0, reserve)
+	objective_guide.route = guidance_path
+	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()), safest, active, objective_place(), size)
+	objective_guide.cues(dt, sound)
+
+
 func _objective_body(target: Vector2) -> String:
 	for i in 2:
 		if target == M.w(M.TERMINALS[i]): return "terminal %d" % i
@@ -1122,12 +1193,6 @@ func _draw_enemy(enemy: Dictionary) -> void:
 			Actors.ENEMIES.draw_destroyed(self, view)
 		return
 	Art.draw_enemy(self, view, clock + enemy.id * 0.137)
-	if enemy.hp < enemy.max_hp or enemy.kind == "transformer":
-		var width := 56.0 if enemy.kind == "transformer" else 34.0
-		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -66 if enemy.kind in ["transformer", "coil"] else -38), Vector2(width, 4))
-		draw_rect(bar.grow(1), Color("07171d"))
-		draw_rect(bar, Color("263b40"))
-		draw_rect(Rect2(bar.position, Vector2(width * clampf(float(enemy.hp) / enemy.max_hp, 0, 1), 4)), PINK)
 
 func _draw_collision_audit() -> void:
 	for edge in M.floor_edges(): draw_line(edge.a, edge.b, Color("75e6da"), 2)
@@ -1175,6 +1240,7 @@ func _draw_fx(layer: Node2D) -> void:
 	# Enemy cores glow through the dark; shields show as hex bubbles.
 	for enemy in enemies:
 		if enemy.hp <= 0 or enemy.zone > stage: continue
+		Actors.ENEMIES.draw_health(layer, enemy)
 		var core: Vector2 = enemy.pos + Vector2(0, -10 if enemy.kind != "coil" else -42)
 		var pulse := 0.5 + 0.5 * sin(clock * 5.0 + enemy.id)
 		layer.draw_circle(core, 3.0 + pulse, Color(PINK, 0.9))
@@ -1191,25 +1257,14 @@ func _draw_fx(layer: Node2D) -> void:
 	for bullet in bullets:
 		if not bullet.hostile:
 			Actors.WEAPON.draw_pulse(layer, bullet, clock)
-		elif bullet.kind == "orb":
-			layer.draw_circle(bullet.pos, 9, Color("f4a6ff", 0.25))
-			layer.draw_circle(bullet.pos, 5, Color("f4a6ff"))
-			layer.draw_circle(bullet.pos, 2, Color.WHITE)
 		else:
-			layer.draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.5), 6)
-			layer.draw_circle(bullet.pos, 4, PINK)
+			Actors.ENEMIES.draw_projectile(layer, bullet)
 	for effect in effects: _draw_effect(layer, effect)
 	if state == "play":
-		var next := guidance_point()
-		if next.distance_to(pos) > 95.0:
-			var direction := (next - pos).normalized()
-			var p := pos + direction * 62 + Vector2(0, 18)
-			layer.draw_polyline(PackedVector2Array([p - direction.rotated(-0.65) * 9, p, p - direction.rotated(0.65) * 9]), Color(GOLD, 0.65 + 0.15 * sin(clock * 3)), 2)
+		objective_guide.draw_world(layer, clock, objective_guide.intensity)
 		var candidate := interaction_candidate()
 		if not candidate.is_empty():
-			var p: Vector2 = candidate.pos
-			layer.draw_arc(p, 46, 0, TAU, 30, Color(CYAN, 0.64), 2)
-			layer.draw_string(ThemeDB.fallback_font, p + Vector2(-6, -52), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, WHITE)
+			FieldHUD.interaction(layer, candidate.pos, clock)
 	layer.draw_set_transform(Vector2.ZERO)
 
 func _draw_beams(layer: Node2D) -> void:

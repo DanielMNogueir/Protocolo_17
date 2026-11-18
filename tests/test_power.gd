@@ -36,6 +36,7 @@ func _run() -> void:
 func _finish(game: Node2D) -> void:
 	game.queue_free()
 	if has_meta("p17_power_handoff"): remove_meta("p17_power_handoff")
+	if has_meta("p17_core_handoff"): remove_meta("p17_core_handoff")
 	await _modules()
 	if FileAccess.file_exists(TEST_PATH): DirAccess.remove_absolute(ProjectSettings.globalize_path(TEST_PATH))
 	print("POWER_TEST_", "OK" if failures == 0 else "FAILED", ": ", checks, " checks; walked ", int(traveled), " px; vents ", vents)
@@ -245,9 +246,9 @@ func _elevator(game: Node2D) -> bool:
 	game.campaign.path = TEST_PATH
 	_check(game.campaign.complete_water("operation", WATER) == OK and game.campaign.complete_residues("operation", "steady_hand") == OK, "test profile prepared")
 	game._interact(1.2, true, false)
-	_check(game.state == "dialogue" and game.after_dialogue == "victory", "holding E rides the elevator")
+	_check(game.state == "dialogue" and game.after_dialogue == "to_core", "holding E rides the elevator")
 	game._finish_dialogue()
-	_check(game.state == "victory" and game.victory_notice.ends_with("PROGRESSO SALVO"), "victory saves Energy")
+	_check(game.state == "to_core" and has_meta("p17_core_handoff") and game.victory_notice.ends_with("PROGRESSO SALVO"), "victory saves Energy")
 	var reloaded = game.CampaignProgress.new()
 	reloaded.path = TEST_PATH
 	reloaded.load_progress()

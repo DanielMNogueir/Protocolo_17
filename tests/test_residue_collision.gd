@@ -63,7 +63,8 @@ func _run() -> void:
 	game.bullets.append({"pos": origin, "source": origin, "vel": Vector2(650, 0), "hostile": false, "life": 1.7, "damage": 1})
 	game._update_bullets(0.2)
 	check(game.bullets.is_empty(), "pulse cannot tunnel through a street pole")
-	# Reproduce the user's stuck bot through actual AI, without teleporting it.
+	# Alert each drone to the last known position while it routes around fixtures.
+	# A new report restarts the search if the 4-second patrol timeout expires.
 	for case in [[Vector2(1000, 900), Vector2(1058, 720), false], [Vector2(1185, 894), Vector2(980, 690), true], [Vector2(1390, 315), Vector2(1135, 315), false], [Vector2(462, 315), Vector2(450, 540), false], [Vector2(620, 455), Vector2(450, 315), false], [Vector2(1390, 315), Vector2(1125, 540), false], [Vector2(982, 695), Vector2(950, 540), false], [Vector2(1185, 894), Vector2(1060, 540), true]]:
 		game.enemies.clear()
 		game.bullets.clear()
@@ -71,7 +72,9 @@ func _run() -> void:
 		game.enemies.append({"pos": case[0] * M.SCALE, "home": case[0] * M.SCALE, "hp": 9, "zone": 2, "shot_cd": 1000.0, "hit_cd": 0.0, "phase": 0.0, "id": 0, "boss": case[2]})
 		var free := true
 		var radius := 25.0 if case[2] else 18.0
+		var mind: RefCounted = game.Brain.for_enemy(game.enemies[0])
 		for tick in 1800:
+			if mind.mode == "patrol": mind.notice(game.pos)
 			game._update_enemies(1.0 / 60.0)
 			free = free and M.walkable(game.enemies[0].pos, radius, 2, game.cleared)
 		check(free, "robot remains outside all fixtures during its complete route")

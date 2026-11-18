@@ -9,10 +9,10 @@ atlas = ExtResource("2_structures")
 region = Rect2(14, 722, 440, 421)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_control"]
-size = Vector2(188, 49)
+size = Vector2(200, 85)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_generator"]
-size = Vector2(151, 40)
+size = Vector2(157, 64)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape_terminal"]
 size = Vector2(24,8)
@@ -88,11 +88,11 @@ collision_layer = 4
 collision_mask = 0
 
 [node name="ControlRoomFootprint" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(-91, -23.5)
+position = Vector2(-91, -39.5)
 shape = SubResource("RectangleShape_control")
 
 [node name="GeneratorFootprint" type="CollisionShape2D" parent="StaticBody2D"]
-position = Vector2(81.5, -19)
+position = Vector2(82.5, -28)
 shape = SubResource("RectangleShape_generator")
 
 [node name="TerminalFootprint" type="CollisionShape2D" parent="StaticBody2D"]

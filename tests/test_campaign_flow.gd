@@ -3,7 +3,7 @@ extends SceneTree
 ## Residues victory offers the three Energy modules and opens the Energy
 ## district with Water modules + the chosen one; Energy victory is saved; the
 ## district selector then reopens Energy with the same loadout, keeps Energy
-## locked on a fresh profile, and shows the Núcleo card as in production.
+## locked on a fresh profile, and opens the Núcleo from the elevator.
 const Progress = preload("res://scripts/campaign_progress.gd")
 const Loadout = preload("res://scripts/campaign_loadout.gd")
 const TEST_PATH := "user://campaign_flow_test.json"
@@ -13,6 +13,7 @@ var failures := 0
 
 class Shell extends "res://scripts/main.gd":
 	var opened_power: Dictionary = {}
+	var opened_core: Dictionary = {}
 	var opened_residues: Dictionary = {}
 	func _save_checkpoint() -> void: pass
 	func _read_checkpoint() -> Dictionary: return {}
@@ -21,6 +22,7 @@ class Shell extends "res://scripts/main.gd":
 	func _save_settings() -> void: pass
 	func _open_residues(level: String) -> void: opened_residues = campaign.residue_loadout(level)
 	func _open_power(level: String) -> void: opened_power = campaign.energy_loadout(level)
+	func _open_core(level: String) -> void: opened_core = campaign.core_loadout(level)
 
 func _initialize() -> void: _run.call_deferred()
 
@@ -53,6 +55,29 @@ func _run() -> void:
 	check(menu.mode == "districts", "Energy locked on a fresh profile (key 3)")
 	menu._action("district_energy")
 	check(menu.mode == "districts" and menu.opened_power.is_empty(), "Energy locked on a fresh profile (direct action)")
+	# Provisional test toggle: every district opens without touching the save.
+	key(menu, KEY_T)
+	check(menu.free_select and menu._district_open(1) and menu._district_open(2) and menu._district_open(3), "Test toggle opens every district")
+	menu.queue_redraw()
+	await process_frame
+	var toggle_drawn := false
+	for button in menu.buttons:
+		if button.id == "district_free": toggle_drawn = true
+	check(toggle_drawn, "Test toggle is a clickable button")
+	menu._action("district_energy")
+	key(menu, KEY_2)
+	check(menu.opened_power.get("difficulty") == "operation" and not menu.campaign.residues_completed, "Test toggle opens Energy on a fresh profile")
+	check(not FileAccess.file_exists(TEST_PATH), "Test toggle writes nothing to the campaign save")
+	menu.mode = "districts"
+	menu._action("district_residues")
+	key(menu, KEY_1)
+	check(menu.opened_residues.get("difficulty") == "story", "Test toggle opens Residues on a fresh profile")
+	menu.mode = "districts"
+	menu._action("district_free")
+	check(not menu.free_select and not menu._district_open(2), "Toggle off locks Energy again")
+	menu.opened_power = {}
+	menu.opened_residues = {}
+	if has_meta("p17_free_select"): remove_meta("p17_free_select")
 	# Water victory.
 	menu.sim.load_data({"version": 2, "stage": 3, "chosen": WATER.duplicate(), "difficulty": "veteran"})
 	menu.sim.state = "victory"
@@ -99,10 +124,27 @@ func _run() -> void:
 		power.campaign.path = TEST_PATH
 		power.campaign.load_progress()
 		power.stage = 3
-		power._start_dialogue(power.Story.ELEVATOR, "victory")
+		power._start_dialogue(power.CoreStory.ELEVATOR, "to_core")
 		power._finish_dialogue()
-		check(power.state == "victory" and power.victory_notice.ends_with("PROGRESSO SALVO"), "Energy victory saved")
-		power.queue_free()
+		check(power.state == "to_core" and power.victory_notice.ends_with("PROGRESSO SALVO"), "Energy victory saved")
+		check(has_meta("p17_core_handoff"), "Elevator publishes the Core handoff")
+		await create_timer(0.7).timeout
+		var core: Node = current_scene
+		check(core != null and core.scene_file_path == "res://scenes/core.tscn", "Elevator opens the Core scene")
+		if core != null and core.scene_file_path == "res://scenes/core.tscn":
+			core.set_physics_process(false)
+			check(core.loadout.upgrades == WATER + ["steady_hand"] and core.campaign.energy_completed, "Core keeps the campaign loadout")
+			check(not has_meta("p17_core_handoff"), "Core consumes the handoff")
+			core.choice.listen("ai")
+			core.choice.listen("human")
+			core.choice.tick(2.5, "human", true)
+			core._record_ending()
+			check(core.campaign.core_completed and core.campaign.endings_seen == ["humanity"], "Core records the chosen ending")
+			core._action("again")
+			check(core.state == "choice" and core.choice.can_decide(), "Return to choice preserves both arguments")
+			core.queue_free()
+		elif is_instance_valid(power):
+			power.queue_free()
 	if has_meta("p17_power_handoff"): remove_meta("p17_power_handoff")
 	await process_frame
 	saved = Progress.new()
@@ -111,7 +153,12 @@ func _run() -> void:
 	check(saved.energy_completed and saved.residues_completed and saved.upgrades == WATER, "Full campaign survives reload")
 	# District selector after the campaign.
 	menu = shell()
-	check(menu.campaign.energy_completed, "Menu sees the completed Energy district")
+	check(menu.campaign.energy_completed and menu.campaign.core_completed, "Menu sees the completed campaign")
+	menu._action("new")
+	key(menu, KEY_4)
+	check(menu.mode == "difficulty" and menu.selected_district == "core", "Core selectable after Energy")
+	key(menu, KEY_2)
+	check(menu.opened_core.get("upgrades", []) == WATER + ["steady_hand"], "Core selector preserves modules")
 	menu._action("new")
 	key(menu, KEY_3)
 	check(menu.mode == "difficulty" and menu.selected_district == "energy", "Energy selectable after Residues")

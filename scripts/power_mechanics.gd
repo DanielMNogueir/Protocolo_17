@@ -95,17 +95,19 @@ class Mirrors:
 	const START := [0, 1, 3]
 	const TURN_TIME := 0.32
 	var orientation: Array[int] = []
+	var targets: Array[int] = []
 	var turning: Array[float] = [0.0, 0.0, 0.0]
 	var solved := false
 
-	func _init() -> void:
-		orientation.assign(START)
+	func _init(goal: Array = TARGET, starts: Array = START) -> void:
+		targets.assign(goal)
+		orientation.assign(starts)
 
 	func tick(dt: float) -> void:
 		for i in 3: turning[i] = maxf(0.0, turning[i] - dt)
 
 	func aligned(index: int) -> bool:
-		return orientation[index] == TARGET[index]
+		return orientation[index] == targets[index]
 
 	## Number of mirrors receiving the beam (1..3); 4 means the collector is lit.
 	func lit_count() -> int:

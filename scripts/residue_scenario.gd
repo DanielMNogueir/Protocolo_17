@@ -4,7 +4,12 @@ extends Node2D
 const M = preload("res://scripts/residue_map.gd")
 const Actors = preload("res://scripts/actors_art.gd")
 const LiaAnimation = preload("res://scripts/lia_animation.gd")
+const Occlusion = preload("res://scripts/occlusion.gd")
 const LIA_POSE = preload("res://scripts/lia_directional.gd")
+const FieldHUD = preload("res://scripts/field_hud.gd")
+const Brain = preload("res://scripts/enemy_brain.gd")
+const EnemyPresentation = preload("res://scripts/enemy_presentation.gd")
+const Guide = preload("res://scripts/objective_guide.gd")
 const HUD = preload("res://scripts/residue_hud.gd")
 const LIGHT_SHADER = preload("res://scripts/residue_lighting.gdshader")
 const BACKGROUND_SHADER = preload("res://scripts/residue_background.gdshader")
@@ -12,6 +17,11 @@ const Sound = preload("res://scripts/audio.gd")
 const Simulation = preload("res://scripts/simulation.gd")
 const CampaignProgress = preload("res://scripts/campaign_progress.gd")
 const Loadout = preload("res://scripts/campaign_loadout.gd")
+const Story = preload("res://scripts/residue_story.gd")
+const DialogueLayer = preload("res://scripts/residue_dialogue_layer.gd")
+## Hostile pulse speed and cadence by difficulty; "operation" keeps the original values.
+const SHOT_SPEED := {"story": 0.85, "operation": 1.0, "veteran": 1.15}
+const PRESSURE := {"story": 1.25, "operation": 1.0, "veteran": 0.8}
 const CYAN := Color("7be4ce")
 const WHITE := Color("e9ece0")
 const PINK := Color("e36b92")
@@ -49,6 +59,17 @@ var bin_lock := 0.0
 var interact_down := false
 var toast := ""
 var toast_time := 0.0
+var toast_ai := false
+var after_dialogue := "play"
+var dialogue: Array = []
+var dialogue_chars := 0.0
+var dialogue_fast := false
+var effects: Array[Dictionary] = []
+var kills := 0
+var deaths := 0
+var elapsed := 0.0
+var _taunts := {}
+var _dialogue_layer: Node2D
 var _animation := LiaAnimation.new()
 var _light: Sprite2D
 var _backgrounds: Array[Sprite2D] = []
@@ -62,6 +83,9 @@ var fire_interval := 0.145
 var pulse_speed := 640.0
 var pulse_damage := 1
 var dash_recharge := 1.2
+var objective_guide := Guide.new()
+var squad := Brain.new()
+var _guide_layer: Node2D
 var guidance_path := PackedVector2Array()
 var _guide_timer := 0.0
 var _guide_target := Vector2.INF
@@ -70,13 +94,29 @@ var _muted := false
 var campaign := CampaignProgress.new()
 var module_notice := ""
 
+class GuidanceLayer extends Node2D:
+	var game: Node2D
+
+	func _draw() -> void:
+		if game.state != "play": return
+		draw_set_transform(game._offset())
+		game.objective_guide.draw_world(self, game.clock, game.objective_guide.intensity)
+		var candidate: Dictionary = game._interaction_candidate()
+		if not candidate.is_empty():
+			FieldHUD.interaction(self, candidate.pos, game.clock)
+		draw_set_transform(Vector2.ZERO)
+
+
 func _ready() -> void:
 	_apply_handoff()
 	sound = Sound.new()
 	add_child(sound)
 	var settings := ConfigFile.new()
-	if settings.load("user://settings.cfg") == OK: _muted = settings.get_value("audio", "muted", false)
+	if settings.load("user://settings.cfg") == OK:
+		_muted = settings.get_value("audio", "muted", false)
+		dialogue_fast = settings.get_value("narrative", "instant_prologue_text", false)
 	sound.set_muted(_muted)
+	objective_guide.configure(settings, "residues")
 	sound.set_mood("calm")
 	Actors.ENEMIES.prepare()
 	for i in 4:
@@ -94,6 +134,9 @@ func _ready() -> void:
 		add_child(background)
 		_backgrounds.append(background)
 	_setup_lighting()
+	_guide_layer = GuidanceLayer.new()
+	_guide_layer.game = self
+	add_child(_guide_layer)
 	var layer := CanvasLayer.new()
 	layer.layer = 5
 	add_child(layer)
@@ -103,14 +146,22 @@ func _ready() -> void:
 	_hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(_hud)
+	# The shared RPG dialogue frame draws on a Node2D, above the field HUD.
+	_dialogue_layer = DialogueLayer.new()
+	_dialogue_layer.game = self
+	layer.add_child(_dialogue_layer)
 	_spawn_enemies()
 	M.prepare_navigation()
 	camera = pos.clamp(get_viewport_rect().size * 0.5, M.SIZE - get_viewport_rect().size * 0.5)
 	_light.position = M.SIZE * 0.5 + _offset()
-	_set_toast("LIA: os materiais estão misturados. Vou reabrir a triagem.")
+	_start_dialogue(Story.INTRO, "play")
 
 func _apply_handoff() -> void:
 	campaign.load_progress()
+	var retry: Dictionary = get_tree().get_meta("p17_residues_retry", {})
+	if get_tree().has_meta("p17_residues_retry"): get_tree().remove_meta("p17_residues_retry")
+	deaths = retry.get("deaths", 0)
+	elapsed = retry.get("time", 0.0)
 	if get_tree().has_meta("p17_residue_handoff"):
 		var data: Dictionary = get_tree().get_meta("p17_residue_handoff")
 		difficulty = data.get("difficulty", "operation")
@@ -146,6 +197,7 @@ func _setup_lighting() -> void:
 
 func _spawn_enemies() -> void:
 	enemies.clear()
+	squad.clear()
 	for i in M.ENEMY_POSITIONS.size():
 		var boss := i == M.ENEMY_POSITIONS.size() - 1
 		var kind := "boss" if boss else ("scout" if i % 2 == 0 else "sentry")
@@ -161,12 +213,18 @@ func _physics_process(delta: float) -> void:
 	if not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT): _map_mouse_held=false
 	_update_audio()
 	if Input.is_physical_key_pressed(KEY_R) and state == "defeat":
-		get_tree().reload_current_scene()
+		_retry()
 		return
+	if state == "dialogue":
+		dialogue_chars += dt * (400.0 if dialogue_fast else 46.0)
+	_update_effects(dt)
 	if state != "play":
+		_update_objective_guide(dt)
 		queue_redraw()
 		_hud.queue_redraw()
+		_dialogue_layer.queue_redraw()
 		return
+	elapsed += dt
 	var movement := Vector2(float(_key(KEY_D) or _key(KEY_RIGHT)) - float(_key(KEY_A) or _key(KEY_LEFT)),
 		float(_key(KEY_S) or _key(KEY_DOWN)) - float(_key(KEY_W) or _key(KEY_UP))).normalized()
 	var target := pointer - get_viewport_rect().size * 0.5 + camera
@@ -210,6 +268,7 @@ func _physics_process(delta: float) -> void:
 	_light_material.set_shader_parameter("scene_time", clock)
 	_light_material.set_shader_parameter("restored", float(stage))
 	_light_material.set_shader_parameter("ventilation", float(int(cleared[2]) + int(cleared[3])))
+	_update_objective_guide(dt)
 	queue_redraw()
 	_hud.queue_redraw()
 
@@ -217,6 +276,22 @@ func _key(code: Key) -> bool:
 	return Input.is_physical_key_pressed(code)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if state == "dialogue":
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			for button in buttons:
+				if button.id == "intro_fast" and button.rect.has_point(event.position):
+					dialogue_fast = not dialogue_fast
+					get_viewport().set_input_as_handled()
+					return
+			_advance_dialogue()
+			get_viewport().set_input_as_handled()
+		elif event is InputEventKey and event.pressed and not event.echo:
+			match event.physical_keycode:
+				KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_E: _advance_dialogue()
+				KEY_TAB: dialogue_fast = not dialogue_fast
+				KEY_ESCAPE: _finish_dialogue()
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		for button in buttons:
 			if button.rect.has_point(event.position):
@@ -245,7 +320,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			state = "play" if state == "map" else "map"
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_R and state == "pause":
-			get_tree().reload_current_scene()
+			_retry()
 		elif event.physical_keycode in [KEY_ENTER, KEY_KP_ENTER] and state == "victory":
 			_action("modules")
 		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3] and state == "upgrade":
@@ -276,7 +351,7 @@ func _action(id: String) -> void:
 		"map": state = "map"
 		"pause": state = "pause"
 		"resume": state = "play"
-		"retry": get_tree().reload_current_scene()
+		"retry": _retry()
 		"districts": _return_to_districts()
 		"modules":
 			if state == "victory": state = "upgrade"
@@ -294,7 +369,7 @@ func choose_module(index: int) -> bool:
 	var loadout := {"difficulty": difficulty, "upgrades": upgrades.duplicate() + [id]}
 	# A scene opened directly in the editor has no Water save to extend.
 	if campaign.water_completed:
-		if campaign.complete_residues(difficulty, id) != OK:
+		if campaign.complete_residues(difficulty, id, {"kills": kills, "deaths": deaths, "time": elapsed}) != OK:
 			module_notice = "Não foi possível salvar o progresso. Tente novamente."
 			return false
 		loadout = campaign.energy_loadout(difficulty)
@@ -307,6 +382,10 @@ func _open_power(loadout: Dictionary) -> void:
 	if get_tree().has_meta("p17_residue_handoff"): get_tree().remove_meta("p17_residue_handoff")
 	get_tree().set_meta("p17_power_handoff", loadout)
 	get_tree().change_scene_to_file("res://scenes/power.tscn")
+
+func _retry() -> void:
+	get_tree().set_meta("p17_residues_retry", {"deaths": deaths, "time": elapsed})
+	get_tree().reload_current_scene()
 
 func _return_to_districts() -> void:
 	get_tree().set_meta("p17_open_districts", true)
@@ -342,7 +421,7 @@ func _fire(target: Vector2, secondary: bool = false) -> void:
 	var direction := (target - start).normalized() if target.is_finite() and target.distance_squared_to(start) > 1.0 else aim
 	if secondary:
 		for index in 5:
-			bullets.append({"pos": start, "source": start, "vel": direction.rotated(float(index - 2) * 0.12) * pulse_speed * 0.85, "hostile": false, "life": 1.2, "damage": pulse_damage + 1})
+			bullets.append({"pos": start, "source": start, "vel": direction.rotated(float(index - 2) * 0.12) * pulse_speed * 0.85, "hostile": false, "life": 1.2, "damage": pulse_damage + 1, "secondary": true})
 	else:
 		bullets.append({"pos": start, "source": start, "vel": direction * pulse_speed, "hostile": false, "life": 1.7, "damage": pulse_damage})
 
@@ -369,6 +448,7 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 			sorted[index] = true
 			carried = -1
 			sound.play_sfx("repair")
+			_burst(M.BINS[index] + Vector2(0, -20), CYAN, 12)
 			_set_toast("CLASSIFICAÇÃO CORRETA  /  " + M.MATERIALS[index])
 		else:
 			carried = -1
@@ -392,15 +472,14 @@ func _interact(dt: float, held: bool, pressed: bool) -> void:
 	if kind == "block":
 		cleared[index] = true
 		sound.play_sfx("repair")
+		_burst(M.BLOCKS[index] + Vector2(0, -20), GOLD, 14)
 		_set_toast("ROTA DE CARGA LIBERADA")
 	else:
 		terminal_on[index] = true
 		stage += 1
 		sound.play_sfx("complete")
-		if stage == 3:
-			state = "victory"
-		else:
-			_set_toast("SISTEMA RESTAURADO  /  PRÓXIMA ÁREA LIBERADA")
+		_burst(M.TERMINALS[index] + Vector2(0, -40), CYAN, 26)
+		_start_dialogue([Story.SORTING, Story.RECYCLING, Story.FINAL][index], "victory" if stage == 3 else "play")
 
 func _spawn_alarm_drone() -> void:
 	var active := 0
@@ -481,6 +560,36 @@ func objective_point() -> Vector2:
 		if enemy.zone == stage and enemy.hp > 0: return enemy.pos
 	return M.TERMINALS[stage]
 
+func objective_place() -> String:
+	match stage:
+		0:
+			if carried >= 0: return "BAIA DE " + M.MATERIALS[carried]
+			for i in sorted.size():
+				if not sorted[i]: return "CARGA DE " + M.MATERIALS[i]
+			return "CENTRO DE TRIAGEM"
+		1:
+			if not (cleared[0] and cleared[1]): return "ROTA DA PRENSA"
+			return "USINA DE RECICLAGEM"
+		2:
+			if not (cleared[2] and cleared[3]): return "DUTOS ORGÂNICOS"
+			return "UNIDADE DE COMPOSTAGEM"
+	return "DISTRITO RECUPERADO"
+
+
+func _update_objective_guide(dt: float) -> void:
+	var size := get_viewport_rect().size
+	objective_guide.in_combat = false
+	for enemy in enemies:
+		if enemy.hp > 0 and enemy.zone <= stage and pos.distance_squared_to(enemy.pos) <= 40000.0:
+			objective_guide.in_combat = true
+			break
+	objective_guide.route = guidance_path
+	objective_guide.update(dt, pos, guidance_point(), objective_point(), Transform2D(0.0, _offset()),
+		FieldHUD.guide_safe_rect(size), state == "play", objective_place(), size)
+	objective_guide.cues(dt, sound)
+	_guide_layer.queue_redraw()
+
+
 func _update_guidance() -> void:
 	var target := objective_point()
 	if _guide_timer > 0.0 and target.distance_to(_guide_target) < 25.0: return
@@ -507,51 +616,119 @@ func guidance_point() -> Vector2:
 	return objective_point()
 
 func _update_enemies(dt: float) -> void:
-	for i in enemies.size():
-		var enemy: Dictionary = enemies[i]
-		if enemy.hp <= 0 or enemy.zone > stage: continue
+	for enemy in enemies:
+		if enemy.hp <= 0:
+			if enemy.get("death_age", -1.0) >= 0.0: enemy.death_age += dt
+			continue
+		if enemy.zone > stage: continue
 		enemy.hit_cd = maxf(0.0, enemy.hit_cd - dt)
+		enemy["attack_age"] = float(enemy.get("attack_age", 99.0)) + dt
 		enemy.shot_cd -= dt
 		enemy.phase += dt
-		var distance: float = enemy.pos.distance_to(pos)
-		var visible := M.line_clear(enemy.pos, pos, 3.0, stage, cleared)
-		if distance < 520: enemy["engaged"] = true
+		var origin: Vector2 = enemy.pos
+		var kind: String = enemy.get("kind", "boss" if enemy.boss else "scout")
+		var mind := Brain.for_enemy(enemy)
 		var radius := 25.0 if enemy.boss else 18.0
-		if enemy.get("engaged", false) and (distance > (145.0 if enemy.boss else 125.0) or not visible):
-			enemy["route_timer"] = float(enemy.get("route_timer", 0.0)) - dt
-			var changed := int(enemy.get("route_geometry", -1)) != M._geometry_key(stage, cleared)
-			if changed or enemy.route_timer <= 0.0 or Vector2(enemy.get("route_target", Vector2.INF)).distance_to(pos) > 64.0:
-				enemy["route"] = M.path_between(enemy.pos, pos, stage, cleared, 85.0, radius, true)
-				if enemy.route.is_empty(): enemy.route = M.path_between(enemy.pos, pos, stage, cleared, 410.0, radius, true)
-				enemy["route_cursor"] = 0
-				enemy["route_timer"] = 1.0 + i * 0.07
-				enemy["route_target"] = pos
-				enemy["route_geometry"] = M._geometry_key(stage, cleared)
-			var route: PackedVector2Array = enemy.get("route", PackedVector2Array())
-			var cursor: int = enemy.get("route_cursor", 0)
-			while cursor < route.size() and enemy.pos.distance_to(route[cursor]) < 8.0: cursor += 1
-			enemy["route_cursor"] = cursor
-			if cursor < route.size():
-				var travel: Vector2 = (route[cursor] - Vector2(enemy.pos)).normalized() * (43.0 if enemy.boss else 68.0)
-				# Gentle separation prevents drones stacking in entrances. Floor and
-				# machine collision still govern the final displacement.
-				for j in enemies.size():
-					if j == i or enemies[j].hp <= 0 or enemies[j].zone > stage: continue
-					var away: Vector2 = enemy.pos - enemies[j].pos
-					var gap := radius + (25.0 if enemies[j].boss else 18.0) + 9.0
-					if away.length() < gap:
-						travel += away.normalized() * (gap - away.length()) * 3.0
-				var before: Vector2 = enemy.pos
-				enemy.pos = M.slide(before, travel.limit_length(80.0) * dt, radius, stage, cleared)
-				if enemy.pos.distance_to(before) < 0.1: enemy.route_timer = minf(enemy.route_timer, 0.15)
-		if distance < 440 and visible and enemy.shot_cd <= 0.0:
-			var direction: Vector2 = (pos - enemy.pos).normalized()
-			var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
-			for spread in spreads:
-				bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * (260.0 if enemy.boss else 235.0), "hostile": true, "life": 2.2})
-			enemy.shot_cd = 1.35 if enemy.boss else 1.55 + (i % 3) * 0.31
-			sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
-		enemies[i] = enemy
+		var walkable := func(point: Vector2) -> bool: return M.walkable(point, radius, stage, cleared)
+		var distance := origin.distance_to(pos)
+		var visible := distance < 520.0 and M.line_clear(origin, pos, 3.0, stage, cleared)
+		if mind.sense(dt, pos, visible):
+			_share_alarm(enemy)
+		if kind == "scout":
+			var dodge := mind.dodge_course(dt, difficulty, origin, bullets, walkable)
+			if not dodge.is_zero_approx():
+				_cancel_attack(enemy)
+				enemy.pos = M.slide(origin, dodge * Brain.DODGE_SPEED * dt, radius, stage, cleared)
+				continue
+		if mind.retreat > 0.0:
+			_cancel_attack(enemy)
+			var goal := origin + pos.direction_to(origin) * 130.0
+			_drone_move(enemy, dt, goal, radius, 96.0)
+			continue
+		var warning: float = enemy.get("attack_left", 0.0)
+		if warning > 0.0:
+			enemy.attack_left = maxf(0.0, warning - dt)
+			if enemy.attack_left <= 0.0: _drone_attack(enemy)
+			continue
+		if mind.mode == "alert":
+			enemy.look_dir = origin.direction_to(mind.last_seen)
+			continue
+		if mind.mode == "combat" and visible and distance < 440.0 and enemy.shot_cd <= 0.0 and squad.acquire(enemy.id, difficulty):
+			var speed: float = (260.0 if enemy.boss else 235.0) * SHOT_SPEED[difficulty]
+			enemy.look_dir = Brain.aim(origin, pos, velocity, speed, difficulty)
+			enemy.attack_left = 0.55 * (1.3 if difficulty == "story" else (0.85 if difficulty == "veteran" else 1.0))
+			continue
+		var target := mind.last_seen
+		if mind.mode == "patrol":
+			target = mind.patrol_point(origin, walkable)
+		elif mind.mode == "combat":
+			var preferred := 145.0 if enemy.boss else (205.0 if kind == "sentry" else 125.0)
+			if mind.tactic_time <= 0.0:
+				mind.tactic_time = 0.5
+				var see := func(a: Vector2, b: Vector2) -> bool: return M.line_clear(a, b, 3.0, stage, cleared)
+				var cover := func(point: Vector2) -> bool: return Brain.near_cover(point, walkable)
+				mind.flank = squad.flank(enemy.id, kind, origin, pos, preferred, walkable, see, cover)
+			if mind.flank.is_finite():
+				target = mind.flank
+			elif visible and absf(distance - preferred) < 45.0:
+				continue
+		else:
+			squad.clear_slot(enemy.id)
+		_drone_move(enemy, dt, target, radius, 43.0 if enemy.boss else 68.0)
+
+
+func _drone_move(enemy: Dictionary, dt: float, target: Vector2, radius: float, speed: float) -> void:
+	var origin: Vector2 = enemy.pos
+	var mind := Brain.for_enemy(enemy)
+	var key := M._geometry_key(stage, cleared)
+	if enemy.get("route_geometry", -1) != key:
+		enemy.route_geometry = key
+		mind.route_time = 0.0
+	var planner := func(a: Vector2, b: Vector2) -> PackedVector2Array:
+		var result := M.path_between(a, b, stage, cleared, 18.0, radius, true)
+		if result.is_empty():
+			result = M.path_between(a, b, stage, cleared, 200.0, radius, true)
+		return result
+	var course := mind.course(dt, origin, target, planner)
+	if origin.distance_squared_to(target) <= 81.0:
+		return
+	var travel := course * speed
+	for other in enemies:
+		if other.id == enemy.id or other.hp <= 0 or other.zone > stage:
+			continue
+		var away: Vector2 = origin - Vector2(other.pos)
+		var gap := radius + (25.0 if other.boss else 18.0) + 9.0
+		if away.length() < gap:
+			travel += away.normalized() * (gap - away.length()) * 3.0
+	enemy.look_dir = course
+	enemy.pos = M.slide(origin, travel.limit_length(104.0) * dt, radius, stage, cleared)
+
+
+func _drone_attack(enemy: Dictionary) -> void:
+	enemy["attack_age"] = 0.0
+	var direction: Vector2 = enemy.look_dir
+	var spreads := [-0.20, 0.0, 0.20] if enemy.boss else [0.0]
+	var speed: float = (260.0 if enemy.boss else 235.0) * SHOT_SPEED[difficulty]
+	for spread in spreads:
+		bullets.append({"pos": enemy.pos + direction * 28, "vel": direction.rotated(spread) * speed, "hostile": true, "life": 2.2})
+	enemy.shot_cd = (1.35 if enemy.boss else 1.55 + (enemy.id % 3) * 0.31) * float(PRESSURE[difficulty])
+	squad.last_attack_origin = enemy.pos
+	squad.release(enemy.id)
+	sound.play_sfx("unit_" + ("boss" if enemy.boss else "scout") + "_fire")
+
+
+func _cancel_attack(enemy: Dictionary) -> void:
+	enemy.attack_left = 0.0
+	squad.release(enemy.id)
+
+
+func _share_alarm(source: Dictionary) -> void:
+	for other in enemies:
+		if other.id == source.id or other.hp <= 0 or other.zone > stage or Vector2(other.pos).distance_to(source.pos) > Brain.ALARM_RADIUS:
+			continue
+		if M.line_clear(source.pos, other.pos, 3.0, stage, cleared):
+			Brain.for_enemy(other).notice(pos)
+
 
 func _update_bullets(dt: float) -> void:
 	for i in range(bullets.size() - 1, -1, -1):
@@ -574,7 +751,17 @@ func _update_bullets(dt: float) -> void:
 					if enemy.hp > 0 and enemy.zone <= stage and bullet.pos.distance_to(enemy.pos) < (28.0 if enemy.boss else 21.0):
 						enemy.hp = maxi(0, enemy.hp - int(bullet.damage))
 						enemy.hit_cd = 0.18
-						if enemy.hp <= 0: sound.play_sfx("enemy_dead")
+						if enemy.hp <= 0:
+							squad.release(enemy.id)
+							squad.clear_slot(enemy.id)
+							enemy["death_age"] = 0.0
+							kills += 1
+							sound.play_sfx("enemy_dead")
+							_burst(enemy.pos + Vector2(0, -10), PINK, 18 if enemy.boss else 10)
+						else:
+							if Brain.for_enemy(enemy).damaged(float(enemy.hp) / float(enemy.max_hp), pos):
+								_share_alarm(enemy)
+							sound.play_sfx("unit_%s_hit" % _enemy_view(enemy).kind)
 						enemies[j] = enemy
 						gone = true
 						break
@@ -586,6 +773,9 @@ func _check_toxic() -> void:
 	for pool in M.TOXIC:
 		if pool.has_point(pos):
 			_damage()
+			if not _taunts.has("toxic") and state == "play":
+				_taunts["toxic"] = true
+				_set_toast(Story.AI_TAUNTS.toxic, true)
 			toxic_cd = 1.15
 			break
 
@@ -595,12 +785,65 @@ func _damage() -> void:
 	hp -= 1
 	invuln = 0.68
 	if hp <= 0:
+		deaths += 1
 		state = "defeat"
 		_set_toast("O distrito será reiniciado; Águas permanece recuperado.")
 
-func _set_toast(message: String) -> void:
+func _set_toast(message: String, from_ai: bool = false) -> void:
 	toast = message
 	toast_time = 3.6
+	toast_ai = from_ai
+
+# ---------------------------------------------------------------- dialogue
+
+func _start_dialogue(lines: Array, next_state: String) -> void:
+	dialogue = lines.duplicate()
+	dialogue_chars = 0.0
+	after_dialogue = next_state
+	state = "dialogue"
+	toast_time = 0.0
+	_clear_pending_actions()
+	if _dialogue_layer != null: _dialogue_layer.queue_redraw()
+
+func dialogue_line() -> Dictionary:
+	return dialogue[0] if not dialogue.is_empty() else {}
+
+func dialogue_complete() -> bool:
+	return not dialogue.is_empty() and dialogue_chars >= float(str(dialogue[0].text).length())
+
+func _advance_dialogue() -> void:
+	if state != "dialogue": return
+	if not dialogue_complete():
+		dialogue_chars = 9999.0
+		return
+	dialogue.pop_front()
+	dialogue_chars = 0.0
+	sound.play_sfx("ui")
+	if dialogue.is_empty(): _finish_dialogue()
+
+func _finish_dialogue() -> void:
+	dialogue.clear()
+	state = after_dialogue
+	_clear_pending_actions()
+	if _dialogue_layer != null: _dialogue_layer.queue_redraw()
+	if state == "play": _set_toast(["OBJETIVO  /  CLASSIFICAR OS QUATRO MATERIAIS", "PRÓXIMA ÁREA  /  USINA DE RECICLAGEM", "PRÓXIMA ÁREA  /  UNIDADE DE COMPOSTAGEM"][mini(stage, 2)])
+
+# ---------------------------------------------------------------- effects
+
+func _burst(at: Vector2, color: Color, count: int) -> void:
+	effects.append({"kind": "burst", "pos": at, "color": color, "count": count, "life": 0.45, "max": 0.45, "seed": randf() * TAU})
+
+func _update_effects(dt: float) -> void:
+	for i in range(effects.size() - 1, -1, -1):
+		effects[i].life -= dt
+		if effects[i].life <= 0.0: effects.remove_at(i)
+
+func _draw_effect(effect: Dictionary) -> void:
+	var t: float = 1.0 - effect.life / effect.max
+	for k in int(effect.count):
+		var direction := Vector2.from_angle(float(k) / effect.count * TAU + effect.seed)
+		var p: Vector2 = effect.pos + direction * t * 34.0 + Vector2(0, t * t * 18.0)
+		draw_line(p, p - direction * 5.0 * (1.0 - t), Color(effect.color, 1.0 - t), 2)
 
 func _draw() -> void:
 	var offset := _offset()
@@ -613,33 +856,41 @@ func _draw() -> void:
 	for prop in M.occluders():
 		depth_entries.append({"kind": "occluder", "depth": prop.depth, "data": prop})
 	for enemy in enemies:
-		if enemy.hp <= 0 or enemy.zone > stage: continue
-		depth_entries.append({"kind": "enemy", "depth": enemy.pos.y + 18.0, "data": enemy})
+		if enemy.zone > stage: continue
+		if enemy.hp > 0 or (enemy.get("death_age", -1.0) >= 0.0 and enemy.death_age < 1.05):
+			depth_entries.append({"kind": "enemy", "depth": enemy.pos.y + 18.0, "data": enemy})
 	depth_entries.append({"kind": "lia", "depth": pos.y + 18.0})
 	depth_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.depth < b.depth)
+	var scenery: Array[Dictionary] = []
+	for entry in depth_entries:
+		var bounds := _scenery_bounds(entry)
+		if bounds.has_area(): scenery.append({"y": float(entry.depth), "bounds": bounds})
+	var ghosts: Array[Dictionary] = []
 	for entry in depth_entries:
 		match entry.kind:
 			"prop": M.draw_prop(self, entry.data, clock)
 			"occluder": M.draw_occluder(self, entry.data)
-			"enemy": _draw_enemy(entry.data)
-			"lia": _draw_lia()
+			"enemy":
+				_draw_enemy(entry.data)
+				var enemy: Dictionary = entry.data
+				if enemy.hp > 0 and Occlusion.is_hidden(Occlusion.drone_rect(enemy.pos, enemy.boss), float(entry.depth), scenery):
+					ghosts.append(enemy)
+			"lia":
+				_draw_lia()
+				if Occlusion.is_hidden(Occlusion.lia_rect(pos), float(entry.depth), scenery):
+					ghosts.append({"lia": true})
+	# Actors behind the biodigesters, the truck or lamp posts stay readable.
+	for ghost in ghosts:
+		if ghost.has("lia"):
+			Occlusion.draw_lia_ghost(self, pos, aim, _animation.elapsed, _animation.moving, "repair" if hold_progress > 0 else "idle")
+		else:
+			Occlusion.draw_drone_ghost(self, _enemy_view(ghost), clock + int(ghost.id) * 0.137)
 	for bullet in bullets:
 		if not bullet.hostile:
 			Actors.WEAPON.draw_pulse(self, bullet, clock)
 		else:
-			draw_line(bullet.pos - bullet.vel.normalized() * 14, bullet.pos, Color(PINK, 0.45), 6)
-			draw_circle(bullet.pos, 4, PINK)
-	if state == "play":
-		var next := guidance_point()
-		if next.distance_to(pos) > 95.0:
-			var direction := (next - pos).normalized()
-			var p := pos + direction * 62 + Vector2(0, 18)
-			draw_polyline(PackedVector2Array([p - direction.rotated(-0.65) * 9, p, p - direction.rotated(0.65) * 9]), Color(GOLD, 0.65 + 0.15 * sin(clock * 3)), 2)
-	var candidate := _interaction_candidate()
-	if not candidate.is_empty():
-		var p: Vector2 = candidate.pos
-		draw_arc(p, 50, 0, TAU, 30, Color(CYAN, 0.64), 2)
-		draw_string(ThemeDB.fallback_font, p + Vector2(-6, -55), "E", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, WHITE)
+			Actors.ENEMIES.draw_projectile(self, bullet)
+	for effect in effects: _draw_effect(effect)
 	if collision_audit:
 		M.draw_collision_audit(self, stage, cleared)
 		draw_arc(pos, 14, 0, TAU, 24, Color.WHITE, 1)
@@ -653,19 +904,27 @@ func _draw_lia() -> void:
 	if carried >= 0:
 		M.draw_sprite(self, carried, pos + Vector2(-14, -25), 24)
 
-func _draw_enemy(enemy: Dictionary) -> void:
+func _scenery_bounds(entry: Dictionary) -> Rect2:
+	if entry.kind in ["prop", "occluder"]: return M.scenery_bounds(entry.kind, entry.data)
+	return Rect2()
+
+func _enemy_view(enemy: Dictionary) -> Dictionary:
 	var view := enemy.duplicate()
 	view["kind"] = enemy.get("kind", "boss" if enemy.boss else ("scout" if enemy.id % 2 == 0 else "sentry"))
 	view["max_hp"] = enemy.get("max_hp", Simulation.enemy_health(view.kind, 3))
-	view["facing"] = (pos - Vector2(enemy.pos)).normalized()
-	view["phase"] = "windup" if enemy.shot_cd < 0.27 else "idle"
-	view["warning"] = 1.0 if enemy.shot_cd < 0.27 else 0.0
+	view["facing"] = enemy.get("look_dir", Vector2.DOWN)
+	view["phase"] = "windup" if enemy.get("attack_left", 0.0) > 0.0 else "idle"
+	view["warning"] = enemy.get("attack_left", 0.0)
 	view["hurt"] = enemy.hit_cd
 	view["moving"] = enemy.pos.distance_to(pos) < 420
+	return view
+
+func _draw_enemy(enemy: Dictionary) -> void:
+	var view := _enemy_view(enemy)
+	if enemy.hp <= 0:
+		view["anim_time"] = clock + enemy.id * 0.137
+		Actors.ENEMIES.draw_destroyed(self, view)
+		return
 	Actors.draw_drone(self, view, clock + enemy.id * 0.137)
-	if enemy.boss or enemy.hp < view.max_hp:
-		var width := 70.0 if enemy.boss else 34.0
-		var bar := Rect2(enemy.pos + Vector2(-width * 0.5, -54 if enemy.boss else -38), Vector2(width, 4))
-		draw_rect(bar.grow(1), Color("07171d"))
-		draw_rect(bar, Color("263b40"))
-		draw_rect(Rect2(bar.position, Vector2(width * clampf(float(enemy.hp) / view.max_hp, 0, 1), 4)), PINK)
+	EnemyPresentation.draw_awareness(self, enemy, clock)
+	Actors.ENEMIES.draw_health(self, view)

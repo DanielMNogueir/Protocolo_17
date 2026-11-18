@@ -44,11 +44,12 @@ static func shell(c: CanvasItem, size: Vector2, title: String, subtitle: String,
 
 static func wrapped(c: CanvasItem, value: String, rect: Rect2, size: int, color: Color, step: int = 16) -> void:
 	var font := ThemeDB.fallback_font
+	step = maxi(step, HUD.font_size(size) + 2)
 	var lines: Array[String] = []
 	var line := ""
 	for word in value.split(" "):
 		var candidate: String = word if line.is_empty() else line+" "+word
-		if not line.is_empty() and font.get_string_size(candidate,HORIZONTAL_ALIGNMENT_LEFT,-1,size).x>rect.size.x:
+		if not line.is_empty() and font.get_string_size(candidate,HORIZONTAL_ALIGNMENT_LEFT,-1,HUD.font_size(size)).x>rect.size.x:
 			lines.append(line)
 			line=word
 		else: line=candidate
@@ -58,6 +59,17 @@ static func wrapped(c: CanvasItem, value: String, rect: Rect2, size: int, color:
 		var value_line := lines[i]
 		if i==maximum-1 and lines.size()>maximum: value_line=HUD.fit(value_line+"…",rect.size.x,size)
 		HUD.text(c,value_line,rect.position+Vector2(0,size+i*step),size,color)
+
+static func label_objective(c: CanvasItem, area: Rect2, point: Vector2, place: String) -> void:
+	marker(c, point, "objective")
+	var width := minf(230.0, ThemeDB.fallback_font.get_string_size(place, HORIZONTAL_ALIGNMENT_LEFT, -1, HUD.font_size(10)).x + 18.0)
+	var size := Vector2(width, 23)
+	var p := (point + Vector2(-width * 0.5, 13)).clamp(area.position, area.end - size)
+	var rect := Rect2(p, size)
+	HUD.plate(c, rect, Color(INK, 0.97), 4)
+	HUD.edge(c, rect, GOLD, 1, 4)
+	HUD.centered(c, HUD.fit(place, width - 12.0, 10), rect.get_center() + Vector2(0, 4), 10, GOLD)
+
 
 static func sidebar(c: CanvasItem, r: Rect2, restored: int, total: int, location: String, objective: String, stats: Array, hint: String) -> void:
 	var p := r.position
@@ -78,7 +90,7 @@ static func sidebar(c: CanvasItem, r: Rect2, restored: int, total: int, location
 		var w := ThemeDB.fallback_font.get_string_size(value,HORIZONTAL_ALIGNMENT_LEFT,-1,12).x
 		HUD.text(c,value,p+Vector2(260-w,y),12,color)
 	c.draw_line(p+Vector2(18,274),p+Vector2(262,274),Color("415c54"),1)
-	HUD.text(c,"SETOR EM FOCO",p+Vector2(18,295),8,GOLD)
+	HUD.text(c,"SETOR EM FOCO",p+Vector2(18,295),9,GOLD)
 	HUD.text(c,HUD.fit(location,244,11),p+Vector2(18,313),11,WHITE)
 	wrapped(c,hint,Rect2(p+Vector2(18,326),Vector2(244,r.size.y-338)),10,MUTED,14)
 

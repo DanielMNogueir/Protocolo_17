@@ -31,22 +31,24 @@ func _draw() -> void:
 		_draw_dialogue(size)
 		return
 	FieldHUD.vital(self, game.hp, game.max_hp, game.clock)
-	var direction: Vector2 = game.guidance_point() - game.pos
-	FieldHUD.mission(self, size.x, STAGE_TITLES[game.stage], _direction(direction) + "  " + game.objective_label(), "ENERGIA  •  SISTEMAS %d/3  •  %s" % [mini(game.stage, 3), _status_line()], game.stage, mini(game.stage, 3), 3, "coil")
+	FieldHUD.mission(self, size.x, STAGE_TITLES[game.stage], game.objective_label().get_slice("  /  ", 0), "SISTEMAS %d/3 · %s" % [mini(game.stage, 3), _status_line()], game.stage, mini(game.stage, 3), 3, "coil", game.objective_guide, game.clock)
 	FieldHUD.abilities(self, size.y, game.secondary_cd, game.loadout.secondary_recharge, game.dash_cd, game.dash_recharge)
-	FieldHUD.navigation(self, "ENERGIA / AURORA", "OPERAÇÃO CORRENTE  •  APAGÃO", game.pointer)
+	FieldHUD.navigation(self, "ENERGIA / AURORA", "OPERAÇÃO CORRENTE", game.pointer)
 	if game.state == "play":
-		game.buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
-		game.buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
-	var mini_map := FieldHUD.radar(self, Rect2(size.x - 202, size.y - 160, 186, 144))
+		game.objective_guide.draw_screen(self, game.clock, game.objective_guide.intensity)
+		game.objective_guide.draw_tip(self)
+		game.buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
+		game.buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
+	var mini_map := FieldHUD.radar(self, FieldHUD.radar_rect(size))
 	_draw_plan(mini_map, false)
 	_draw_system_panel()
 	_draw_interaction(size)
 	if game.toast_time > 0:
-		var toast := Rect2(size.x * 0.5 - 275, 146, 550, 34)
-		FieldHUD.panel(self, toast, MAGENTA if game.toast_ai else GOLD)
+		var overloading: bool = game.stage < 2 and game.overloads[game.stage].running
+		var toast := Rect2(size.x * 0.5 - 220, size.y - (198 if overloading else 98), 440, 28)
+		FieldHUD.compact_panel(self, toast, MAGENTA if game.toast_ai else GOLD)
 		if game.toast_ai: draw_rect(Rect2(toast.position + Vector2(10, 9), Vector2(3, 16)), MAGENTA)
-		_text_center(FieldHUD.fit(game.toast, 520, 10), toast.get_center() + Vector2(0, 4), 10, MAGENTA.lightened(0.35) if game.toast_ai else WHITE)
+		_text_center(FieldHUD.fit(game.toast, toast.size.x - 32, 10), toast.get_center() + Vector2(0, 4), 10, MAGENTA.lightened(0.35) if game.toast_ai else WHITE)
 	match game.state:
 		"defeat":
 			game.buttons.clear()
@@ -87,49 +89,49 @@ func _draw_dialogue(size: Vector2) -> void:
 # ---------------------------------------------------------------- systems
 
 func _draw_system_panel() -> void:
-	var panel := Rect2(16, 124, 288, 0)
+	var panel := Rect2(12, 78, 204, 0)
 	match game.stage:
 		0:
 			if game.mirrors.solved: return
-			panel.size.y = 62
-			FieldHUD.panel(self, panel)
+			panel.size.y = 52
+			FieldHUD.compact_panel(self, panel)
 			FieldHUD.icon(self, "sun", Rect2(panel.position + Vector2(14, 12), Vector2(20, 20)), GOLD)
 			_text("ESPELHOS SOLARES", panel.position + Vector2(42, 27), 10, GOLD)
 			for i in 3:
-				var cell := Rect2(panel.position + Vector2(18 + i * 88, 38), Vector2(80, 12))
+				var cell := Rect2(panel.position + Vector2(12 + i * 62, 33), Vector2(55, 7))
 				var lit: bool = game.mirrors.lit_count() > i + 1
 				FieldHUD.bar(self, cell, 1.0 if lit else (0.45 if game.mirrors.lit_count() == i + 1 else 0.0), CYAN if lit else GOLD)
 		1:
 			if game.relays.solved or game.pos.x < 880 * M.SCALE: return
-			panel.size.y = 70
-			FieldHUD.panel(self, panel)
+			panel.size.y = 58
+			FieldHUD.compact_panel(self, panel)
 			FieldHUD.icon(self, "coil", Rect2(panel.position + Vector2(14, 11), Vector2(20, 20)), GOLD)
-			_text("RELÉS  /  MANTENHA OS TRÊS CARREGADOS", panel.position + Vector2(42, 27), 9, GOLD)
+			_text("CARREGUE OS TRÊS RELÉS", panel.position + Vector2(42, 27), 9, GOLD)
 			for i in 3:
-				var cell := Rect2(panel.position + Vector2(18 + i * 88, 40), Vector2(80, 12))
+				var cell := Rect2(panel.position + Vector2(12 + i * 62, 33), Vector2(55, 7))
 				var amount: float = game.relays.charge[i] / game.relays.window
 				FieldHUD.bar(self, cell, amount, ELECTRIC if amount > 0.3 else RED)
-				_text("R%d" % (i + 1), cell.position + Vector2(0, 24), 8, MUTED)
+				_text("R%d" % (i + 1), cell.position + Vector2(0, 24), 10, MUTED)
 		2:
 			if not game.battery.started: return
-			panel.size.y = 112
-			FieldHUD.panel(self, panel, CYAN)
+			panel.size.y = 100
+			FieldHUD.compact_panel(self, panel, CYAN)
 			FieldHUD.icon(self, "battery", Rect2(panel.position + Vector2(14, 11), Vector2(20, 20)), CYAN)
-			_text("CARGA DA RESERVA", panel.position + Vector2(42, 27), 10, CYAN)
-			_text("%d%%" % int(game.battery.charge * 100.0), panel.position + Vector2(232, 27), 12, WHITE)
-			FieldHUD.bar(self, Rect2(panel.position + Vector2(18, 36), Vector2(252, 12)), game.battery.charge, CYAN)
+			_text("RESERVA", panel.position + Vector2(42, 27), 10, CYAN)
+			_text("%d%%" % int(game.battery.charge * 100.0), panel.position + Vector2(159, 27), 12, WHITE)
+			FieldHUD.bar(self, Rect2(panel.position + Vector2(12, 33), Vector2(180, 8)), game.battery.charge, CYAN)
 			for i in 3:
 				var value: float = game.battery.cells[i]
 				var danger: bool = game.battery.danger(i)
-				var cell := Rect2(panel.position + Vector2(18 + i * 86, 58), Vector2(78, 14))
+				var cell := Rect2(panel.position + Vector2(12 + i * 62, 50), Vector2(55, 12))
 				FieldHUD.inset(self, cell)
 				draw_rect(Rect2(cell.position + Vector2(2 + (cell.size.x - 4) * 0.25, 2), Vector2((cell.size.x - 4) * 0.53, cell.size.y - 4)), Color(CYAN, 0.12))
 				var fill := Rect2(cell.position + Vector2(2, 2), Vector2((cell.size.x - 4) * value, cell.size.y - 4))
 				var color := RED if danger else (GOLD if value > 0.65 else CYAN)
 				if danger and int(game.clock * 8) % 2 == 0: color = color.lightened(0.3)
 				draw_rect(fill, color)
-				_text("CÉLULA %d" % (i + 1), cell.position + Vector2(0, 27), 8, RED if danger else MUTED)
-			_text("SAIR DO ANEL PAUSA A CARGA", panel.position + Vector2(170, 100), 7, MUTED)
+				_text("CÉLULA %d" % (i + 1), cell.position + Vector2(0, 27), 9, RED if danger else MUTED)
+			_text("SAIR DO ANEL PAUSA", panel.position + Vector2(12, 91), 10, MUTED)
 
 func _draw_interaction(size: Vector2) -> void:
 	if game.state != "play": return
@@ -142,30 +144,24 @@ func _draw_interaction(size: Vector2) -> void:
 	if candidate.is_empty():
 		if near_terminal and not game.terminal_ready(index) and overload.cooldown <= 0.0 and not overload.done:
 			var reason := "ALINHE O FEIXE SOLAR PRIMEIRO" if index == 0 and not game.mirrors.solved else ("ENERGIZE OS RELÉS PRIMEIRO" if index == 1 and not game.relays.solved else "NEUTRALIZE OS DRONES DA INSTALAÇÃO")
-			_prompt(size, "TERMINAL BLOQUEADO  •  " + reason, GOLD)
+			FieldHUD.prompt(self, size, "", "TERMINAL BLOQUEADO  •  " + reason, GOLD)
 		return
 	match candidate.kind:
 		"terminal":
-			if overload.running: _prompt(size, "E  •  PULSO %d DE 3  /  PRESSIONE NA FAIXA VERDE" % (overload.hits + 1), CYAN)
-			else: _prompt(size, "E  •  INICIAR SOBRECARGA CONTROLADA", CYAN)
+			if overload.running: FieldHUD.prompt(self, size, "E", "PULSO %d DE 3  /  PRESSIONE NA FAIXA VERDE" % (overload.hits + 1), CYAN)
+			else: FieldHUD.prompt(self, size, "E", "INICIAR SOBRECARGA CONTROLADA", CYAN)
 		"console":
 			var danger: bool = game.battery.danger(candidate.index)
-			_prompt(size, "E  •  ALIVIAR CÉLULA %d%s" % [candidate.index + 1, "  /  CRÍTICA" if danger else ""], RED if danger else CYAN)
+			FieldHUD.prompt(self, size, "E", "ALIVIAR CÉLULA %d%s" % [candidate.index + 1, "  /  CRÍTICA" if danger else ""], RED if danger else CYAN)
 		"elevator":
-			_prompt(size, "SEGURE E  •  SUBIR AO NÚCLEO AURORA", CYAN)
-			if game.hold_progress > 0: draw_rect(Rect2(Vector2(size.x * 0.5 - 200, size.y - 69), Vector2(400 * game.hold_progress, 3)), CYAN)
-
-func _prompt(size: Vector2, message: String, color: Color) -> void:
-	var box := Rect2(size.x * 0.5 - 220, size.y - 110, 440, 44)
-	FieldHUD.panel(self, box, color)
-	_text_center(FieldHUD.fit(message, 410, 11), box.get_center() + Vector2(0, 3), 11, color)
+			FieldHUD.prompt(self, size, "E", "SUBIR AO NÚCLEO AURORA", CYAN, game.hold_progress)
 
 ## The Sobrecarga v2 gauge: a sweeping needle, the shrinking green window and
 ## three pulse pips. Locked consoles show their countdown in red.
 func _draw_overload(size: Vector2, overload) -> void:
-	var box := Rect2(size.x * 0.5 - 230, size.y - 196, 460, 76)
-	FieldHUD.panel(self, box, RED if overload.cooldown > 0.0 else CYAN)
-	_text("SOBRECARGA  /  " + ("CENTRAL SOLAR" if game.stage == 0 else "TORRE NORTE  •  REDE OSCILANDO"), box.position + Vector2(16, 22), 9, GOLD)
+	var box := Rect2(size.x * 0.5 - 218, size.y - 160, 436, 84)
+	FieldHUD.compact_panel(self, box, RED if overload.cooldown > 0.0 else CYAN)
+	_text("SOBRECARGA  /  " + ("CENTRAL SOLAR" if game.stage == 0 else "TORRE NORTE"), box.position + Vector2(16, 22), 9, GOLD)
 	for i in 3:
 		var pip := Rect2(box.end.x - 88 + i * 24, box.position.y + 11, 18, 12)
 		FieldHUD.plate(self, pip, CYAN if i < overload.hits else Color("20383b"), 2)
@@ -189,7 +185,7 @@ func _draw_overload(size: Vector2, overload) -> void:
 	draw_line(Vector2(needle_x, track.position.y - 3), Vector2(needle_x, track.end.y + 3), WHITE if inside else GOLD, 3)
 	draw_colored_polygon(PackedVector2Array([Vector2(needle_x - 5, track.position.y - 7), Vector2(needle_x + 5, track.position.y - 7), Vector2(needle_x, track.position.y - 1)]), WHITE if inside else GOLD)
 	if overload.flash > 0.0: draw_rect(track, Color(CYAN, overload.flash * 2.0), false, 2)
-	_text("FORA DA FAIXA = DESCARGA", box.position + Vector2(16, box.size.y - 7), 7, MUTED)
+	_text("FORA DA FAIXA = DESCARGA", box.position + Vector2(16, box.size.y - 7), 9, MUTED)
 
 # ---------------------------------------------------------------- plan and map
 
@@ -213,13 +209,12 @@ func _draw_plan(area: Rect2, detailed: bool) -> void:
 	for point in game.guidance_path: route.append(area.position + point * scale)
 	if route.size() > 1: draw_polyline(route, Color(GOLD, 0.95), 2 if detailed else 1)
 	var target: Vector2 = area.position + game.objective_point() * scale
-	draw_arc(target, 7 if detailed else 4, 0, TAU, 20, GOLD, 2)
+	if not detailed: MapUI.marker(self, target, "objective")
 	for enemy in game.enemies:
 		if enemy.hp > 0 and enemy.zone <= game.stage and not detailed:
 			draw_circle(area.position + Vector2(enemy.pos) * scale, 2, RED)
 	var lia: Vector2 = area.position + game.pos * scale
-	draw_circle(lia, 7 if detailed else 5, INK)
-	draw_circle(lia, 4 if detailed else 3, WHITE)
+	if not detailed: MapUI.marker(self, lia, "player", false, game.aim)
 
 func _draw_map(size: Vector2) -> void:
 	var parts := MapUI.shell(self, size, "DISTRITO DE ENERGIA", "REDE ELÉTRICA / 3 INSTALAÇÕES", game.pointer)
@@ -249,7 +244,7 @@ func _draw_map(size: Vector2) -> void:
 		var route := PackedVector2Array([area.position + game.pos * scale])
 		for point in game.guidance_path: route.append(area.position + point * scale)
 		for i in range(route.size() - 1): draw_dashed_line(route[i], route[i + 1], GOLD, 2, 4)
-	MapUI.marker(self, area.position + game.objective_point() * scale, "objective")
+	MapUI.label_objective(self, area, area.position + game.objective_point() * scale, game.objective_place())
 	var alive := 0
 	for enemy in game.enemies:
 		if enemy.hp > 0 and enemy.zone <= game.stage:
@@ -269,7 +264,7 @@ func _draw_map(size: Vector2) -> void:
 		"Fique dentro do anel para carregar a reserva. Quando uma célula ficar vermelha, alivie-a no console.",
 		"A rede de Aurora está acesa. O elevador do núcleo leva ao topo da torre central.",
 	]
-	MapUI.sidebar(self, parts.sidebar, mini(game.stage, 3), 3, STAGE_TITLES[game.stage], game.objective_label(), stats, hints[game.stage])
+	MapUI.sidebar(self, parts.sidebar, mini(game.stage, 3), 3, game.objective_place(), game.objective_label(), stats, hints[game.stage])
 
 # ---------------------------------------------------------------- overlays
 
@@ -303,7 +298,12 @@ func _overlay(title: String, subtitle: String) -> void:
 	var size := get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.9))
 	_text_center(title, Vector2(size.x * 0.5, size.y * 0.5 - 30), 30, WHITE)
-	_text_center(subtitle, Vector2(size.x * 0.5, size.y * 0.5 + 20), 14, GOLD)
+	if game.state == "pause":
+		_text_center("OBJETIVO ATUAL", size * 0.5 + Vector2(0, 3), 10, GOLD)
+		_text_center(FieldHUD.fit(game.objective_label(), size.x - 64, 13), size * 0.5 + Vector2(0, 21), 13, WHITE)
+		_text_center(game.objective_place(), size * 0.5 + Vector2(0, 40), 11, CYAN)
+	else:
+		_text_center(subtitle, Vector2(size.x * 0.5, size.y * 0.5 + 20), 14, GOLD)
 
 func _overlay_buttons() -> void:
 	var center := get_viewport_rect().size * 0.5
@@ -318,10 +318,6 @@ func _button(rect: Rect2, label: String, id: String) -> void:
 	game.buttons.append({"rect": rect, "id": id})
 
 # ---------------------------------------------------------------- text helpers (also used by DialoguePanel)
-
-func _direction(vector: Vector2) -> String:
-	if vector.length() < 45: return "●"
-	return ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][posmod(int(round(vector.angle() / (PI / 4.0))), 8)]
 
 func _text(value: String, point: Vector2, size: int, color: Color) -> void:
 	draw_string(ThemeDB.fallback_font, point.round(), value, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)

@@ -116,12 +116,15 @@ static func _draw_energy_panel(canvas: Node2D, r: Rect2, color: Color, online: b
 	if online:
 		canvas.draw_rect(Rect2(r.position+Vector2(10+int(time*10)%22,29),Vector2(3,1)),CYAN)
 
-static func draw_sign(canvas: Node2D, goal: Vector2, index: int, online: bool, available: bool, repair: float, time: float) -> void:
-	var data := placement(goal,index)
-	var bounds: Rect2 = data.visual_bounds
-	var color := state_color(online,available,repair)
+## Screen footprint of a terminal's floating sign (used for actor silhouettes).
+static func sign_rect(goal: Vector2, index: int) -> Rect2:
+	var bounds: Rect2 = placement(goal,index).visual_bounds
 	var width := 166.0
-	var sign := Rect2(bounds.get_center().x-width/2,bounds.position.y-48,width,40)
+	return Rect2(bounds.get_center().x-width/2,bounds.position.y-48,width,40)
+
+static func draw_sign(canvas: Node2D, goal: Vector2, index: int, online: bool, available: bool, repair: float, time: float) -> void:
+	var color := state_color(online,available,repair)
+	var sign := sign_rect(goal,index)
 	# Small metal legs attach the sign to the equipment, not a floating UI card.
 	for x in [sign.position.x+14,sign.end.x-14]:
 		canvas.draw_rect(Rect2(x,sign.end.y,2,12),Color("738983"))

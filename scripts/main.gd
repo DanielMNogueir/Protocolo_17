@@ -13,10 +13,14 @@ const Sound = preload("res://scripts/audio.gd")
 const ENERGY_STATION_SCENE = preload("res://scenes/structures/energy_station.tscn")
 const WaterSurface = preload("res://scripts/water_surface.gd")
 const Objectives = preload("res://scripts/objective_visual.gd")
+const Occlusion = preload("res://scripts/occlusion.gd")
+const Guide = preload("res://scripts/objective_guide.gd")
+const WaterGuidance = preload("res://scripts/water_guidance.gd")
 const Prologue = preload("res://scripts/prologue.gd")
 const PrologueView = preload("res://scripts/prologue_presentation.gd")
 const LaboratoryEffects = preload("res://scripts/laboratory_effects.gd")
 const DistrictLighting = preload("res://scripts/district_lighting.gd")
+const DEV_TOOLS := true
 const SAVE_PATH := "user://aurora_beta_checkpoint.json"
 const INK := Color("091922")
 const PANEL := Color("102730")
@@ -39,9 +43,14 @@ const FIELD_MESSAGES := [
 var sim: P17Simulation = Simulation.new()
 var campaign := CampaignProgress.new()
 var selected_district := "water"
+## PROVISÓRIO (teste): libera todos os distritos só nesta sessão, sem gravar no save.
+var free_select := false
 var campaign_notice := ""
 var lia_animation := LiaAnimation.new()
 var enemy_presentation := EnemyPresentation.new()
+var guidance := WaterGuidance.new()
+var water_guide := Guide.new()
+var prologue_guide := Guide.new()
 var sound: Node
 var mode := "title"
 var menu_focus := ""
@@ -117,6 +126,7 @@ func _ready() -> void:
 	has_save = _read_checkpoint().size() > 0
 	_load_settings()
 	campaign.load_progress()
+	free_select = DEV_TOOLS and get_tree().get_meta("p17_free_select", false) == true
 	if get_tree().has_meta("p17_open_districts"):
 		get_tree().remove_meta("p17_open_districts")
 		mode = "districts"
@@ -164,6 +174,7 @@ func _process(delta: float) -> void:
 		interact_requested = false
 		lia_animation.advance(dt, sim.velocity, sim.dash_time > 0)
 		enemy_presentation.advance(dt, sim.enemies, sim.stage, sim.elapsed)
+		guidance.update(sim, dt)
 		var heard := {}
 		for cue in enemy_presentation.cues:
 			if Vector2(cue.pos).distance_to(sim.pos) < 650.0 and not heard.has(cue.id):
@@ -176,10 +187,48 @@ func _process(delta: float) -> void:
 		var target: Vector2 = sim.pos + (world_mouse - sim.pos).limit_length(100) * 0.18
 		camera_pos = camera_pos.lerp(target, 1 - exp(-dt * 7))
 		_clamp_camera()
+	_update_objective_guides(dt)
 	if sound and energy_station and sound.has_method("set_structure_hum"):
 		var hum_proximity := clampf(1.0 - sim.pos.distance_to(World.ENERGY_STATION_ORIGIN) / 520.0, 0.0, 1.0)
 		sound.set_structure_hum(mode == "play" and energy_station.is_online(), hum_proximity)
 	queue_redraw()
+
+func _water_offset() -> Vector2:
+	var jitter := Vector2(sin(clock * 103), cos(clock * 79)) * shake
+	return (_size() * 0.5 - camera_pos + jitter).round()
+
+
+func _water_place() -> String:
+	if sim.state == "activation" and not sim.operation.ready():
+		return WaterGuidance.task_place(sim)
+	return SECTOR_SUBTITLES[sim.stage]
+
+
+func _update_objective_guides(dt: float) -> void:
+	var size := _size()
+	var active := mode == "play" and dialogue.is_empty() and sim.state in ["combat", "activation"]
+	var safe := FieldHUD.guide_safe_rect(size)
+	water_guide.in_combat = false
+	if active:
+		for enemy in sim.enemies:
+			if enemy.hp > 0 and sim.pos.distance_squared_to(enemy.pos) <= 40000.0:
+				water_guide.in_combat = true
+				break
+		water_guide.route = guidance.path
+		water_guide.update(dt, sim.pos, guidance.next_point(sim), WaterGuidance.objective(sim),
+			Transform2D(0.0, _water_offset()), safe, true, _water_place(), size)
+	else:
+		water_guide.mode = "hidden"
+	water_guide.cues(dt, sound)
+	if prologue == null or mode != "prologue" or prologue.phase != "lab" or not prologue.conversation.is_empty() or prologue.step >= 7:
+		prologue_guide.mode = "hidden"
+		return
+	var target: Vector2 = prologue.TARGETS[prologue.step]
+	var offset := (size * 0.5 - prologue_camera).round()
+	prologue_guide.update(dt, prologue.pos, target, target, Transform2D(0.0, offset),
+		safe, true, prologue.PLACE_NAMES[prologue.step], size)
+	prologue_guide.cues(dt, sound)
+
 
 func _update_energy_station(delta: float) -> void:
 	if energy_station == null:
@@ -289,7 +338,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mode == "difficulty":
 			_action("difficulty_"+selected_difficulty)
 		elif mode == "title":
-			_action("continue" if has_save else "new")
+			_action("continue" if _can_continue() else "new")
 		elif mode == "briefing":
 			_advance_briefing()
 		elif not dialogue.is_empty() and mode == "play":
@@ -304,8 +353,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_action("upgrade_%d" % (key - KEY_1))
 	elif mode == "difficulty" and key in [KEY_1,KEY_2,KEY_3]:
 		_action("difficulty_"+Simulation.DIFFICULTIES[key-KEY_1])
-	elif mode == "districts" and key in [KEY_1,KEY_2,KEY_3]:
-		_action(["district_water", "district_residues", "district_energy"][key - KEY_1])
+	elif mode == "districts" and key in [KEY_1, KEY_2, KEY_3, KEY_4]:
+		_action(["district_water", "district_residues", "district_energy", "district_core"][key - KEY_1])
+	elif mode == "districts" and key == KEY_T:
+		_action("district_free")
 
 func _action(id: String) -> void:
 	menu_focus = ""
@@ -319,14 +370,23 @@ func _action(id: String) -> void:
 		"district_water":
 			selected_district = "water"
 			mode = "difficulty"
+		"district_free":
+			if not DEV_TOOLS: return
+			free_select = not free_select
+			get_tree().set_meta("p17_free_select", free_select)
 		"district_residues":
-			if campaign.water_completed:
+			if _district_open(1):
 				selected_district = "residues"
 				selected_difficulty = campaign.difficulty
 				mode = "difficulty"
 		"district_energy":
-			if campaign.residues_completed:
+			if _district_open(2):
 				selected_district = "energy"
+				selected_difficulty = campaign.difficulty
+				mode = "difficulty"
+		"district_core":
+			if _district_open(3):
+				selected_district = "core"
 				selected_difficulty = campaign.difficulty
 				mode = "difficulty"
 		"difficulty_back": mode = "districts"
@@ -344,6 +404,9 @@ func _action(id: String) -> void:
 			if prologue != null: prologue.fast_text = instant_prologue_text
 			_save_settings()
 		"continue":
+			if campaign.energy_completed and not campaign.core_completed:
+				_open_core(campaign.difficulty)
+				return
 			var data := _read_checkpoint()
 			if not data.is_empty() and sim.load_data(data):
 				enemy_presentation.reset()
@@ -361,6 +424,16 @@ func _action(id: String) -> void:
 			mode = "settings"
 		"back":
 			mode = settings_return
+		"guide":
+			water_guide.intensity = posmod(water_guide.intensity - 1, Guide.INTENSITY_NAMES.size())
+			prologue_guide.intensity = water_guide.intensity
+			_save_settings()
+		"guide_path":
+			water_guide.path_enabled = not water_guide.path_enabled
+			_save_settings()
+		"text_scale":
+			FieldHUD.text_scale_percent = 125 if FieldHUD.text_scale_percent == 100 else 100
+			_save_settings()
 		"fullscreen":
 			_toggle_fullscreen()
 		"sound":
@@ -407,9 +480,11 @@ func _action(id: String) -> void:
 				selected_difficulty = level
 				_save_settings()
 				if selected_district == "residues":
-					if campaign.water_completed: _open_residues(level)
+					if _district_open(1): _open_residues(level)
 				elif selected_district == "energy":
-					if campaign.residues_completed: _open_power(level)
+					if _district_open(2): _open_power(level)
+				elif selected_district == "core":
+					if _district_open(3): _open_core(level)
 				else:
 					_start_prologue(false)
 			if id.begins_with("upgrade_") and mode == "upgrade":
@@ -433,6 +508,10 @@ func _start_prologue(replay: bool) -> void:
 	mode = "prologue"
 	sound.set_mood("calm")
 
+## The test toggle also opens districts without campaign progress.
+func _district_open(index: int) -> bool:
+	return index >= 0 and index < 4 and (free_select or [true, campaign.water_completed, campaign.residues_completed, campaign.energy_completed][index])
+
 func _open_residues(level: String) -> void:
 	get_tree().set_meta("p17_residue_handoff", campaign.residue_loadout(level))
 	get_tree().change_scene_to_file("res://scenes/residues.tscn")
@@ -441,8 +520,15 @@ func _open_power(level: String) -> void:
 	get_tree().set_meta("p17_power_handoff", campaign.energy_loadout(level))
 	get_tree().change_scene_to_file("res://scenes/power.tscn")
 
+func _can_continue() -> bool:
+	return has_save or (campaign.energy_completed and not campaign.core_completed)
+
+func _open_core(level: String) -> void:
+	get_tree().set_meta("p17_core_handoff", campaign.core_loadout(level))
+	get_tree().change_scene_to_file("res://scenes/core.tscn")
+
 func _complete_water_campaign() -> void:
-	if campaign.complete_water(sim.difficulty, sim.chosen) == OK:
+	if campaign.complete_water(sim.difficulty, sim.chosen, {"kills": sim.kills, "deaths": sim.deaths, "time": sim.elapsed}) == OK:
 		campaign_notice = "DISTRITO DE RESÍDUOS DESBLOQUEADO / ACESSO SALVO"
 		_clear_checkpoint()
 	else:
@@ -508,12 +594,13 @@ func _state_changed() -> void:
 func _consume_events() -> void:
 	for event in sim.events:
 		if event != "enemy_dead":
-			sound.play_sfx("shoot" if event == "secondary" else ("ui" if event in ["operation_done","reinforcements","timing_miss","treatment_ok","treatment_miss"] else event))
+			sound.play_sfx("shoot" if event == "secondary" else ("ui" if event in ["operation_done","reinforcements","timing_miss","treatment_ok","treatment_miss","mash","pressure_miss"] else event))
 		match event:
 			"reinforcements":
 				sound.set_mood("combat")
 				_notify("ATIVIDADE HOSTIL  /  REFORÇOS DETECTADOS",3)
 			"timing_miss": _notify("FORA DE SINCRONIA  /  SOLTE E E TENTE NA FAIXA VERDE",2)
+			"pressure_miss": _notify("PRESSÃO FORA DA FAIXA  /  SOLTE E DENTRO DO VERDE",2)
 			"treatment_miss": _notify("A AMOSTRA CONTÉM SÓLIDOS  /  ESCOLHA FILTRAÇÃO",2)
 			"treatment_ok": _notify("FILTRAÇÃO SELECIONADA  /  SEGURE E PARA LAVAR O FILTRO",2)
 			"boss_phase":
@@ -574,6 +661,10 @@ func _clear_checkpoint() -> void:
 
 func _save_settings() -> void:
 	var config := ConfigFile.new()
+	config.load(Guide.SETTINGS_PATH)
+	config.set_value("interface", "guide", Guide.INTENSITY_NAMES[water_guide.intensity])
+	config.set_value("interface", "guide_path", water_guide.path_enabled)
+	config.set_value("interface", "text_scale", FieldHUD.text_scale_percent)
 	config.set_value("gameplay", "difficulty", selected_difficulty)
 	config.set_value("audio", "muted", muted)
 	config.set_value("display", "fullscreen", fullscreen)
@@ -591,6 +682,8 @@ func _load_settings() -> void:
 		sound.set_muted(muted)
 		if fullscreen:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	water_guide.configure(config, "water")
+	prologue_guide.configure(config)
 
 func _draw() -> void:
 	var showing_prologue := prologue!=null and (mode=="prologue" or (mode=="pause" and previous_mode=="prologue") or (mode=="settings" and settings_return=="pause" and previous_mode=="prologue"))
@@ -627,11 +720,9 @@ func _draw() -> void:
 		"victory": _draw_victory()
 	if toast_time > 0 and mode == "play" and dialogue.is_empty():
 		var alpha := minf(toast_time, 1)
-		var width := minf(_size().x - 140, _font.get_string_size(toast, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 44)
-		var rect := Rect2((_size().x - width) * 0.5, 139, width, 32)
-		draw_rect(rect, Color(INK, alpha * 0.94))
-		draw_rect(Rect2(rect.position.x, rect.position.y, 2, 32), Color(CYAN, alpha))
-		_text_center(toast, rect.get_center() + Vector2(0, 4), 12, Color(WHITE, alpha))
+		var rect := Rect2(_size().x * 0.5 - 220, _size().y - 98, 440, 28)
+		FieldHUD.compact_panel(self, rect, CYAN)
+		FieldHUD.centered(self, FieldHUD.fit(toast, rect.size.x - 24, 10), rect.get_center() + Vector2(0, 4), 10, Color(WHITE, alpha))
 	if screen_flash > 0:
 		draw_rect(Rect2(Vector2.ZERO, _size()), Color(MAGENTA if mode == "play" else CYAN, screen_flash * 0.3))
 
@@ -671,14 +762,17 @@ func _draw_title() -> void:
 	draw_string(_brand_font,Vector2(x-3,y+128),"PROTOCOLO",HORIZONTAL_ALIGNMENT_LEFT,-1,53,FieldHUD.WHITE)
 	draw_line(Vector2(x+2,y+143),Vector2(x+100,y+143),GOLD,3)
 	draw_string(_brand_font,Vector2(x-7,y+232),"17",HORIZONTAL_ALIGNMENT_LEFT,-1,115,CYAN)
+	if "ai" in campaign.endings_seen:
+		draw_string(_brand_font, Vector2(x-7, y+232), "17", HORIZONTAL_ALIGNMENT_LEFT, -1, 115, Color(MAGENTA, 0.25 + 0.1 * sin(clock * 2.0)))
 	draw_string(_brand_font,Vector2(x+130,y+192),"A U R O R A",HORIZONTAL_ALIGNMENT_LEFT,-1,20,FieldHUD.WHITE)
 	draw_line(Vector2(x+132,y+207),Vector2(x+292,y+207),GOLD,1)
 	FieldHUD.text(self,"A rede caiu. A esperança, ainda não.",Vector2(x+132,y+225),10,MUTED)
 	FieldHUD.text(self,"AÇÃO / EXPLORAÇÃO / RECUPERAÇÃO",Vector2(x,y+257),9,MUTED)
-	FieldHUD.menu_button(self,Rect2(x-1,y+282,276,40),"CONTINUAR OPERAÇÃO" if has_save else "INICIAR OPERAÇÃO","continue" if has_save else "new",true,menu_focus==("continue" if has_save else "new"))
-	FieldHUD.text(self,"CHECKPOINT DISPONÍVEL / ÁGUAS" if has_save else "ESCOLHA SEU DISTRITO",Vector2(x+11,y+339),8,CYAN)
+	FieldHUD.menu_button(self,Rect2(x-1,y+282,276,40),"CONTINUAR OPERAÇÃO" if _can_continue() else "INICIAR OPERAÇÃO","continue" if _can_continue() else "new",true,menu_focus==("continue" if _can_continue() else "new"))
+	var checkpoint_label := "NÚCLEO AURORA DISPONÍVEL" if campaign.energy_completed and not campaign.core_completed else ("CHECKPOINT DISPONÍVEL / ÁGUAS" if has_save else "ESCOLHA SEU DISTRITO")
+	FieldHUD.text(self,checkpoint_label,Vector2(x+11,y+339),8,CYAN)
 	var row := y+351
-	if has_save:
+	if _can_continue():
 		FieldHUD.menu_button(self,Rect2(x,row,274,28),"ESCOLHER DISTRITO","new",false,menu_focus=="new")
 		row+=31
 	for entry in [["CONFIGURAÇÕES","settings"],["REVER PRÓLOGO","intro_replay"],["SAIR","exit"]]:
@@ -721,9 +815,14 @@ func _draw_briefing() -> void:
 	_button(Rect2(60, size.y - 86, 171, 39), "PULAR INTRODUÇÃO", "skip", false)
 	_text("ENTER AVANÇA  /  ESC PULA", Vector2(60, size.y - 22), 10, MUTED)
 
+## Footprint of scenery drawn in the y-sorted pass; empty for actors and wrecks.
+func _scenery_bounds(entity: Dictionary) -> Rect2:
+	if entity.has("structure"): return World.station_part_bounds(int(entity.part))
+	if entity.has("world_object"): return World.sortable_bounds(entity.world_object)
+	return Rect2()
+
 func _draw_game() -> void:
-	var jitter := Vector2(sin(clock * 103), cos(clock * 79)) * shake
-	var world_offset:=(_size()*0.5-camera_pos+jitter).round()
+	var world_offset := _water_offset()
 	water_surface.present(world_offset,clock,sim.restored)
 	draw_set_transform(world_offset)
 	district_effects.present(clock,sim.restored)
@@ -744,6 +843,11 @@ func _draw_game() -> void:
 	for part in energy_station.sortable_parts():
 		entities.append({"y":part.y,"structure":energy_station,"part":part.index})
 	entities.sort_custom(func(a, b): return a.y < b.y)
+	var scenery: Array[Dictionary] = []
+	for entity in entities:
+		var bounds := _scenery_bounds(entity)
+		if bounds.has_area(): scenery.append({"y": float(entity.y), "bounds": bounds})
+	var ghosts: Array[Dictionary] = []
 	for entity in entities:
 		if entity.has("world_object"):
 			World.draw_sortable(self,entity.world_object,sim.restored,clock,sim.stage,sim.state=="activation" and sim.operation.ready(),sim.repair)
@@ -756,26 +860,56 @@ func _draw_game() -> void:
 			var lia_action := "repair" if sim.repair > 0 else ("fire" if sim.state == "combat" and sim._fire_cd > 0 else "idle")
 			var shot_age := sim.fire_interval - sim._fire_cd if sim._fire_cd > 0 else -1.0
 			Actors.draw_lia(self, sim.pos, sim.aim, lia_animation.elapsed, lia_animation.moving, sim.invuln > 0 and int(clock * 16) % 2 == 0, sim.dash_time > 0, lia_action, shot_age)
+			if Occlusion.is_hidden(Occlusion.lia_rect(sim.pos), float(entity.y), scenery):
+				ghosts.append({"lia": true, "action": lia_action})
 		elif entity.has("wreck"):
 			Actors.ENEMIES.draw_destroyed(self, entity.wreck)
 		else:
 			var enemy: Dictionary = entity.enemy
 			if enemy.get("warning", 0.0) > 0:
 				_text_center("!",enemy.pos+Vector2(0,-65 if enemy.kind == "boss" else -43),18,GOLD)
-			Actors.draw_drone(self, enemy_presentation.view_for(enemy), sim.elapsed)
+			var view: Dictionary = enemy_presentation.view_for(enemy)
+			Actors.draw_drone(self, view, sim.elapsed)
+			Actors.ENEMIES.draw_health(self, view)
+			EnemyPresentation.draw_awareness(self, enemy, clock)
+			if Occlusion.is_hidden(Occlusion.drone_rect(enemy.pos, enemy.kind == "boss"), float(entity.y), scenery):
+				ghosts.append({"view": view})
 	energy_station.draw_effects(self, clock)
 	for index in range(4):
 		Objectives.draw_sign(self,World.GOALS[index],index,index<sim.restored,index==sim.stage and sim.state=="activation" and sim.operation.ready(),sim.repair if index==sim.stage else 0.0,clock)
-	_draw_operation_beacon()
+	# Actors behind tall machines, terminal signs or the task label stay
+	# readable as a silhouette drawn above all of them.
+	var labels: Array[Rect2] = []
+	for index in range(4): labels.append(Objectives.sign_rect(World.GOALS[index],index))
+	if sim.state == "activation" and not sim.operation.ready():
+		labels.append(Rect2(sim.operation.target()+Vector2(-68,-53),Vector2(136,25)))
+	var lia_marked := false
+	for ghost in ghosts:
+		if ghost.has("lia"): lia_marked = true
+	if not lia_marked and Occlusion.hidden_fraction(Occlusion.lia_rect(sim.pos), labels) >= Occlusion.THRESHOLD:
+		ghosts.append({"lia": true, "action": "repair" if sim.repair > 0 else "idle"})
+	for enemy in sim.enemies:
+		if enemy.hp > 0 and Occlusion.hidden_fraction(Occlusion.drone_rect(enemy.pos, enemy.kind == "boss"), labels) >= Occlusion.THRESHOLD:
+			var marked := false
+			for ghost in ghosts:
+				if ghost.has("view") and ghost.view.get("id", -1) == enemy.get("id", -2): marked = true
+			if not marked: ghosts.append({"view": enemy_presentation.view_for(enemy)})
+	for ghost in ghosts:
+		if ghost.has("lia"):
+			Occlusion.draw_lia_ghost(self, sim.pos, sim.aim, lia_animation.elapsed, lia_animation.moving, ghost.action)
+		else:
+			Occlusion.draw_drone_ghost(self, ghost.view, sim.elapsed)
+	if mode == "play":
+		water_guide.draw_world(self, clock, water_guide.intensity)
+		if dialogue.is_empty() and sim.state == "activation":
+			var target := WaterGuidance.objective(sim)
+			if sim.pos.distance_to(target) <= 72.0:
+				FieldHUD.interaction(self, target, clock)
 	for bolt in sim.bullets:
 		if not bolt.hostile:
 			Actors.WEAPON.draw_pulse(self, bolt, clock)
 			continue
-		var color: Color = MAGENTA if bolt.hostile else CYAN
-		var tail: Vector2 = bolt.pos - bolt.vel.normalized() * 11
-		draw_line(tail, bolt.pos, Color(color, 0.22), 7)
-		draw_line(tail.lerp(bolt.pos, 0.3), bolt.pos, color, 3)
-		draw_rect(Rect2(bolt.pos - Vector2(1, 1), Vector2(3, 3)), WHITE)
+		Actors.ENEMIES.draw_projectile(self, bolt)
 	for particle in sim.particles:
 		var alpha := clampf(float(particle.life) / maxf(float(particle.get("max_life", 1.0)), 0.01), 0, 1)
 		var col: Color = particle.get("color", CYAN)
@@ -818,39 +952,29 @@ func _draw_terminals() -> void:
 func _draw_hud() -> void:
 	var size := _size()
 	FieldHUD.vital(self, sim.hp, sim.max_hp, clock)
-	var alive := 0
-	for enemy in sim.enemies:
-		if enemy.hp > 0: alive += 1
-	var detail: String = sim.operation.label() if not sim.operation.ready() else ("Restaure o terminal do setor" if sim.state == "activation" else "Neutralize os drones para liberar o terminal")
-	var status := "%02d DRONES  •  LEVA %d/3  •  TAREFAS %d/2" % [alive, mini(sim.wave + 1, 3), sim.operation.completed]
+	var detail := WaterGuidance.label(sim).get_slice("  /  ", 0)
+	var step := WaterGuidance.step(sim)
+	var status := "SETOR %d/4 · ETAPA %d/%d · LEVA %d/3" % [sim.stage + 1, step, WaterGuidance.STEPS, mini(sim.wave + 1, 3)]
 	if sim.restored > sim.stage:
-		detail = "Sistema restaurado"
-		status = "REDE EM OPERAÇÃO"
-	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4)
-	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / OPERAÇÃO DE CAMPO", pointer)
-	buttons.append({"rect": Rect2(333, 28, 78, 23), "id": "map"})
-	buttons.append({"rect": Rect2(419, 28, 107, 23), "id": "pause"})
+		detail = "●  SISTEMA RESTAURADO"
+		status = "ÁGUAS  •  REDE %d/4 EM OPERAÇÃO" % sim.restored
+	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4, "water", water_guide, clock)
+	water_guide.draw_screen(self, clock, water_guide.intensity)
+	water_guide.draw_tip(self)
+	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / CAMPO", pointer)
+	buttons.append({"rect": FieldHUD.MAP_BUTTON, "id": "map"})
+	buttons.append({"rect": FieldHUD.PAUSE_BUTTON, "id": "pause"})
 	_draw_operation_hud()
 	FieldHUD.abilities(self, size.y, sim.secondary_cd, sim.secondary_recharge, sim.dash_cd, sim.dash_recharge)
-	_draw_minimap(Rect2(size.x - 202, size.y - 160, 186, 144))
+	_draw_minimap(FieldHUD.radar_rect(size))
 
 	if sim.pos.distance_to(World.GOALS[sim.stage]) < 84 and sim.operation.ready():
-		var message: String = "[E] REPARAR " + Objectives.SYSTEMS[sim.stage] if sim.state == "activation" else "TERMINAL BLOQUEADO  /  ELIMINE OS DRONES"
-		if sim.restored>sim.stage: message = "SISTEMA RESTAURADO  /  " + Objectives.TITLES[sim.stage]
-		var rect := Rect2(size.x * 0.5 - 190, size.y - 110, 380, 45)
-		FieldHUD.panel(self, rect)
-		_text_center(message, rect.get_center() + Vector2(0, 1), 10, CYAN if sim.state == "activation" else GOLD)
 		if sim.state == "activation":
-			draw_rect(Rect2(rect.position + Vector2(12, 35), Vector2((rect.size.x - 24) * sim.repair, 3)), CYAN)
-	else:
-		var goal: Vector2 = World.GOALS[sim.stage] if sim.operation.ready() else sim.operation.target()
-		var difference: Vector2 = goal - sim.pos
-		if difference.length() > 250:
-			var anchor := size * 0.5 + difference.normalized() * minf(size.y * 0.32, 170)
-			draw_circle(anchor, 12, Color(INK, 0.82))
-			var dir := difference.normalized()
-			var side := dir.orthogonal()
-			draw_colored_polygon(PackedVector2Array([anchor + dir * 6, anchor - dir * 4 + side * 4, anchor - dir * 4 - side * 4]), CYAN)
+			FieldHUD.prompt(self, size, "E", "RESTAURE " + Objectives.SYSTEMS[sim.stage], CYAN, sim.repair)
+		elif sim.restored > sim.stage:
+			FieldHUD.prompt(self, size, "", "SISTEMA RESTAURADO", CYAN)
+		else:
+			FieldHUD.prompt(self, size, "", "ELIMINE OS DRONES PARA LIBERAR O TERMINAL")
 	for enemy in sim.enemies:
 		if enemy.kind == "boss" and enemy.hp > 0 and enemy.pos.distance_to(sim.pos) < 480:
 			FieldHUD.panel(self, Rect2(size.x * 0.5 - 190, size.y - 61, 380, 43), MAGENTA)
@@ -892,7 +1016,8 @@ func _draw_minimap(rect: Rect2) -> void:
 	for index in 2:
 		var point: Vector2 = sim.operation.points[index]
 		draw_circle(origin+point*scale_value,2,CYAN if index<sim.operation.completed else GOLD)
-	draw_circle(origin + sim.pos * scale_value, 3, WHITE)
+	FieldMap.marker(self, origin + WaterGuidance.objective(sim) * scale_value, "objective")
+	FieldMap.marker(self, origin + sim.pos * scale_value, "player", false, sim.aim)
 
 func _draw_map() -> void:
 	var size := _size()
@@ -943,8 +1068,8 @@ func _draw_map() -> void:
 			alive+=1
 			FieldMap.marker(self,origin+enemy.pos*ratio,"boss" if enemy.kind=="boss" else "enemy")
 	var objective := sim.operation.label() if not sim.operation.ready() else ("RESTAURE O TERMINAL DO SETOR" if sim.state=="activation" else "NEUTRALIZE OS DRONES PARA LIBERAR O TERMINAL")
-	var target: Vector2 = sim.operation.target() if not sim.operation.ready() else World.GOALS[sim.stage]
-	if sim.restored<=sim.stage: FieldMap.marker(self,origin+target*ratio,"objective")
+	var target := WaterGuidance.objective(sim)
+	if sim.restored<=sim.stage: FieldMap.label_objective(self, area, origin + target * ratio, _water_place())
 	else: objective="SISTEMA RESTAURADO / PASSAGEM LIBERADA"
 	var player: Vector2 = origin+sim.pos*ratio
 	FieldMap.marker(self,player,"player",false,sim.aim)
@@ -953,7 +1078,7 @@ func _draw_map() -> void:
 	var hint := "Complete as tarefas e as levas. Depois, restaure o terminal para liberar a passagem."
 	if sim.state=="activation": hint="Área segura. Aproxime-se do marcador e use E para operar o sistema."
 	if sim.restored>sim.stage: hint="Rede do setor restaurada. A passagem está liberada."
-	FieldMap.sidebar(self,parts.sidebar,sim.restored,4,SECTOR_SUBTITLES[sim.stage],objective,stats,hint)
+	FieldMap.sidebar(self,parts.sidebar,sim.restored,4,_water_place(),objective,stats,hint)
 
 func _draw_dialogue() -> void:
 	var size := _size()
@@ -971,14 +1096,16 @@ func _draw_pause() -> void:
 	var r := Rect2(size.x/2-240,size.y/2-182,480,364)
 	FieldHUD.panel(self,r)
 	FieldHUD.centered(self,"SINAL EM ESPERA",r.position+Vector2(240,44),26,WHITE)
-	FieldHUD.centered(self,"A operação está pausada.",r.position+Vector2(240,72),12,MUTED)
+	FieldHUD.centered(self,"OBJETIVO ATUAL",r.position+Vector2(240,72),10,GOLD)
+	var objective: String = prologue.OBJECTIVES[prologue.step] if previous_mode=="prologue" and prologue != null else WaterGuidance.label(sim)
+	FieldHUD.centered(self,FieldHUD.fit(objective, 440, 12),r.position+Vector2(240,91),12,WHITE)
 	_menu_control(Rect2(r.position+Vector2(60,104),Vector2(360,40)),"RETOMAR OPERAÇÃO","resume","ESC")
 	_menu_control(Rect2(r.position+Vector2(60,158),Vector2(360,35)),"CONFIGURAÇÕES","settings")
 	_menu_control(Rect2(r.position+Vector2(60,207),Vector2(360,35)),"VOLTAR AO INÍCIO","title")
 	if previous_mode=="prologue":
 		_menu_control(Rect2(r.position+Vector2(60,256),Vector2(360,32)),"PULAR INTRODUÇÃO","intro_skip","P",GOLD)
 	else:
-		FieldHUD.centered(self,"O checkpoint guarda o início da etapa atual.",r.position+Vector2(240,281),10,MUTED)
+		FieldHUD.centered(self,_water_place(),r.position+Vector2(240,281),11,CYAN)
 	FieldHUD.centered(self,"↑ ↓ SELECIONAR / ENTER CONFIRMAR",r.position+Vector2(240,333),9,GOLD)
 
 func _draw_settings() -> void:
@@ -990,15 +1117,18 @@ func _draw_settings() -> void:
 	FieldHUD.centered(self,"Ajuste seu equipamento de campo.",r.position+Vector2(340,69),12,MUTED)
 	_menu_control(Rect2(r.position+Vector2(40,96),Vector2(600,40)),"ÁUDIO / "+("DESLIGADO" if muted else "LIGADO"),"sound","F10")
 	_menu_control(Rect2(r.position+Vector2(40,149),Vector2(600,40)),"TELA / "+("CHEIA" if fullscreen else "JANELA"),"fullscreen","F11")
-	var area := Rect2(r.position+Vector2(40,212),Vector2(600,117))
+	_menu_control(Rect2(r.position+Vector2(40,196),Vector2(600,36)),"GUIA DE OBJETIVO / "+Guide.INTENSITY_NAMES[water_guide.intensity],"guide")
+	_menu_control(Rect2(r.position+Vector2(40,241),Vector2(292,32)),"TRILHA NO CHÃO / "+("LIGADA" if water_guide.path_enabled else "DESLIGADA"),"guide_path")
+	_menu_control(Rect2(r.position+Vector2(348,241),Vector2(292,32)),"TEXTO DO HUD / %d%%" % FieldHUD.text_scale_percent,"text_scale")
+	var area := Rect2(r.position+Vector2(40,283),Vector2(600,78))
 	FieldHUD.inset(self,area)
-	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,23),10,GOLD)
-	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,47),10,WHITE)
-	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,68),10,MUTED)
-	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,89),10,MUTED)
+	FieldHUD.centered(self,"CONTROLES DE CAMPO",area.position+Vector2(300,18),10,GOLD)
+	FieldHUD.centered(self,"WASD / SETAS: MOVER   •   MOUSE: MIRAR E DISPARAR",area.position+Vector2(300,37),10,WHITE)
+	FieldHUD.centered(self,"Q / BOTÃO DIREITO: RAJADA   •   SHIFT: ESQUIVA",area.position+Vector2(300,53),10,MUTED)
+	FieldHUD.centered(self,"E: RESTAURAR   •   M: MAPA   •   ESC: PAUSA",area.position+Vector2(300,69),10,MUTED)
 	var level_name: String = Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty if settings_return=="pause" else selected_difficulty)]
-	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,356),9,GOLD)
-	_menu_control(Rect2(r.position+Vector2(240,371),Vector2(200,35)),"VOLTAR","back","ESC")
+	FieldHUD.text(self,"DIFICULDADE / "+level_name,r.position+Vector2(43,395),9,GOLD)
+	_menu_control(Rect2(r.position+Vector2(240,374),Vector2(200,35)),"VOLTAR","back","ESC")
 func _draw_upgrades() -> void:
 	var size := _size()
 	draw_rect(Rect2(Vector2.ZERO, size), Color(INK, 0.93))
@@ -1043,13 +1173,14 @@ func _draw_victory() -> void:
 		var p := Vector2(size.x * 0.5 - 260 + i * 260, 203)
 		_text_center(stats[i].split("\n")[0], p, 30, CYAN)
 		_text_center(stats[i].split("\n")[1], p + Vector2(0, 25), 9, MUTED)
-	var rect := Rect2(120, 276, size.x - 240, 134)
+	var rect := Rect2(120, 276, size.x - 240, 138)
 	_panel(rect)
 	draw_rect(Rect2(rect.position, Vector2(3, rect.size.y)), GOLD)
 	_text("REGISTRO RECUPERADO  /  ACESSO EXTERNO", rect.position + Vector2(24, 28), 10, GOLD)
 	_wrapped("LIA: Comando… a alteração nas ordens aconteceu antes do colapso. Isso não foi uma falha.", Rect2(rect.position + Vector2(24, 42), Vector2(rect.size.x - 48, 47)), 15, WHITE, 23)
 	_text("ORIGEM DO COMANDO: REDIGIDA  /  DESTINO: OUTRO DISTRITO", rect.position + Vector2(24, 110), 10, MAGENTA)
-	_text_center(campaign_notice, Vector2(size.x * 0.5, 427), 10, CYAN if campaign.water_completed else MAGENTA)
+	_text("LEITURA DURANTE O APAGÃO: CONTAMINAÇÃO DO RIO −87%", rect.position + Vector2(24, 128), 10, CYAN)
+	_text_center(campaign_notice, Vector2(size.x * 0.5, 431), 10, CYAN if campaign.water_completed else MAGENTA)
 	_button(Rect2(size.x * 0.5 - 320, 445, 310, 42), "SEGUIR AO DISTRITO DE RESÍDUOS  →" if campaign.water_completed else "TENTAR SALVAR DESBLOQUEIO", "residues", true)
 	_button(Rect2(size.x * 0.5 + 10, 445, 310, 42), "ESCOLHER DISTRITO", "districts", false)
 	_text_center("OPERAÇÃO FILTRO  /  ODS 6 — ÁGUA POTÁVEL E SANEAMENTO", Vector2(size.x * 0.5, size.y - 19), 9, MUTED)
@@ -1144,20 +1275,22 @@ func _draw_difficulty() -> void:
 	var r := Rect2(size.x/2-360,size.y/2-235,720,470)
 	FieldHUD.panel(self,r)
 	FieldHUD.centered(self,"ESCOLHA SUA OPERAÇÃO",r.position+Vector2(360,44),26,WHITE)
-	var subtitle: String = {"residues": "DISTRITO DE RESÍDUOS", "energy": "DISTRITO DE ENERGIA / TRÊS INSTALAÇÕES"}.get(selected_district, "DISTRITO DAS ÁGUAS / QUATRO SETORES")
+	var subtitle: String = {"residues": "DISTRITO DE RESÍDUOS", "energy": "DISTRITO DE ENERGIA / TRÊS INSTALAÇÕES", "core": "NÚCLEO AURORA / CONFRONTO FINAL"}.get(selected_district, "DISTRITO DAS ÁGUAS / QUATRO SETORES")
 	FieldHUD.centered(self,subtitle,r.position+Vector2(360,72),12,MUTED)
 	var descriptions := ["9 de vida / 37 inimigos. Mais tempo para reagir e sincronizar.","6 de vida / 57 inimigos. Tiros rápidos e pressão crescente.","5 de vida / 77 inimigos. Tiros mais rápidos e sincronização precisa."]
 	if selected_district == "residues":
 		descriptions = ["9 de vida base. Triagem, reciclagem e compostagem.","6 de vida base. Triagem, reciclagem e compostagem.","5 de vida base. Triagem, reciclagem e compostagem."]
 	elif selected_district == "energy":
 		descriptions = ["9 de vida base. Janelas largas e descargas lentas.","6 de vida base. Arcos rápidos e drones com escudo.","5 de vida base. Sobrecarga precisa e rede hostil."]
+	elif selected_district == "core":
+		descriptions = ["9 de vida base. Checkpoint em cada fase do confronto.", "6 de vida base. Checkpoint no início da arena.", "5 de vida base. Ataques rápidos e sobrecarga precisa."]
 	for index in 3:
 		var id: String = "difficulty_"+Simulation.DIFFICULTIES[index]
 		var y := 99.0+index*88
 		_menu_control(Rect2(r.position+Vector2(35,y),Vector2(650,43)),Simulation.DIFFICULTY_NAMES[index]+(" / SELECIONADO" if selected_difficulty==Simulation.DIFFICULTIES[index] else ""),id,str(index+1),CYAN if index==1 else GOLD)
 		FieldHUD.centered(self,descriptions[index],r.position+Vector2(360,y+64),11,MUTED)
 	_menu_control(Rect2(r.position+Vector2(270,375),Vector2(180,34)),"VOLTAR","difficulty_back","ESC")
-	var footnote: String = {"residues": "Melhorias da última conclusão de Águas preservadas.", "energy": "Módulos de Águas e Resíduos preservados."}.get(selected_district, "A dificuldade fica vinculada ao checkpoint da operação.")
+	var footnote: String = {"residues": "Melhorias da última conclusão de Águas preservadas.", "energy": "Módulos de Águas e Resíduos preservados.", "core": "Módulos de Águas e Resíduos preservados."}.get(selected_district, "A dificuldade fica vinculada ao checkpoint da operação.")
 	FieldHUD.centered(self,footnote,r.position+Vector2(360,443),10,MUTED)
 
 func _draw_districts() -> void:
@@ -1177,13 +1310,15 @@ func _draw_districts() -> void:
 	]
 	for index in cards.size():
 		var data: Dictionary = cards[index]
-		var unlocked: bool = data.open
+		var unlocked: bool = _district_open(index)
+		var test_only: bool = unlocked and not data.open
 		var card := Rect2(frame.position + Vector2(24 + index * 282, 96), Vector2(268, 254))
 		FieldHUD.panel(self, card, CYAN if unlocked else MUTED)
 		FieldHUD.icon(self, data.icon, Rect2(card.position + Vector2(20, 21), Vector2(30, 36)), CYAN if unlocked else MUTED)
 		FieldHUD.text(self, data.title, card.position + Vector2(60, 44), 18, WHITE if unlocked else MUTED)
 		var done: bool = [campaign.water_completed, campaign.residues_completed, campaign.energy_completed][index]
-		FieldHUD.text(self, "RECUPERADO" if done else ("DISPONÍVEL" if unlocked else "BLOQUEADO"), card.position + Vector2(21, 82), 10, CYAN if unlocked else GOLD)
+		var status := "RECUPERADO" if done else ("LIBERADO PARA TESTE" if test_only else ("DISPONÍVEL" if unlocked else "BLOQUEADO"))
+		FieldHUD.text(self, status, card.position + Vector2(21, 82), 10, GOLD if test_only else (CYAN if unlocked else GOLD))
 		_wrapped(data.text, Rect2(card.position + Vector2(21, 103), Vector2(228, 60)), 12, WHITE if unlocked else MUTED, 18)
 		FieldHUD.text(self, data.note if unlocked else "Conclua o distrito anterior.", card.position + Vector2(21, 178), 9, GOLD)
 		if unlocked:
@@ -1191,13 +1326,25 @@ func _draw_districts() -> void:
 		else:
 			FieldHUD.inset(self, Rect2(card.position + Vector2(18, 195), Vector2(232, 39)))
 			FieldHUD.centered(self, data.lock, card.position + Vector2(134, 219), 10, MUTED)
-	# The final operation is announced but not playable yet.
 	var core := Rect2(frame.position + Vector2(24, 362), Vector2(832, 40))
+	var core_open := _district_open(3)
 	FieldHUD.inset(self, core)
-	FieldHUD.icon(self, "network", Rect2(core.position + Vector2(14, 8), Vector2(24, 24)), GOLD if campaign.energy_completed else MUTED)
-	FieldHUD.text(self, "04 / NÚCLEO AURORA", core.position + Vector2(48, 25), 13, WHITE if campaign.energy_completed else MUTED)
-	FieldHUD.text(self, "ACESSO PELO ELEVADOR DO NÚCLEO  /  EM PRODUÇÃO" if campaign.energy_completed else "CONCLUA ENERGIA  /  CONFRONTO FINAL", core.position + Vector2(240, 25), 10, GOLD if campaign.energy_completed else MUTED)
+	FieldHUD.icon(self, "network", Rect2(core.position + Vector2(14, 8), Vector2(24, 24)), GOLD if core_open else MUTED)
+	FieldHUD.text(self, "04 / NÚCLEO AURORA", core.position + Vector2(48, 25), 13, WHITE if core_open else MUTED)
+	var core_status := "CONCLUA ENERGIA PARA LIBERAR O ELEVADOR"
+	if campaign.core_completed:
+		core_status = "FINAIS VISTOS %d/2" % campaign.endings_seen.size()
+	elif campaign.energy_completed:
+		core_status = "ACESSO PELO ELEVADOR DO NÚCLEO"
+	elif core_open:
+		core_status = "LIBERADO PARA TESTE"
+	FieldHUD.text(self, core_status, core.position + Vector2(240, 25), 10, GOLD if core_open else MUTED)
+	if core_open:
+		_menu_control(Rect2(core.position + Vector2(620, 3), Vector2(204, 34)), "JOGAR NÚCLEO", "district_core", "4")
 	_menu_control(Rect2(frame.position + Vector2(340, 414), Vector2(200, 36)), "VOLTAR", "district_back", "ESC")
+	if DEV_TOOLS:
+		_menu_control(Rect2(frame.position + Vector2(616, 414), Vector2(240, 36)), "TESTE: TODOS " + ("ON" if free_select else "OFF"), "district_free", "T", GOLD)
+
 func _draw_operation_markers() -> void:
 	for index in 2:
 		var point: Vector2 = sim.operation.points[index]
@@ -1223,19 +1370,40 @@ func _draw_operation_hud() -> void:
 		for index in 3:
 			_button(Rect2(rect.position.x+22,264+index*40,420,32),choices[index],"treatment_"+str(index),false)
 		return
-	var rect := Rect2(size.x*0.5-190,size.y-115,380,62)
-	FieldHUD.panel(self, rect)
-	var prompt := "SEGURE E  /  " + sim.operation.label()
-	if sim.stage == 1: prompt = "APERTE E QUANDO O INDICADOR ESTIVER VERDE"
-	_text_center(prompt,rect.position+Vector2(190,21),10,WHITE)
-	var bar := Rect2(rect.position+Vector2(18,34),Vector2(344,10))
+	var task_mode: String = sim.operation.mode()
+	var locked: bool = sim.operation.cooldown > 0.0
+	if locked:
+		FieldHUD.prompt(self, size, "", "AGUARDE O SISTEMA REINICIAR", MAGENTA)
+		return
+	var prompt: String = sim.operation.label()
+	var hold := -1.0
+	match task_mode:
+		"timing": prompt = "PRESSIONE NO VERDE"
+		"mash": prompt = "TOQUE REPETIDAMENTE · " + prompt
+		"charge":
+			prompt = "SOLTE NO VERDE PARA PRESSURIZAR"
+			hold = 0.0
+		_:
+			hold = 0.0
+	FieldHUD.prompt(self, size, "E", prompt, GOLD if task_mode in ["timing", "charge"] else CYAN, hold)
+	var bar := Rect2(size.x * 0.5 - 206.0, size.y - 30.0, 412, 5)
 	draw_rect(bar,Color("29424a"))
-	if sim.stage == 1:
-		var width: float = 0.22 if sim.difficulty=="story" else (0.11 if sim.difficulty=="veteran" else 0.16)
-		draw_rect(Rect2(bar.position+Vector2((0.5-width)*bar.size.x,0),Vector2(width*2*bar.size.x,10)),CYAN)
-		draw_rect(Rect2(bar.position+Vector2(sim.operation.charge()*bar.size.x-2,-3),Vector2(4,16)),WHITE)
-	else:
-		draw_rect(Rect2(bar.position,Vector2(bar.size.x*sim.operation.progress,10)),CYAN)
+	match task_mode:
+		"timing":
+			var width: float = 0.22 if sim.difficulty=="story" else (0.11 if sim.difficulty=="veteran" else 0.16)
+			draw_rect(Rect2(bar.position+Vector2((0.5-width)*bar.size.x,0),Vector2(width*2*bar.size.x,bar.size.y)),CYAN)
+			draw_rect(Rect2(bar.position+Vector2(sim.operation.charge()*bar.size.x-1,-2),Vector2(2,9)),WHITE)
+		"charge":
+			# Pressure gauge: green safe band, red overpressure tail, live fill.
+			var safe_band: Vector2 = P17SectorOperation.band(sim.difficulty)
+			draw_rect(Rect2(bar.position+Vector2(safe_band.x*bar.size.x,0),Vector2((safe_band.y-safe_band.x)*bar.size.x,bar.size.y)),Color(CYAN,0.45))
+			draw_rect(Rect2(bar.position+Vector2(0.94*bar.size.x,0),Vector2(0.06*bar.size.x,bar.size.y)),Color(MAGENTA,0.6))
+			var fill: float = sim.operation.progress
+			var inside: bool = fill >= safe_band.x and fill <= safe_band.y
+			draw_rect(Rect2(bar.position,Vector2(bar.size.x*fill,bar.size.y)),CYAN if inside else GOLD)
+			draw_rect(Rect2(bar.position+Vector2(fill*bar.size.x-1,-2),Vector2(2,9)),WHITE)
+		_:
+			draw_rect(Rect2(bar.position,Vector2(bar.size.x*sim.operation.progress,bar.size.y)),CYAN)
 
 
 func _clear_pending_actions() -> void:
@@ -1243,11 +1411,6 @@ func _clear_pending_actions() -> void:
 	secondary_requested = false
 	interact_requested = false
 
-func _draw_operation_beacon() -> void:
-	if sim.state != "activation" or sim.operation.ready(): return
-	var point: Vector2 = sim.operation.target()
-	var rect := Rect2(point+Vector2(-130,-84),Vector2(260,26))
-	draw_rect(rect,Color(INK,0.94))
-	draw_rect(rect,GOLD,false,1)
-	_text_center(str(sim.operation.completed+1)+"  /  "+sim.operation.label(),rect.get_center()+Vector2(0,4),10,GOLD)
-	draw_colored_polygon(PackedVector2Array([point+Vector2(-5,-52),point+Vector2(5,-52),point+Vector2(0,-44)]),GOLD)
+func _direction(vector: Vector2) -> String:
+	if vector.length() < 45: return "●"
+	return ["→", "↘", "↓", "↙", "←", "↖", "↑", "↗"][posmod(int(round(vector.angle() / (PI / 4.0))), 8)]

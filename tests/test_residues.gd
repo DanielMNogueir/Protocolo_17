@@ -12,6 +12,9 @@ func _run() -> void:
 	root.add_child(game)
 	game.set_physics_process(false)
 	await process_frame
+	_check(game.state == "dialogue" and game.dialogue_line().speaker == "radio", "district opens with Major 0 on the radio")
+	game._finish_dialogue()
+	_check(game.state == "play", "closing the briefing starts the operation")
 	_check(M.walkable(M.START, 14.0, 0, game.cleared), "start stands on the avenue")
 	_check(M.walkable(Vector2(1440, 550) * M.SCALE, 14.0, 0, game.cleared), "whole public avenue stays accessible")
 	_check(not M.walkable(Vector2(410, 680) * M.SCALE, 14.0, 0, game.cleared), "warehouse roof is not traversable")
@@ -71,6 +74,8 @@ func _run() -> void:
 		if enemy.zone == 2: enemy.hp = 0
 	if not _travel(game, M.TERMINALS[2], 55): return
 	game._interact(1.5, true, false)
+	_check(game.stage == 3 and game.state == "dialogue" and game.after_dialogue == "victory", "final terminal opens the closing conversation")
+	game._finish_dialogue()
 	_check(game.stage == 3 and game.state == "victory", "physical street and dock traversal completes district")
 	set_meta("p17_residue_handoff", {"difficulty": "veteran", "upgrades": ["reserve_cell", "induction_coil", "water_stride"]})
 	var transferred: Node2D = load("res://scenes/residues.tscn").instantiate()

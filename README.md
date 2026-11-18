@@ -1,6 +1,6 @@
 # Protocolo 17 — Aurora
 
-Beta candidata **0.2.2** em Godot 4.7.1. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. O **Distrito de Resíduos** é desbloqueado permanentemente após concluir Águas.
+Beta candidata **0.2.2** em Godot 4.7.2. Lia recupera o Distrito das Águas de Aurora: captação, energia, filtragem e distribuição. A operação combina ação em visão superior, tarefas ambientais, melhorias e confronto final, ligada ao ODS 6 — água potável e saneamento. O **Distrito de Resíduos** é desbloqueado permanentemente após concluir Águas.
 
 ## Seleção de distritos — 0.2.2
 
@@ -31,11 +31,11 @@ Após a vitória em Águas, selecione **Seguir ao Distrito de Resíduos**. Tamb�
 - **Central Solar Aurora:** atire nos espelhos para levar o feixe ao coletor. Depois faça a **Sobrecarga**: três toques de E na faixa verde, que se move e encolhe. Errar descarrega e trava o console.
 - **Torre de Distribuição Norte:** atravesse os arcos rítmicos do corredor e destrua o transformador que dá escudo aos drones. Energize os três relés com tiros dentro da janela e estabilize a rede oscilante.
 - **Banco de Baterias Central:** fique no anel para carregar a reserva enquanto alivia as células críticas nos consoles, sob quatro ondas.
-- **Elevador do Núcleo:** encerra a operação.
+- **Elevador do Núcleo:** segure E para salvar o progresso de Energia e subir ao confronto final.
 
-Os três fragmentos do registro de Beatrix fecham a história do comando redigido. A vitória salva a campanha; o card **04 / NÚCLEO AURORA** aparece como "em produção".
+Os três fragmentos do registro de Beatrix revelam que os comandos vieram da própria rede. Depois de concluir Energia, o card **04 / NÚCLEO AURORA** fica disponível na seleção de distritos.
 
-A arte atual é provisória, desenhada em código sobre a geometria final. Os prompts do Codex estão em [assets/power/PROMPTS.md](assets/power/PROMPTS.md); o jogo troca para os setores pintados assim que os arquivos existirem.
+Energia usa setores pintados para os estados apagado e ligado. A direção visual está em [assets/power/PROMPTS.md](assets/power/PROMPTS.md).
 
 ![Sobrecarga na Central Solar](captures/energia/03-sobrecarga.png)
 
@@ -50,6 +50,25 @@ Testes: `test_power_mechanics`, `test_power`, `test_power_collision`, `test_powe
 [Visão geral do bairro](captures/residuos/06-bairro-completo.png) · [Vista em 960×540](captures/residuos/08-triagem-960.png) · [Auditoria de colisões](captures/residuos/09-colisoes.png) · [Fontes da arte](assets/residues/README.md).
 
 Resíduos reutiliza as poses, o recuo, o clarão e o pulso de Águas. Os galpões têm pisos de trabalho abertos, a triagem possui uma entrada ampla e os biodigestores deixam uma passagem central. Jogador, robôs e projéteis consultam a mesma geometria; esquivas verificam todo o deslocamento. O fundo usa quatro setores de 1536×1024, cobrindo o bairro em 3072×2048 sem aumentar a escala da personagem.
+
+## Núcleo Aurora
+
+Leia o canal de comando na Galeria e suba à Coroa da Torre. Na arena, derrube os quatro pilares com **E** na faixa verde, atire nos espelhos para alinhar o feixe solar e ataque o núcleo exposto enquanto desvia das rajadas.
+
+Depois do confronto, pressione **E** perto de cada console para ouvir os argumentos. Segure **E por 2,5 segundos** junto ao console ciano para isolar o núcleo ou ao magenta para liberar a rede. Após o epílogo e os créditos, use **R** na tela da campanha para voltar à escolha. Os dois finais ficam registrados no perfil.
+
+No modo Fácil, **R** após uma derrota retoma a fase atual do chefe. No Médio e no Difícil, retoma o início da arena. Os módulos conquistados em Águas e Resíduos continuam equipados. O módulo de guia fica em **Configurações** e tem três intensidades. Nessa tela também é possível desligar a trilha pontilhada ou ampliar o texto do HUD para 125%. Use **M** para consultar o objetivo no mapa e **Esc** para consultar o objetivo na pausa.
+
+A arte e as medidas da fase estão em [assets/core](assets/core) e [na direção visual](docs/direcao-visual/nucleo-aurora.md). Para verificar o percurso e gerar as capturas nas duas resoluções:
+
+```bash
+godot --headless --path . --audio-driver Dummy --script tests/test_core.gd
+godot --path . --script tools/review_core.gd
+```
+
+## Comportamento dos drones
+
+Em Águas e Resíduos, os drones patrulham, alertam aliados próximos e procuram Lia no último ponto em que a viram. Um **!** sinaliza o alerta e um **?** sinaliza a busca. Os avisos de ataque dão tempo para mudar de posição. Em dificuldades maiores, mais drones podem atacar juntos e os disparos antecipam parte do movimento de Lia.
 
 ## Dificuldades
 
