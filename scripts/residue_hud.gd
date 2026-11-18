@@ -24,6 +24,7 @@ func _draw() -> void:
 	if game.stage < 3: status += "  •  ETAPA %d/%d" % [mini(beats.done + 1, beats.labels.size()), beats.labels.size()]
 	if beats.drones > 0: status += "  •  %d DRONE%s" % [beats.drones, "" if beats.drones == 1 else "S"]
 	FieldHUD.mission(self, size.x, ["CENTRO DE TRIAGEM", "USINA DE RECICLAGEM", "UNIDADE DE COMPOSTAGEM", "DISTRITO RECUPERADO"][game.stage], game.objective_label().get_slice("  /  ", 0), status, game.stage, mini(game.stage, 3), 3, "recycle", game.objective_guide, game.clock)
+	if game.state == "play": FieldHUD.instruction(self, size.x, game.objective_howto())
 	FieldHUD.abilities(self, size.y, game.secondary_cd, 3.8, game.dash_cd, game.dash_recharge)
 	FieldHUD.navigation(self, "RESÍDUOS / AURORA", "RECUPERAÇÃO INDUSTRIAL", game.pointer)
 	if game.state == "play":

@@ -927,6 +927,30 @@ func objective_label() -> String:
 			return "SEGURAR A CARGA NO ANEL  /  %d%%" % int(battery.charge * 100.0)
 	return "ELEVADOR DO NÚCLEO  /  SEGURE E"
 
+## The same beat as objective_label(), spelled out for someone who has never
+## seen the mechanic: what to shoot, where to stand, what to press and when.
+func objective_howto() -> String:
+	var key := Gamepad.hint("E")
+	match stage:
+		0:
+			if not mirrors.solved: return "Atire em cada espelho solar para girá-lo. Gire até o feixe de luz apontar para o próximo espelho; o último espelho deve mandar a luz para o coletor."
+			if zone_alive(0) > 0: return "Destrua os drones da Central Solar. O terminal só libera sem drones por perto."
+			return "Vá até o terminal e aperte %s. Aperte %s de novo sempre que o marcador estiver dentro da faixa verde (3 vezes). Fora do verde, você leva um choque." % [key, key]
+		1:
+			if pos.x < 900 * M.SCALE: return "Atravesse o corredor quando os arcos elétricos entre os postes apagarem. Quando eles brilham e zumbem, o choque está vindo: espere ou use a esquiva."
+			if _alive_kind(1, "transformer"): return "Destrua o transformador corrompido. Enquanto ele existir, os drones próximos ficam com escudo azul."
+			if not relays.solved: return "Atire nos 3 relés da torre. Cada relé fica aceso por %d segundos: acenda os três antes que o primeiro apague." % int(relays.window)
+			if zone_alive(1) > 0: return "Destrua os drones da torre. O terminal só libera sem drones por perto."
+			return "Vá até o terminal da torre e aperte %s quando o marcador estiver na faixa verde (3 vezes). A faixa muda de velocidade." % key
+		2:
+			if not battery.started: return "Entre no anel de recarga no centro da sala. A bateria só carrega enquanto você estiver dentro do anel."
+			for i in 3:
+				if battery.danger(i):
+					var seconds := ceili(maxf(0.0, 1.0 - battery.cells[i]) / maxf(battery.surge_rate, 0.001))
+					return "A célula %d vai estourar em %d s! Corra até o console da célula %d (marcado em vermelho), aperte %s e volte para o anel." % [i + 1, seconds, i + 1, key]
+			return "Fique dentro do anel até a carga chegar a 100%%. Se uma célula ficar vermelha, vá ao console dela e aperte %s antes que estoure." % key
+	return "Vá até o elevador do núcleo e segure %s para subir." % key
+
 func _alive_kind(zone: int, kind: String) -> bool:
 	for enemy in enemies:
 		if enemy.zone == zone and enemy.kind == kind and enemy.hp > 0: return true

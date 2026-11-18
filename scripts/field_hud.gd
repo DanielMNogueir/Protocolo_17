@@ -161,6 +161,38 @@ static func mission(c: CanvasItem, width: float, title: String, detail: String, 
 		edge(c, rect, Color(GOLD, guide.highlight), 1, 5)
 
 
+## Plain-language "how to" for the current beat, right under the mission card,
+## so a first-time player reads exactly what to do (shoot it, stand in it,
+## run to it before the time runs out). Returns the bottom edge of the panel.
+static func instruction(c: CanvasItem, width: float, value: String, accent: Color = CYAN) -> float:
+	if value.is_empty(): return mission_rect(width).end.y
+	var mission := mission_rect(width)
+	var lines := wrap_lines(value, mission.size.x - 24, 11)
+	var rect := Rect2(mission.position + Vector2(0, mission.size.y + 6), Vector2(mission.size.x, 24 + lines.size() * 15))
+	compact_panel(c, rect, accent)
+	text(c, "COMO FAZER", rect.position + Vector2(12, 15), 8, accent)
+	for i in lines.size():
+		text(c, lines[i], rect.position + Vector2(12, 31 + i * 15), 11)
+	return rect.end.y
+
+static func wrap_lines(value: String, width: float, size: int, max_lines: int = 3) -> PackedStringArray:
+	var font := ThemeDB.fallback_font
+	var lines := PackedStringArray()
+	var line := ""
+	for word in value.split(" ", false):
+		var candidate := word if line.is_empty() else line + " " + word
+		if line.is_empty() or font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size(size)).x <= width:
+			line = candidate
+		else:
+			lines.append(line)
+			line = word
+	if not line.is_empty(): lines.append(line)
+	if lines.size() > max_lines:
+		lines.resize(max_lines)
+		lines[max_lines - 1] = fit(lines[max_lines - 1] + "…", width, size)
+	return lines
+
+
 const CAMPAIGN := ["ÁGUAS", "RESÍDUOS", "ENERGIA", "NÚCLEO"]
 const CAMPAIGN_RECT := Rect2(312, 96, 236, 62)
 const VITAL_RECT := Rect2(12, 12, 204, 56)

@@ -45,6 +45,23 @@ static func label(sim: P17Simulation) -> String:
 		return "%s  /  %s" % [sim.operation.label(), hint % Gamepad.hint("E")]
 	return "RESTAURAR %s  /  SEGURE %s" % [Objectives.SYSTEMS[sim.stage], Gamepad.hint("E")]
 
+## The current beat spelled out for a first-time player (empty when the
+## sector is already restored).
+static func howto(sim: P17Simulation) -> String:
+	var key := Gamepad.hint("E")
+	if sim.restored > sim.stage: return ""
+	if sim.state == "combat":
+		if sim.operation.completed > 0: return "Reforços chegaram! Destrua os drones que vieram defender o setor para continuar o reparo."
+		return "Destrua todos os drones do setor. Mire com o mouse e atire com o botão esquerdo. A seta mostra o drone mais próximo."
+	if sim.operation.wants_treatment(sim.pos): return "Escolha o tratamento da amostra com as teclas 1 a 3. Se a amostra tiver sólidos, a escolha certa é a filtração." if not Gamepad.active else "Escolha o tratamento da amostra e confirme com A. Se a amostra tiver sólidos, a escolha certa é a filtração."
+	if not sim.operation.ready():
+		match sim.operation.mode():
+			"mash": return "Vá até o ponto marcado e aperte %s várias vezes, bem rápido, para soltar a grade. Se você parar, ela volta a travar." % key
+			"timing": return "Vá até o ponto marcado e aperte %s quando o marcador passar pela faixa verde. Fora do verde, a sincronia falha." % key
+			"charge": return "Vá até o ponto marcado e segure %s para subir a pressão. Solte quando o ponteiro estiver dentro da faixa verde." % key
+		return "Vá até o ponto marcado e segure %s até a barra encher." % key
+	return "Vá até o terminal do setor e segure %s até restaurar o sistema." % key
+
 static func task_place(sim: P17Simulation) -> String:
 	var name: String = sim.operation.label()
 	return name.substr(name.find(" ") + 1).trim_prefix("A ").trim_prefix("O ").trim_prefix("AS ").trim_prefix("OS ")

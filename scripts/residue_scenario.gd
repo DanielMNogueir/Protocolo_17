@@ -556,6 +556,21 @@ func objective_label() -> String:
 			return "DERROTAR A COLETORA PESADA" if enemy.boss else "NEUTRALIZAR DRONES DE COLETA"
 	return "RESTAURAR O TERMINAL  /  SEGURE E"
 
+## The current beat spelled out for a first-time player.
+func objective_howto() -> String:
+	var key := Gamepad.hint("E")
+	if stage == 3: return ""
+	if stage == 0:
+		if carried >= 0: return "Leve o %s até a baia com o mesmo nome e aperte %s para depositar. Baia errada trava as baias e chama um drone." % [M.MATERIALS[carried], key]
+		for value in sorted:
+			if not value: return "Pegue um material da esteira apertando %s perto dele. Depois leve até a baia com o mesmo nome (metal, plástico, vidro ou orgânico)." % key
+	if stage == 1 and not (cleared[0] and cleared[1]): return "Vá até o entulho marcado e segure %s até a barra encher para liberar a rota da prensa." % key
+	if stage == 2 and not (cleared[2] and cleared[3]): return "Vá até o duto entupido marcado e segure %s até a barra encher." % key
+	for enemy in enemies:
+		if enemy.zone == stage and enemy.hp > 0:
+			return "Destrua a coletora pesada. Desvie dos ataques com a esquiva e atire sem parar." if enemy.boss else "Destrua os drones desta área. O terminal só libera sem drones por perto."
+	return "Vá até o terminal e segure %s até restaurar o sistema." % key
+
 func objective_point() -> Vector2:
 	if stage == 3: return M.TERMINALS[2]
 	if stage == 0:

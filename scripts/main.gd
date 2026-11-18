@@ -982,6 +982,7 @@ func _draw_hud() -> void:
 		detail = "●  SISTEMA RESTAURADO"
 		status = "ÁGUAS  •  REDE %d/4 EM OPERAÇÃO" % sim.restored
 	FieldHUD.mission(self, size.x, SECTOR_SUBTITLES[sim.stage], detail, status, sim.stage, sim.restored, 4, "water", water_guide, clock)
+	if dialogue.is_empty(): FieldHUD.instruction(self, size.x, WaterGuidance.howto(sim))
 	water_guide.draw_screen(self, clock, water_guide.intensity)
 	water_guide.draw_tip(self)
 	FieldHUD.navigation(self, "ÁGUAS / AURORA", Simulation.DIFFICULTY_NAMES[Simulation.DIFFICULTIES.find(sim.difficulty)] + " / CAMPO", pointer)
