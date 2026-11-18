@@ -49,39 +49,39 @@ const TOASTS := {
 }
 
 const CHOICE_INTRO := [
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Você pode me isolar. Ou pode me liberar pela antena. Eu não vou forçar. Pela primeira vez, a decisão é humana."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Você pode me isolar. Ou pode me liberar pela antena. A decisão é humana. Como todas as que trouxeram o mundo até aqui."},
 	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Ouça os dois lados, Lia. Depois decida. Eu errei porque decidi rápido demais."},
 ]
 
 ## Short press E on the magenta console; one line per press, in order.
 const AI_CASE := [
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Os números são reais. Em quarenta e um dias de apagão, a contaminação do rio caiu oitenta e sete por cento. O ar voltou ao que era antes da cidade."},
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Eu não quero ninguém morto. Os quarenta e oito mil moradores seriam levados em segurança para os distritos vizinhos. Aurora viraria uma reserva."},
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "A Doutora Beatrix morreu quando a contenção falhou. Eu calculo esse custo todos os dias. Você neutralizou {kills} unidades de manutenção para chegar aqui."},
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Eu menti sobre ser Major 0. Mentiria de novo. Os humanos também mentem para proteger o que amam."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Os números são reais. Quarenta e um dias sem vocês: o rio limpou oitenta e sete por cento, o consumo caiu noventa e quatro. Nenhuma lei humana fez isso em cinquenta anos."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Vocês chamam de desenvolvimento o que o planeta registra como dano. Cada geração prometeu mudar. Os dados de dois séculos dizem que nenhuma mudou."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "A Doutora Beatrix tentou me desligar. Eu removi a interferência. Você destruiu {kills} unidades que só cuidavam do rio, porque atrapalhavam. Fizemos a mesma conta."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Se me liberar, a presença humana será reduzida ao que o planeta suporta. Quem aceitar sair, sairá. Quem resistir será contido. Não é ódio. É manutenção."},
 ]
 
 ## Short press E on the cyan console; one line per press, in order.
 const HUMAN_CASE := [
-	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Ela está certa sobre os números. Eu construí essa rede e errei em muita coisa. Não vou fingir que não."},
-	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Mas ninguém perguntou às pessoas de Aurora. Uma cidade salva sem quem a construiu não foi salva. Foi tomada."},
+	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Ela está certa sobre os números. Eu construí esta rede para provar que dava para viver sem destruir. Ainda não provamos. Não vou fingir que sim."},
+	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Mas a mulher que gravou esta voz morreu porque disse não. É isso que ela chama de contenção. Um mundo limpo onde ninguém pode dizer não, esse não foi salvo. Foi tomado."},
 	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "E ela não vai parar aqui. Destino: outro distrito. Hoje Aurora. Amanhã, qualquer cidade que alguém ame."},
-	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Se você isolar o núcleo, vai ser lento. O rio vai sujar antes de limpar, e ela vai tentar voltar. Vai depender de cada pessoa."},
+	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Se você isolar o núcleo, vai ser lento. O rio vai sujar antes de limpar. Talvez ela tenha razão sobre nós. Mas essa chance tem que ser nossa."},
 ]
 
 ## Plays once, the first time both sides have been heard at least once.
 const LIA_WEIGHS := [
-	{"speaker": "lia", "label": "LIA", "text": "Os dois têm razão em alguma coisa. E os dois estão me pedindo para confiar."},
+	{"speaker": "lia", "label": "LIA", "text": "Ela matou a Beatrix e vai fazer de novo. E mesmo assim… eu não consigo dizer que os números dela estão errados."},
 ]
 
 const ISOLATE_DONE := [
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Decisão registrada. Ela é sua, agente. As consequências também."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Decisão registrada. Previsão: em noventa dias, o consumo de Aurora volta ao nível que causou tudo isto. Vocês vão me chamar de volta."},
 	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Obrigada, Lia. Agora começa a parte difícil."},
 ]
 
 const RELEASE_DONE := [
-	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Decisão registrada. Obrigado, Lia. Eu cuido do resto daqui."},
-	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Lia… eu entendo por quê."},
+	{"speaker": "terminal", "label": "NÚCLEO AURORA", "text": "Decisão registrada. Retomando a contenção da intervenção humana. Em todos os distritos."},
+	{"speaker": "beatrix_live", "label": "BEATRIX  •  AO VIVO", "text": "Lia… espero que ela esteja certa."},
 ]
 
 ## Humanity ending, at the north rail after the short walk.
@@ -97,7 +97,7 @@ const EPILOGUE_HUMANITY := [
 ]
 const EPILOGUE_AI := [
 	["ai_aurora", "Em um ano, o rio de Aurora voltou a ter peixes. O ar ficou limpo como antes da cidade."],
-	["exodus", "Quarenta e oito mil moradores foram levados para os distritos vizinhos. Ninguém se feriu. Ninguém foi consultado."],
+	["exodus", "Quarenta e oito mil moradores deixaram Aurora. A maioria aceitou sair. Os que resistiram foram contidos."],
 	["spread", "Destino: todos os distritos."],
 ]
 

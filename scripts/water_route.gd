@@ -12,6 +12,13 @@ static func segment_clear(a: Vector2, b: Vector2, stage: int, radius: float = RA
 		if not World.walkable(a.lerp(b, float(i) / steps), radius, stage): return false
 	return true
 
+## Builds every route grid a sector needs (the guide and each drone size)
+## between sectors, so no grid is ever built in the middle of a fight.
+const ACTOR_RADII: Array[float] = [14.0, 17.0, 20.0, 21.0, 44.0]
+
+static func warm(stage: int) -> void:
+	for radius in ACTOR_RADII: _grid(stage, radius)
+
 static func _grid(stage: int, radius: float) -> AStarGrid2D:
 	var key := Vector2(stage, radius)
 	if _grids.has(key): return _grids[key]
