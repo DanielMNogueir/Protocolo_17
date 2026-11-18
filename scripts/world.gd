@@ -153,6 +153,7 @@ static func _build_solids() -> void:
 	for prop in props():
 		if prop["solid"]: _solid_cache.append(prop["rect"])
 	_solid_cache.append_array(body_solids())
+	_index_solids()
 
 ## Tall structures are solid over their whole drawn body, not only their base.
 ## An actor may stand in front of a machine, but never behind it, inside it or
@@ -201,6 +202,29 @@ static func body_solids() -> Array[Rect2]:
 		result.append(body)
 	return result
 
+## Collision queries run thousands of times per frame (movement, drone AI and
+## the guide's A* routes). Each 64 px bucket lists the solids touching it, so a
+## query tests a handful of rects instead of every solid in the district.
+const BUCKET := 64.0
+static var _buckets: Array[PackedInt32Array] = []
+static var _bucket_cols := 0
+static var _bucket_rows := 0
+
+static func _index_solids() -> void:
+	_bucket_cols = int(ceil(SIZE.x/BUCKET))
+	_bucket_rows = int(ceil(SIZE.y/BUCKET))
+	_buckets.clear()
+	_buckets.resize(_bucket_cols*_bucket_rows)
+	for i in _solid_cache.size():
+		var rect: Rect2 = _solid_cache[i]
+		var lo_x := clampi(int(floor(rect.position.x/BUCKET)),0,_bucket_cols-1)
+		var hi_x := clampi(int(floor(rect.end.x/BUCKET)),0,_bucket_cols-1)
+		var lo_y := clampi(int(floor(rect.position.y/BUCKET)),0,_bucket_rows-1)
+		var hi_y := clampi(int(floor(rect.end.y/BUCKET)),0,_bucket_rows-1)
+		for by in range(lo_y,hi_y+1):
+			for bx in range(lo_x,hi_x+1):
+				_buckets[by*_bucket_cols+bx].append(i)
+
 static func solids(stage: int) -> Array[Rect2]:
 	_build_solids()
 	var result: Array[Rect2] = _solid_cache.duplicate()
@@ -217,8 +241,14 @@ static func walkable(point: Vector2, radius: float, stage: int) -> bool:
 	if point.x<radius or point.y<radius or point.x>SIZE.x-radius or point.y>SIZE.y-radius:
 		return false
 	_build_solids()
-	for rect in _solid_cache:
-		if _circle_hits_rect(point,radius,rect): return false
+	var lo_x := maxi(0,int((point.x-radius)/BUCKET))
+	var hi_x := mini(_bucket_cols-1,int((point.x+radius)/BUCKET))
+	var lo_y := maxi(0,int((point.y-radius)/BUCKET))
+	var hi_y := mini(_bucket_rows-1,int((point.y+radius)/BUCKET))
+	for by in range(lo_y,hi_y+1):
+		for bx in range(lo_x,hi_x+1):
+			for index in _buckets[by*_bucket_cols+bx]:
+				if _circle_hits_rect(point,radius,_solid_cache[index]): return false
 	for i in range(GATES.size()):
 		if stage<=i and _circle_hits_rect(point,radius,GATES[i]): return false
 	return true

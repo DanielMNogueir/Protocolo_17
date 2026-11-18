@@ -84,6 +84,7 @@ var _particle_serial: int = 0
 func start(stage_index: int = 0, level: String = "operation") -> void:
 	difficulty = level if level in DIFFICULTIES else "operation"
 	stage = clampi(stage_index, 0, 3)
+	WaterRoute.warm(stage)
 	restored = stage
 	chosen.clear()
 	elapsed = 0.0
@@ -587,6 +588,7 @@ func choose_upgrade(index: int) -> bool:
 	chosen.append(id)
 	_apply_upgrade(id, true)
 	stage += 1
+	WaterRoute.warm(stage)
 	# Only the next gate changes. Lia stays at the terminal she just repaired.
 	_begin_encounter(false)
 	return true
