@@ -61,7 +61,9 @@ func _run() -> void:
 	# Lia directly north of the distribution terminal is covered by it.
 	var terminal := World.terminal(3)
 	var behind := Vector2(terminal.visual_bounds.get_center().x, terminal.depth_anchor.y - 45.0)
-	check(World.walkable(behind, 14.0, 4), "Spot behind the distribution terminal is walkable")
+	# Water structures are solid over their whole body: nobody can stand there.
+	check(not World.walkable(behind, 14.0, 4), "Nobody stands behind the distribution terminal")
+	# The silhouette still works if something ever ends up there.
 	var behind_rect := Occlusion.lia_rect(behind)
 	check(Occlusion.is_hidden(behind_rect, behind.y + 14.0, water), "Silhouette behind the distribution terminal")
 	check(not Occlusion.is_hidden(Occlusion.lia_rect(World.START), World.START.y + 14.0, water), "No silhouette on the open quay")

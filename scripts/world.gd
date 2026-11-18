@@ -28,7 +28,7 @@ const SPAWNS := [
 	[Vector2(740,1330),Vector2(955,1260),Vector2(510,1480)],
 	[Vector2(560,610),Vector2(920,455),Vector2(740,490),Vector2(410,670)],
 	[Vector2(1620,590),Vector2(1910,460),Vector2(2200,720),Vector2(2310,540),Vector2(2050,540)],
-	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1900,1540),Vector2(2110,1370)],
+	[Vector2(1890,1140),Vector2(2220,1210),Vector2(2260,1510),Vector2(1900,1531),Vector2(2120,1370)],
 ]
 ## The only bridge crosses the river; the other two gates stand in openings
 ## of the walls that divide each bank.
@@ -38,7 +38,7 @@ const GATES: Array[Rect2] = [Rect2(682,919,176,22),Rect2(1289,522,22,176),Rect2(
 const PIER := Rect2(370,1680,140,90)
 const ROUTES := [
 	[START,Vector2(690,1570),Vector2(690,1190),GOALS[0]],
-	[GOALS[0],Vector2(870,1070),Vector2(770,1070),Vector2(770,730),Vector2(850,730),Vector2(1030,520),Vector2(1030,450),GOALS[1]],
+	[GOALS[0],Vector2(910,1190),Vector2(910,965),Vector2(770,965),Vector2(770,730),Vector2(850,730),Vector2(1030,520),Vector2(1030,450),GOALS[1]],
 	[GOALS[1],Vector2(1030,450),Vector2(1030,610),Vector2(1530,610),Vector2(2110,610),GOALS[2]],
 	[GOALS[2],Vector2(2040,600),Vector2(2040,1110),Vector2(2110,1110),GOALS[3]],
 ]
@@ -152,6 +152,69 @@ static func _build_solids() -> void:
 	_solid_cache.append_array(EnergyStation.COLLISION_RECTS)
 	for prop in props():
 		if prop["solid"]: _solid_cache.append(prop["rect"])
+	_solid_cache.append_array(body_solids())
+
+## Tall structures are solid over their whole drawn body, not only their base.
+## An actor may stand in front of a machine, but never behind it, inside it or
+## against its sides, so Lia and the drones are never drawn over the art nor
+## hidden inside it. The margins match the sprite boxes in occlusion.gd: the
+## sprite reaches 3 px wider than the collision circle on each side and 2 px
+## lower than it (Lia: 17 px half width and 16 px below the feet, radius 14;
+## drones: 20 px and 14 px, radius 17).
+## The body stops one player radius above the base's front edge: the base
+## itself still blocks there, and an actor in front of the machine (drawn over
+## it) can pass close to its front corners instead of hitting a square corner
+## of transparent pixels.
+const BODY_SIDE := 3.0
+const BODY_TOP := 2.0
+const BODY_FRONT_CLEARANCE := 14.0
+
+static func body_rect(visual: Rect2, base: Rect2) -> Rect2:
+	var top := visual.position.y - BODY_TOP
+	var bottom := maxf(base.end.y - BODY_FRONT_CLEARANCE, top + 1.0)
+	return Rect2(visual.position.x - BODY_SIDE, top, visual.size.x + BODY_SIDE * 2.0, bottom - top)
+
+## Everything an actor cannot stand on for one structure: base plus body.
+static func solid_footprint(visual: Rect2, base: Rect2) -> Rect2:
+	return base.merge(body_rect(visual, base))
+
+static func body_solids() -> Array[Rect2]:
+	var result: Array[Rect2] = []
+	var tall: Array[Dictionary] = []
+	tall.append_array(building_objects())
+	tall.append(clarifier())
+	for prop in props():
+		if prop["solid"]: tall.append(prop)
+	for index in [0,2,3]: tall.append(terminal(index))
+	for item in tall:
+		var visual: Rect2 = item.visual_bounds
+		var base: Rect2 = item.collision_rect
+		result.append(body_rect(visual, base))
+	var station_visuals: Array[Rect2] = [EnergyStation.CONTROL_VISUAL, EnergyStation.GENERATOR_VISUAL, EnergyStation.TERMINAL_VISUAL]
+	for i in station_visuals.size():
+		var body := body_rect(station_visuals[i], EnergyStation.COLLISION_RECTS[i])
+		if i == 1:
+			# The generator's lower right corner is transparent (STRUCTURE_CONTOURS[5])
+			# and the repair terminal stands in it: stop the body where Lia's circle
+			# reaches the terminal's interaction point.
+			body.end.x = minf(body.end.x, EnergyStation.INTERACTION_POINT.x - 14.0)
+		result.append(body)
+	result.append_array(sign_solids())
+	return result
+
+## Each terminal's sign stands on metal legs above the machine and is drawn
+## over everything: it is part of the structure, so nobody stands where the
+## sign would cover them. From 2 px above the sign down to where a sprite's top
+## (50 px above Lia's feet) clears the sign's lower edge, minus the radius.
+const SIGN_CLEARANCE := 36.0
+
+static func sign_solids() -> Array[Rect2]:
+	var result: Array[Rect2] = []
+	for index in range(GOALS.size()):
+		var sign: Rect2 = Objectives.sign_rect(GOALS[index], index)
+		var top := sign.position.y - BODY_TOP
+		result.append(Rect2(sign.position.x - BODY_SIDE, top, sign.size.x + BODY_SIDE * 2.0, sign.end.y + SIGN_CLEARANCE - top))
+	return result
 
 static func solids(stage: int) -> Array[Rect2]:
 	_build_solids()
@@ -181,6 +244,8 @@ static func projectile_solids(stage: int) -> Array[Rect2]:
 	for channel_piece in Wetlands.channel_solids(): result.erase(channel_piece)
 	# Low retaining lips stop feet; pulses pass over them just like open drains.
 	for wall in Architecture.walls: result.erase(wall.collision_rect)
+	# Shots pass under a sign's legs; only the machines themselves stop them.
+	for sign in sign_solids(): result.erase(sign)
 	return result
 
 static func _circle_hits_rect(point: Vector2, radius: float, rect: Rect2) -> bool:

@@ -43,7 +43,8 @@ func _run() -> void:
 	check(World.building_objects().size() == 6, "Six machines expose independent placements")
 	for building in World.building_objects():
 		check(building.visual_bounds.encloses(building.collision_rect), "Local footprint belongs to its visible equipment")
-	check(World.walkable(Vector2(300, 250), 14.0, 3), "Transparent upper structure area is no longer a giant solid rectangle")
+	# The drawn body of a machine is solid too: nobody walks behind or over it.
+	check(not World.walkable(Vector2(300, 250), 14.0, 3), "The control room's drawn body is solid behind its base")
 	var sortable := World.sortable_objects(Rect2(Vector2.ZERO, World.SIZE))
 	var building_count := 0
 	var prop_count := 0

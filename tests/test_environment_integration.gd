@@ -51,17 +51,19 @@ func _run() -> void:
 		check(not W.walkable(r.get_center(),1,3),"Physical footprint blocks ground occupancy: %s" % r)
 		check(record.visual_bounds.grow(2).encloses(r),"Footprint fits the visible base")
 		check(is_equal_approx(record.depth_anchor.y,r.end.y),"Depth belongs to the base, not the image center")
-		var perimeter := r.grow(S.PLAYER_RADIUS+4)
+		# The whole drawn body is solid (World.body_rect), so walk around it.
+		var solid := W.solid_footprint(record.visual_bounds, r)
+		var perimeter := solid.grow(S.PLAYER_RADIUS+4)
 		var corners := [perimeter.position,Vector2(perimeter.end.x,perimeter.position.y),perimeter.end,Vector2(perimeter.position.x,perimeter.end.y)]
 		for index in range(4): walk_edge(sim,corners[index],corners[(index+1)%4])
 		# Hit the base from every reachable side with the same movement API as play.
 		for side in [Vector2.LEFT,Vector2.RIGHT,Vector2.UP,Vector2.DOWN]:
-			var half := r.size*0.5
-			var start: Vector2 = r.get_center()+side*(half+Vector2(S.PLAYER_RADIUS+6,S.PLAYER_RADIUS+6))
+			var half := solid.size*0.5
+			var start: Vector2 = solid.get_center()+side*(half+Vector2(S.PLAYER_RADIUS+6,S.PLAYER_RADIUS+6))
 			if not W.walkable(start,S.PLAYER_RADIUS,3): continue
 			sim.pos = start
 			sim.velocity = Vector2.ZERO
-			for frame in 30: sim.tick(1.0/120,-side,r.get_center(),false,false,false)
+			for frame in 30: sim.tick(1.0/120,-side,solid.get_center(),false,false,false)
 			check(W.walkable(sim.pos,S.PLAYER_RADIUS,3),"Pressing against the base never enters it")
 			check(not r.has_point(sim.pos),"Low equipment cannot be crossed")
 			blocker_checks += 1
@@ -90,9 +92,10 @@ func _run() -> void:
 	var base: Rect2 = tank.collision_rect
 	var visual: Rect2 = tank.visual_bounds
 	var high_y := visual.position.y+visual.size.y*0.55
-	check(sim._wall_fraction(Vector2(200,high_y),Vector2(320,high_y),0)==INF,"Shots can cross the walkable space behind a tall tank")
+	# The whole drawn tank is solid: shots hit it and nobody walks behind it.
+	check(sim._wall_fraction(Vector2(200,high_y),Vector2(320,high_y),0)!=INF,"Shots hit the drawn body of a tall tank")
 	check(sim._wall_fraction(Vector2(200,base.get_center().y),Vector2(320,base.get_center().y),0)!=INF,"The same tank base blocks swept projectiles")
-	check(W.walkable(Vector2(260,high_y),14,3),"Lia can walk behind the upper tank silhouette")
+	check(not W.walkable(Vector2(260,high_y),14,3),"Lia cannot walk behind the upper tank silhouette")
 	var sortable := W.sortable_objects(Rect2(Vector2.ZERO,W.SIZE))
 	var categories := {}
 	for object in sortable: categories[object.type]=categories.get(object.type,0)+1

@@ -9,9 +9,9 @@ const LABELS := [
 	["ABRIR A REDE NORTE", "ABRIR A REDE SUL"],
 ]
 const POINTS := [
-	[Vector2(660,1490), Vector2(800,1110)],
+	[Vector2(660,1490), Vector2(712,1110)],
 	[Vector2(670,660), Vector2(940,480)],
-	[Vector2(1700,520), Vector2(2240,480)],
+	[Vector2(1700,520), Vector2(2265,480)],
 	[Vector2(1960,1170), Vector2(2190,1530)],
 ]
 ## Each sector asks for a different gesture on E, matching its machine:

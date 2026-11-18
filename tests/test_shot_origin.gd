@@ -51,8 +51,10 @@ func _run() -> void:
 	# Use the pump's physical base, not the now-walkable upper sprite rectangle.
 	sim.start()
 	var pump: Rect2 = World.props()[2].collision_rect
+	var pump_solid := World.solid_footprint(World.props()[2].visual_bounds, pump)
 	var left_muzzle: Vector2 = LiaPose.pose(Vector2.LEFT,0,false).muzzle
-	sim.pos = Vector2(pump.end.x+15,pump.get_center().y-left_muzzle.y)
+	# Lia stands against the pump's solid side, level with its base.
+	sim.pos = Vector2(pump_solid.end.x+15,pump.get_center().y-left_muzzle.y)
 	var enemy: Dictionary = sim.enemies[0]
 	sim.enemies.clear()
 	enemy.pos = Vector2(10000, 10000)
