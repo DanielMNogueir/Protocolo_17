@@ -53,6 +53,13 @@ var water_guide := Guide.new()
 var prologue_guide := Guide.new()
 var sound: Node
 var mode := "title"
+## "Antes de Aurora": the story trailer shown when a new campaign begins.
+const TRAILER_PATH := "res://assets/video/antes_de_aurora.ogv"
+const TRAILER_SKIP_DELAY := 0.6
+var trailer_layer: CanvasLayer
+var trailer_player: VideoStreamPlayer
+var trailer_hint: Label
+var trailer_age := 0.0
 var menu_focus := ""
 var menu_focus_mode := ""
 var _brand_font: SystemFont
@@ -147,6 +154,10 @@ func _process(delta: float) -> void:
 	shake = maxf(0, shake - dt * 14)
 	screen_flash = maxf(0, screen_flash - dt * 3)
 	title_fade = maxf(0, title_fade - dt * 0.7)
+	if mode == "trailer":
+		trailer_age += delta
+		if trailer_hint: trailer_hint.modulate.a = clampf((trailer_age - TRAILER_SKIP_DELAY) * 2.0, 0.0, 0.85)
+		if trailer_player and not trailer_player.is_playing() and trailer_age > 1.0: _end_trailer()
 	if mode == "prologue":
 		var motion := gamepad.movement(_key)
 		var offset := (_size()/2-prologue_camera).round()
@@ -264,6 +275,11 @@ func _pad_buttons(menu: String) -> Array[Dictionary]:
 	return buttons
 
 func _unhandled_input(event: InputEvent) -> void:
+	if mode == "trailer":
+		var pressed: bool = (event is InputEventKey and event.pressed and not event.echo) or (event is InputEventMouseButton and event.pressed) or (event is InputEventJoypadButton and event.pressed)
+		if pressed and trailer_age >= TRAILER_SKIP_DELAY: _end_trailer()
+		get_viewport().set_input_as_handled()
+		return
 	var pad_menu := _pad_menu()
 	var confirm := KEY_E
 	if (mode == "play" and not dialogue.is_empty()) or (mode == "prologue" and not prologue.conversation.is_empty()):
@@ -507,7 +523,7 @@ func _action(id: String) -> void:
 				elif selected_district == "core":
 					if _district_open(3): _open_core(level)
 				else:
-					_start_prologue(false)
+					_start_trailer()
 			if id.begins_with("upgrade_") and mode == "upgrade":
 				var index := int(id.trim_prefix("upgrade_"))
 				sim.choose_upgrade(index)
@@ -518,6 +534,62 @@ func _action(id: String) -> void:
 				dialogue_clock = 0
 				sound.set_mood("combat")
 			_notify("PASSAGEM LIBERADA  /  " + SECTOR_SUBTITLES[sim.stage], 4)
+
+## Plays the story trailer, then the prologue. Any key, click or pad button
+## skips it; a missing or unreadable video goes straight to the prologue.
+func _start_trailer() -> void:
+	# Without a window (headless tests and tools) there is nothing to watch.
+	if DisplayServer.get_name() == "headless" or not ResourceLoader.exists(TRAILER_PATH):
+		_start_prologue(false)
+		return
+	var stream := load(TRAILER_PATH) as VideoStream
+	if stream == null:
+		_start_prologue(false)
+		return
+	mode = "trailer"
+	trailer_age = 0.0
+	sound.set_muted(true)
+	trailer_layer = CanvasLayer.new()
+	trailer_layer.layer = 50
+	add_child(trailer_layer)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color.BLACK
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	trailer_layer.add_child(backdrop)
+	var frame := AspectRatioContainer.new()
+	frame.ratio = 16.0 / 9.0
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	trailer_layer.add_child(frame)
+	trailer_player = VideoStreamPlayer.new()
+	trailer_player.stream = stream
+	trailer_player.expand = true
+	trailer_player.volume_db = -80.0 if muted else 0.0
+	trailer_player.finished.connect(_end_trailer)
+	frame.add_child(trailer_player)
+	trailer_hint = Label.new()
+	trailer_hint.text = "PRESSIONE %s PARA PULAR" % ("QUALQUER BOTÃO" if Gamepad.active else "QUALQUER TECLA")
+	trailer_hint.add_theme_font_size_override("font_size", 14)
+	trailer_hint.add_theme_color_override("font_color", Color("cfe7e1"))
+	trailer_hint.add_theme_color_override("font_outline_color", Color.BLACK)
+	trailer_hint.add_theme_constant_override("outline_size", 5)
+	trailer_hint.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	trailer_hint.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	trailer_hint.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	trailer_hint.offset_right = -24
+	trailer_hint.offset_bottom = -18
+	trailer_hint.modulate.a = 0.0
+	trailer_layer.add_child(trailer_hint)
+	trailer_player.play()
+
+func _end_trailer() -> void:
+	if mode != "trailer": return
+	if is_instance_valid(trailer_player): trailer_player.stop()
+	if is_instance_valid(trailer_layer): trailer_layer.queue_free()
+	trailer_layer = null
+	trailer_player = null
+	trailer_hint = null
+	sound.set_muted(muted)
+	_start_prologue(false)
 
 func _start_prologue(replay: bool) -> void:
 	prologue_interact_requested = false
@@ -709,13 +781,16 @@ func _load_settings() -> void:
 func _draw() -> void:
 	var showing_prologue := prologue!=null and (mode=="prologue" or (mode=="pause" and previous_mode=="prologue") or (mode=="settings" and settings_return=="pause" and previous_mode=="prologue"))
 	laboratory_effects.present(prologue.elapsed if prologue!=null else 0.0,prologue!=null and prologue.step>=3,showing_prologue and prologue.phase in ["lab","ending","retry"])
-	water_surface.visible=not (showing_prologue or mode in ["title","briefing","difficulty","districts"] or (mode=="settings" and settings_return=="title"))
+	water_surface.visible=not (showing_prologue or mode in ["title","briefing","difficulty","districts","trailer"] or (mode=="settings" and settings_return=="title"))
 	district_effects.present(clock,sim.restored,water_surface.visible)
 	if menu_focus_mode != mode:
 		menu_focus = ""
 		menu_focus_mode = mode
 	buttons.clear()
 	if _font == null:
+		return
+	if mode == "trailer":
+		draw_rect(Rect2(Vector2.ZERO, _size()), Color.BLACK)
 		return
 	if showing_prologue:
 		PrologueView.draw(self,prologue,prologue_camera)
